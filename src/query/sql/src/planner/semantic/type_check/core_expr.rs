@@ -75,6 +75,7 @@ impl<'a> CoreExprArena<'a> {
         Self {
             nodes: Vec::new(),
             week_start,
+            reads_session_context: false,
             aggregate_function_registry,
             name_resolution_ctx: name_resolution_ctx.clone(),
         }

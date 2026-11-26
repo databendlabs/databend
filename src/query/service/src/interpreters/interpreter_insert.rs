@@ -348,9 +348,10 @@ impl InsertInterpreter {
             return Ok((input, false));
         }
 
-        let Some(partition_info) = fuse_table.partition_pruning_info(self.ctx.clone()) else {
+        let partition_keys = fuse_table.linear_partition_keys(self.ctx.clone());
+        if partition_keys.is_empty() {
             return Ok((input, false));
-        };
+        }
         let input = prepare_table_write_input(
             input,
             table,
@@ -360,8 +361,8 @@ impl InsertInterpreter {
             cast_needed,
         );
         let input_schema = input.output_schema()?;
-        let mut partition_exprs = Vec::with_capacity(partition_info.partition_keys.len());
-        for partition_key in partition_info.partition_keys {
+        let mut partition_exprs = Vec::with_capacity(partition_keys.len());
+        for partition_key in partition_keys {
             let expr = partition_key.as_expr(&BUILTIN_FUNCTIONS);
             partition_exprs.push(expr.project_column_ref(|name| input_schema.index_of(name))?);
         }

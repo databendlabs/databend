@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::iter;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -39,6 +40,7 @@ use databend_common_ast::ast::ExistsTableStmt;
 use databend_common_ast::ast::Expr as AstExpr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IntervalKind;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
@@ -58,6 +60,7 @@ use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
+use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumAllStmt;
@@ -95,6 +98,7 @@ use databend_common_expression::resolve_type_name;
 use databend_common_expression::resolve_type_name_by_str;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::scalars::dt_func::TIMEZONE_ARGUMENT_FUNCTIONS;
 use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::schema::CatalogType;
@@ -136,6 +140,7 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use log::debug;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -229,6 +234,129 @@ impl PartitionBucketValidator {
             );
         }
     }
+}
+
+/// Rewrite time functions of a TIMESTAMP that read the session time zone into their
+/// overloads with an explicit time zone, such as `to_date(ts)` into
+/// `to_date(ts, 'Asia/Shanghai')`, so that a partition key does not depend on the session.
+#[derive(VisitorMut)]
+#[visitor(AstExpr(exit))]
+struct PartitionKeyTimezonePinner<'a> {
+    timezone: &'a str,
+    data_type: &'a mut dyn FnMut(&AstExpr) -> Option<DataType>,
+}
+
+impl PartitionKeyTimezonePinner<'_> {
+    fn exit_ast_expr(&mut self, expr: &mut AstExpr) {
+        let (span, func_name, arg) = match expr {
+            AstExpr::FunctionCall { func, .. }
+                if func.args.len() == 1
+                    && func.params.is_empty()
+                    && !func.distinct
+                    && func.window.is_none()
+                    && func.lambda.is_none()
+                    && has_timezone_overload(&func.name.name) =>
+            {
+                if self.is_timestamp(&func.args[0]) {
+                    func.args.push(self.timezone_literal());
+                }
+                return;
+            }
+            // Keep a NOT NULL cast so that a NULL still fails it; pin only its argument.
+            AstExpr::Cast {
+                span,
+                expr: arg,
+                target_type: TypeName::NotNull(target_type),
+                ..
+            } if matches!(**target_type, TypeName::Date) => {
+                if self.is_timestamp(arg) {
+                    let ts = take_ast_expr(arg);
+                    **arg = self.pinned_call(*span, "to_date", ts);
+                }
+                return;
+            }
+            AstExpr::Cast {
+                span,
+                expr: arg,
+                target_type,
+                ..
+            } if is_date_type(target_type) => (*span, "to_date", arg),
+            AstExpr::DateTrunc { span, unit, date } => match date_trunc_function(unit) {
+                Some(func_name) => (*span, func_name, date),
+                None => return,
+            },
+            _ => return,
+        };
+        if !self.is_timestamp(arg) {
+            return;
+        }
+        // `expr` is overwritten right after its argument is moved out.
+        let arg = take_ast_expr(arg);
+        *expr = self.pinned_call(span, func_name, arg);
+    }
+
+    fn pinned_call(&self, span: Span, func_name: &str, arg: AstExpr) -> AstExpr {
+        AstExpr::FunctionCall {
+            span,
+            func: FunctionCall {
+                name: Identifier::from_name(span, func_name),
+                args: vec![arg, self.timezone_literal()],
+                ..Default::default()
+            },
+        }
+    }
+
+    fn is_timestamp(&mut self, expr: &AstExpr) -> bool {
+        (self.data_type)(expr)
+            .is_some_and(|data_type| data_type.remove_nullable() == DataType::Timestamp)
+    }
+
+    fn timezone_literal(&self) -> AstExpr {
+        AstExpr::Literal {
+            span: None,
+            value: Literal::String(self.timezone.to_string()),
+        }
+    }
+}
+
+/// Whether `name` has a `(timestamp, time_zone)` overload.
+fn has_timezone_overload(name: &str) -> bool {
+    let name = name.to_lowercase();
+    let name = BUILTIN_FUNCTIONS.aliases.get(&name).unwrap_or(&name);
+    TIMEZONE_ARGUMENT_FUNCTIONS.contains(&name.as_str())
+}
+
+/// Move `expr` out, leaving a NULL literal in its place.
+fn take_ast_expr(expr: &mut AstExpr) -> AstExpr {
+    std::mem::replace(expr, AstExpr::Literal {
+        span: None,
+        value: Literal::Null,
+    })
+}
+
+fn is_date_type(type_name: &TypeName) -> bool {
+    match type_name {
+        TypeName::Date => true,
+        TypeName::Nullable(type_name) => matches!(**type_name, TypeName::Date),
+        _ => false,
+    }
+}
+
+/// The rounder with a time zone argument that `date_trunc(unit, ts)` lowers to.
+/// A week depends on `week_start`, so it is left to be rejected.
+fn date_trunc_function(unit: &IntervalKind) -> Option<&'static str> {
+    Some(match unit {
+        IntervalKind::Year => "to_start_of_year",
+        IntervalKind::ISOYear => "to_start_of_iso_year",
+        IntervalKind::Quarter => "to_start_of_quarter",
+        IntervalKind::Month => "to_start_of_month",
+        IntervalKind::ISOWeek => "to_monday",
+        IntervalKind::Day => "to_start_of_day",
+        IntervalKind::Hour => "to_start_of_hour",
+        IntervalKind::Minute => "to_start_of_minute",
+        IntervalKind::Second => "to_start_of_second",
+        _ => return None,
+    })
 }
 
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
@@ -1203,7 +1331,7 @@ impl Binder {
             && let Some(partition_exprs) = partition_by
         {
             let keys = self
-                .analyze_table_keys(partition_exprs, schema.clone(), None, "PARTITION BY", false)
+                .analyze_partition_keys(partition_exprs, schema.clone())
                 .await?;
             options.insert(
                 OPT_KEY_PARTITION_BY.to_owned(),
@@ -1727,12 +1855,13 @@ impl Binder {
                         Some(&tbl.get_table_info().meta.indexes),
                         "CLUSTER BY with PARTITION BY",
                         false,
+                        false,
                     )
                     .await?;
                 }
 
                 let partition_keys = self
-                    .analyze_table_keys(partition_by, tbl.schema(), None, "PARTITION BY", false)
+                    .analyze_partition_keys(partition_by, tbl.schema())
                     .await?;
 
                 Ok(Plan::AlterTablePartitionBy(Box::new(
@@ -2851,8 +2980,20 @@ impl Binder {
                 "CLUSTER BY with PARTITION BY"
             },
             allow_vector,
+            false,
         )
         .await
+    }
+
+    /// Partition values are compared across sessions, so a key must not depend on the
+    /// session, for example on its time zone.
+    async fn analyze_partition_keys(
+        &mut self,
+        key_exprs: &[AstExpr],
+        schema: TableSchemaRef,
+    ) -> Result<Vec<String>> {
+        self.analyze_table_keys(key_exprs, schema, None, "PARTITION BY", false, true)
+            .await
     }
 
     async fn analyze_table_keys(
@@ -2862,6 +3003,7 @@ impl Binder {
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
         key_name: &str,
         allow_vector: bool,
+        require_context_independent: bool,
     ) -> Result<Vec<String>> {
         let expr_len = key_exprs.len();
 
@@ -2880,6 +3022,7 @@ impl Binder {
             &[],
         );
 
+        let timezone = self.ctx.get_settings().get_timezone()?;
         let mut normalizer = StoredKeyNormalizer::new(&self.name_resolution_ctx);
         let mut table_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
@@ -2893,7 +3036,24 @@ impl Binder {
                 )));
             }
 
-            let (table_key, _) = scalar_binder.bind(key_expr)?;
+            // The stored key: pinned to the session time zone, then normalized.
+            let mut stored_key = key_expr.clone();
+            if require_context_independent {
+                stored_key.drive_mut(&mut PartitionKeyTimezonePinner {
+                    timezone: &timezone,
+                    data_type: &mut |expr| scalar_binder.bind(expr).ok().map(|(_, ty)| ty),
+                });
+                // The check runs before constant folding.
+                scalar_binder.set_require_context_independent(true);
+                let checked = scalar_binder.bind(&stored_key);
+                scalar_binder.set_require_context_independent(false);
+                if checked.is_err() {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "{key_name} expression `{key_expr:#}` depends on session settings"
+                    )));
+                }
+            }
+            let (table_key, _) = scalar_binder.bind(&stored_key)?;
             if table_key.used_columns().len() != 1 || !table_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "{key_name} expression `{key_expr:#}` is invalid"
@@ -2953,9 +3113,8 @@ impl Binder {
                 VectorDistanceType::from_index_options(field.name(), distances)?;
             }
 
-            let mut key_expr = key_expr.clone();
-            key_expr.drive_mut(&mut normalizer);
-            table_keys.push(format!("{key_expr:#}"));
+            stored_key.drive_mut(&mut normalizer);
+            table_keys.push(format!("{stored_key:#}"));
         }
 
         Ok(table_keys)

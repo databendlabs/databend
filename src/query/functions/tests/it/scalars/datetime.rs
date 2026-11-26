@@ -1550,3 +1550,41 @@ fn test_parse_epoch_str_unit() {
     assert_eq!(parse_epoch_str("abc"), None);
     assert_eq!(parse_epoch_str(""), None);
 }
+
+#[test]
+fn test_timezone_argument_functions() {
+    use databend_common_expression::Constant;
+    use databend_common_expression::Expr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_functions::scalars::dt_func::TIMEZONE_ARGUMENT_FUNCTIONS;
+
+    // Each listed function has an exact `(Timestamp, String)` overload that does not read
+    // the session, so a partition key can name its time zone.
+    let args = [
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::Timestamp,
+            display_name: String::new(),
+        }),
+        Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::String("UTC".to_string()),
+            data_type: DataType::String,
+        }),
+    ];
+    for name in TIMEZONE_ARGUMENT_FUNCTIONS {
+        let call = check_function(None, name, &[], &args, &BUILTIN_FUNCTIONS)
+            .unwrap_or_else(|err| panic!("{name}: {err}"))
+            .into_function_call()
+            .unwrap_or_else(|_| panic!("{name} is not a function call"));
+        assert_eq!(
+            call.function.signature.args_type,
+            [DataType::Timestamp, DataType::String],
+            "{name}"
+        );
+        assert!(!BUILTIN_FUNCTIONS.is_context_dependent(&call.id), "{name}");
+    }
+}

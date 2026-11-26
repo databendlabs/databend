@@ -16,12 +16,14 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use unicase::Ascii;
 
+use super::CoreExpr;
 use super::CoreExprArena;
 use super::CoreExprId;
 use super::TypeCheckAdapter;
@@ -81,6 +83,7 @@ where A: TypeCheckAdapter
             grouping_key: Default::default(),
             grouping_key_memo: Default::default(),
             lambda_params: Vec::new(),
+            require_context_independent: false,
         })
     }
 
@@ -103,6 +106,12 @@ where A: TypeCheckAdapter
         self.forbid_virtual_computed_column = forbid;
     }
 
+    /// Reject expressions whose value may depend on the session, including
+    /// parts already folded to constants while binding.
+    pub(crate) fn set_require_context_independent(&mut self, require: bool) {
+        self.require_context_independent = require;
+    }
+
     pub(super) fn core_expr_arena(&self) -> CoreExprArena<'a> {
         CoreExprArena::with_aggregate_function_registry(
             self.func_ctx.week_start as u64,
@@ -119,6 +128,27 @@ where A: TypeCheckAdapter
         root: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.adapter.check_core_expr_context(arena)?;
+        // Other nodes may fold values without the checks on scalar calls and casts.
+        // A map access becomes `get`-style calls or a virtual column, which do not
+        // read the session.
+        if self.require_context_independent
+            && (arena.reads_session_context
+                || !arena.nodes.iter().all(|node| {
+                    matches!(
+                        node,
+                        CoreExpr::ColumnRef { .. }
+                            | CoreExpr::Literal { .. }
+                            | CoreExpr::Call { .. }
+                            | CoreExpr::ScalarFunction { .. }
+                            | CoreExpr::Cast { .. }
+                            | CoreExpr::MapAccess { .. }
+                    )
+                }))
+        {
+            return Err(ErrorCode::SemanticError(
+                "The expression may depend on the session context",
+            ));
+        }
         self.with_own_grouping_key_memo(|type_checker| type_checker.resolve_core(arena, root))
     }
 

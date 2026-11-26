@@ -24,10 +24,12 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::FunctionKind;
 use crate::Symbol;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
 use crate::values::Scalar;
 
@@ -1011,6 +1013,36 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
+    /// Whether this expression can be compared across function contexts.
+    /// Unknown dispatch (such as composite casts) is conservatively not trusted.
+    #[recursive::recursive]
+    pub fn is_context_independent(&self, registry: &FunctionRegistry) -> bool {
+        match self {
+            Expr::ColumnRef(_) | Expr::Constant(_) => true,
+            Expr::Cast(cast) => {
+                cast_is_context_independent(
+                    cast.is_try,
+                    cast.expr.data_type(),
+                    &cast.dest_type,
+                    registry,
+                ) && cast.expr.is_context_independent(registry)
+            }
+            Expr::FunctionCall(call) => {
+                registry
+                    .get_property(&call.function.signature.name)
+                    .is_some_and(|property| {
+                        property.kind == FunctionKind::Scalar && !property.non_deterministic
+                    })
+                    && !registry.is_context_dependent(&call.id)
+                    && call
+                        .args
+                        .iter()
+                        .all(|arg| arg.is_context_independent(registry))
+            }
+            Expr::LambdaFunctionCall(_) => false,
+        }
+    }
+
     pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
         struct Deterministic<'a> {
             non_deterministic: bool,
@@ -1198,6 +1230,36 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
 pub enum RemoteDefaultExpr {
     RemoteExpr(RemoteExpr),
     Sequence(String),
+}
+
+/// Whether the functions that evaluate a cast do not read [`crate::FunctionContext`].
+/// Follows the cast dispatch of the evaluator, and is false for casts it does not cover.
+fn cast_is_context_independent(
+    is_try: bool,
+    source: &DataType,
+    dest: &DataType,
+    registry: &FunctionRegistry,
+) -> bool {
+    if source == dest || source.matches_physical_type(dest) {
+        return true;
+    }
+    let independent = |dest: &DataType| {
+        resolve_cast_function(None, is_try, source, dest, registry)
+            .map(|call| !registry.is_context_dependent(&call.id))
+    };
+    // A variant is cast with the function that returns a nullable value.
+    if let Some(independent) = independent(dest).or_else(|| independent(&dest.wrap_nullable())) {
+        return independent;
+    }
+    match (source, dest) {
+        (DataType::Nullable(source), dest) => {
+            cast_is_context_independent(is_try, source, dest.remove_nullable_ref(), registry)
+        }
+        (source, DataType::Nullable(dest)) => {
+            cast_is_context_independent(is_try, source, dest, registry)
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]

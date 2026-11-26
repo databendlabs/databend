@@ -32,6 +32,7 @@ use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
@@ -43,8 +44,10 @@ use databend_common_timezone::fast_utc_from_local;
 
 use crate::date_arithmetic::last_day_of_year_month;
 use crate::date_extract::calendar_monotonicity;
+use crate::date_extract::tz_wall_clock_single_segment;
 use crate::fixed_offset::FixedOffset;
 use crate::fixed_offset::MICROS_PER_DAY;
+use crate::timezone_arg::register_timestamp_with_timezone;
 
 #[derive(Clone, Copy)]
 enum Round {
@@ -336,7 +339,7 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         );
     }
 
-    // timestamp -> timestamp
+    // timestamp -> timestamp, in the session time zone
     register_timestamp_round(registry, "to_start_of_second", Round::Second);
     register_timestamp_round(registry, "to_start_of_minute", Round::Minute);
     register_timestamp_round(registry, "to_start_of_five_minutes", Round::FiveMinutes);
@@ -349,34 +352,39 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
     register_timestamp_round(registry, "to_start_of_hour", Round::Hour);
     register_timestamp_round(registry, "to_start_of_day", Round::Day);
     register_timestamp_round(registry, "time_slot", Round::TimeSlot);
-    crate::date_time_slice::register(registry);
+    // Its DATE overloads read week_start.
+    registry.register_context_dependent(crate::date_time_slice::register);
 
     // date | timestamp -> date
     registry.register_aliases("to_monday", &["to_start_of_iso_week"]);
-    rounder_functions_helper::<ToLastMonday>(registry, "to_monday");
+    rounder_functions_helper_with_timezone::<ToLastMonday>(registry, "to_monday");
+    // The second argument of `to_start_of_week` is the week mode, not a time zone.
     rounder_functions_helper::<ToLastSunday>(registry, "to_start_of_week");
-    rounder_functions_helper::<ToStartOfMonth>(registry, "to_start_of_month");
-    rounder_functions_helper::<ToStartOfQuarter>(registry, "to_start_of_quarter");
-    rounder_functions_helper::<ToStartOfYear>(registry, "to_start_of_year");
-    rounder_functions_helper::<ToStartOfISOYear>(registry, "to_start_of_iso_year");
-    rounder_functions_helper::<ToLastOfWeek>(registry, "to_last_of_week");
-    rounder_functions_helper::<ToLastOfMonth>(registry, "to_last_of_month");
-    rounder_functions_helper::<ToLastOfQuarter>(registry, "to_last_of_quarter");
-    rounder_functions_helper::<ToLastOfYear>(registry, "to_last_of_year");
-    rounder_functions_helper::<ToPreviousMonday>(registry, "to_previous_monday");
-    rounder_functions_helper::<ToPreviousTuesday>(registry, "to_previous_tuesday");
-    rounder_functions_helper::<ToPreviousWednesday>(registry, "to_previous_wednesday");
-    rounder_functions_helper::<ToPreviousThursday>(registry, "to_previous_thursday");
-    rounder_functions_helper::<ToPreviousFriday>(registry, "to_previous_friday");
-    rounder_functions_helper::<ToPreviousSaturday>(registry, "to_previous_saturday");
-    rounder_functions_helper::<ToPreviousSunday>(registry, "to_previous_sunday");
-    rounder_functions_helper::<ToNextMonday>(registry, "to_next_monday");
-    rounder_functions_helper::<ToNextTuesday>(registry, "to_next_tuesday");
-    rounder_functions_helper::<ToNextWednesday>(registry, "to_next_wednesday");
-    rounder_functions_helper::<ToNextThursday>(registry, "to_next_thursday");
-    rounder_functions_helper::<ToNextFriday>(registry, "to_next_friday");
-    rounder_functions_helper::<ToNextSaturday>(registry, "to_next_saturday");
-    rounder_functions_helper::<ToNextSunday>(registry, "to_next_sunday");
+    rounder_functions_helper_with_timezone::<ToStartOfMonth>(registry, "to_start_of_month");
+    rounder_functions_helper_with_timezone::<ToStartOfQuarter>(registry, "to_start_of_quarter");
+    rounder_functions_helper_with_timezone::<ToStartOfYear>(registry, "to_start_of_year");
+    rounder_functions_helper_with_timezone::<ToStartOfISOYear>(registry, "to_start_of_iso_year");
+    rounder_functions_helper_with_timezone::<ToLastOfWeek>(registry, "to_last_of_week");
+    rounder_functions_helper_with_timezone::<ToLastOfMonth>(registry, "to_last_of_month");
+    rounder_functions_helper_with_timezone::<ToLastOfQuarter>(registry, "to_last_of_quarter");
+    rounder_functions_helper_with_timezone::<ToLastOfYear>(registry, "to_last_of_year");
+    rounder_functions_helper_with_timezone::<ToPreviousMonday>(registry, "to_previous_monday");
+    rounder_functions_helper_with_timezone::<ToPreviousTuesday>(registry, "to_previous_tuesday");
+    rounder_functions_helper_with_timezone::<ToPreviousWednesday>(
+        registry,
+        "to_previous_wednesday",
+    );
+    rounder_functions_helper_with_timezone::<ToPreviousThursday>(registry, "to_previous_thursday");
+    rounder_functions_helper_with_timezone::<ToPreviousFriday>(registry, "to_previous_friday");
+    rounder_functions_helper_with_timezone::<ToPreviousSaturday>(registry, "to_previous_saturday");
+    rounder_functions_helper_with_timezone::<ToPreviousSunday>(registry, "to_previous_sunday");
+    rounder_functions_helper_with_timezone::<ToNextMonday>(registry, "to_next_monday");
+    rounder_functions_helper_with_timezone::<ToNextTuesday>(registry, "to_next_tuesday");
+    rounder_functions_helper_with_timezone::<ToNextWednesday>(registry, "to_next_wednesday");
+    rounder_functions_helper_with_timezone::<ToNextThursday>(registry, "to_next_thursday");
+    rounder_functions_helper_with_timezone::<ToNextFriday>(registry, "to_next_friday");
+    rounder_functions_helper_with_timezone::<ToNextSaturday>(registry, "to_next_saturday");
+    rounder_functions_helper_with_timezone::<ToNextSunday>(registry, "to_next_sunday");
 
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "to_start_of_week",
@@ -396,49 +404,84 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
-    registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, DateType, _, _>(
-        "to_start_of_week",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<TimestampType, Int64Type, DateType>(
-            |val, mode, output, ctx| {
-                let result = if mode == 0 {
-                    DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.func_ctx.tz)
-                } else {
-                    DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.func_ctx.tz)
-                };
-                match result {
-                    Ok(value) => output.push(value),
-                    Err(error) => {
-                        ctx.set_error(output.len(), error);
-                        output.push(0);
+    registry.register_context_dependent(|registry| {
+        registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, DateType, _, _>(
+            "to_start_of_week",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<TimestampType, Int64Type, DateType>(
+                |val, mode, output, ctx| {
+                    let result = if mode == 0 {
+                        DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.func_ctx.tz)
+                    } else {
+                        DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.func_ctx.tz)
+                    };
+                    match result {
+                        Ok(value) => output.push(value),
+                        Err(error) => {
+                            ctx.set_error(output.len(), error);
+                            output.push(0);
+                        }
                     }
-                }
-            },
-        ),
-    );
+                },
+            ),
+        );
+    });
+}
+
+/// The rounded endpoints of `domain` in `tz`, under the conditions that
+/// `rounding_monotonicity` checks for the session time zone.
+fn rounded_endpoints<T>(
+    tz: &Tz,
+    domain: &SimpleDomain<i64>,
+    eval: impl Fn(i64, &Tz) -> Result<T, String>,
+) -> Option<SimpleDomain<T>> {
+    let margin = 370 * 86_400_000_000;
+    let safe = domain.min >= TIMESTAMP_MIN + margin && domain.max <= TIMESTAMP_MAX - margin;
+    if !safe || !tz_wall_clock_single_segment(tz, domain.min, domain.max) {
+        return None;
+    }
+    Some(SimpleDomain {
+        min: eval(domain.min, tz).ok()?,
+        max: eval(domain.max, tz).ok()?,
+    })
 }
 
 fn register_timestamp_round(registry: &mut FunctionRegistry, name: &'static str, round: Round) {
-    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _>(
+    registry.register_context_dependent(|registry| {
+        registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _>(
+            name,
+            |_, _| FunctionDomain::MayThrow,
+            move |val, ctx| {
+                if let Value::Column(col) = &val
+                    && let Some(rounded) =
+                        round_at_fixed_offset(col, ctx.validity.as_ref(), &ctx.func_ctx.tz, round)
+                {
+                    return Value::Column(rounded);
+                }
+                vectorize_with_builder_1_arg::<TimestampType, TimestampType>(
+                    move |value, output, ctx| match round_timestamp(value, &ctx.func_ctx.tz, round)
+                    {
+                        Ok(value) => output.push(value),
+                        Err(error) => {
+                            ctx.set_error(output.len(), error);
+                            output.push(0);
+                        }
+                    },
+                )(val, ctx)
+            },
+        );
+    });
+
+    let monotonic = has_monotonicity_check(registry, name);
+    register_timestamp_with_timezone::<TimestampType, _, _>(
+        registry,
         name,
-        |_, _| FunctionDomain::MayThrow,
-        move |val, ctx| {
-            if let Value::Column(col) = &val
-                && let Some(rounded) =
-                    round_at_fixed_offset(col, ctx.validity.as_ref(), &ctx.func_ctx.tz, round)
-            {
-                return Value::Column(rounded);
-            }
-            vectorize_with_builder_1_arg::<TimestampType, TimestampType>(
-                move |value, output, ctx| match round_timestamp(value, &ctx.func_ctx.tz, round) {
-                    Ok(value) => output.push(value),
-                    Err(error) => {
-                        ctx.set_error(output.len(), error);
-                        output.push(0);
-                    }
-                },
-            )(val, ctx)
+        move |tz, domain| match monotonic {
+            true => rounded_endpoints(tz, domain, |ts, tz| round_timestamp(ts, tz, round))
+                .map_or(FunctionDomain::MayThrow, FunctionDomain::Domain),
+            false => FunctionDomain::MayThrow,
         },
+        move |ts, tz| round_timestamp(ts, tz, round),
     );
 }
 
@@ -457,17 +500,47 @@ where T: RoundDate {
             }
         }),
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _>(
-        name,
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<TimestampType, DateType>(|value, output, ctx| {
-            match DateRounder::eval_timestamp::<T>(value, &ctx.func_ctx.tz) {
-                Ok(value) => output.push(value),
-                Err(error) => {
-                    ctx.set_error(output.len(), error);
-                    output.push(0);
+    // A timestamp is rounded in the session time zone.
+    registry.register_context_dependent(|registry| {
+        registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _>(
+            name,
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_1_arg::<TimestampType, DateType>(|value, output, ctx| {
+                match DateRounder::eval_timestamp::<T>(value, &ctx.func_ctx.tz) {
+                    Ok(value) => output.push(value),
+                    Err(error) => {
+                        ctx.set_error(output.len(), error);
+                        output.push(0);
+                    }
                 }
-            }
-        }),
+            }),
+        );
+    });
+}
+
+/// Also register `name(timestamp, time_zone)`, which rounds in the given time zone.
+fn rounder_functions_helper_with_timezone<T>(registry: &mut FunctionRegistry, name: &str)
+where T: RoundDate + 'static {
+    rounder_functions_helper::<T>(registry, name);
+
+    let monotonic = has_monotonicity_check(registry, name);
+    register_timestamp_with_timezone::<DateType, _, _>(
+        registry,
+        name,
+        move |tz, domain| match monotonic {
+            true => rounded_endpoints(tz, domain, DateRounder::eval_timestamp::<T>)
+                .map_or(FunctionDomain::MayThrow, FunctionDomain::Domain),
+            false => FunctionDomain::MayThrow,
+        },
+        DateRounder::eval_timestamp::<T>,
     );
+}
+
+/// Whether `register` gave `name` a range-sensitive monotonicity check, so that its
+/// domain can be computed from the rounded endpoints.
+fn has_monotonicity_check(registry: &FunctionRegistry, name: &str) -> bool {
+    registry
+        .properties
+        .get(name)
+        .is_some_and(|property| property.monotonicity_check.is_some())
 }

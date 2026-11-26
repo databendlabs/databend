@@ -87,6 +87,7 @@ use crate::date_conversion::calc_date_to_timestamp;
 use crate::date_format::pg_format_to_strftime;
 use crate::fixed_offset::local_dates;
 use crate::interval::civil_date_to_days;
+use crate::timezone_arg::register_timestamp_with_timezone;
 
 const MONTHS_PER_YEAR: i64 = 12;
 const YEARS_PER_CENTURY: i64 = 100;
@@ -117,7 +118,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // cast([date | timestamp] AS [uint8 | int8 | ...])
     // to_[uint8 | int8 | ...]([date | timestamp])
-    registry.register_context_dependent(crate::date_extract::register_cast);
+    crate::date_extract::register_cast(registry);
 
     // [add | subtract]_[years | months | days | hours | minutes | seconds]([date | timestamp], number)
     // date_[add | sub]([year | quarter | month | week | day | hour | minute | second], [date | timestamp], number)
@@ -132,10 +133,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     crate::date_conversion::register_real_time_functions(registry);
 
     // to_*([date | timestamp]) -> number
-    registry.register_context_dependent(crate::date_extract::register);
+    // Only the overloads that read the session are registered as context dependent.
+    crate::date_extract::register(registry);
 
     // to_*([date | timestamp]) -> [date | timestamp]
-    registry.register_context_dependent(crate::date_round::register);
+    crate::date_round::register(registry);
 
     // [date | timestamp] +/- number
     registry.register_context_dependent(crate::date_arithmetic::register_timestamp_add_sub);
@@ -149,6 +151,9 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_date_from_parts(registry);
     registry.register_context_dependent(register_timestamp_from_parts);
     registry.register_context_dependent(register_timestamp_tz_from_parts);
+
+    // to_date(timestamp, time_zone)
+    register_timestamp_to_date_with_timezone(registry);
 }
 
 fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
@@ -1122,6 +1127,26 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     fn calc_timestamp_to_date(val: i64, tz: &Tz) -> Result<i32, String> {
         timestamp_to_date_days(val, tz)
     }
+}
+
+fn register_timestamp_to_date_with_timezone(registry: &mut FunctionRegistry) {
+    register_timestamp_with_timezone::<DateType, _, _>(
+        registry,
+        "to_date",
+        |tz, domain| {
+            if !wall_clock_is_monotonic(tz, domain.min, domain.max) {
+                return FunctionDomain::MayThrow;
+            }
+            let (Ok(min), Ok(max)) = (
+                timestamp_to_date_days(domain.min, tz),
+                timestamp_to_date_days(domain.max, tz),
+            ) else {
+                return FunctionDomain::MayThrow;
+            };
+            FunctionDomain::Domain(SimpleDomain { min, max })
+        },
+        timestamp_to_date_days,
+    );
 }
 
 fn timestamp_to_date_days(value: i64, tz: &Tz) -> Result<i32, String> {

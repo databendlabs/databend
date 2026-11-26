@@ -85,6 +85,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::bind_normalized_key_exprs;
+use databend_common_sql::bind_partition_keys_for_pruning;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
@@ -738,9 +739,13 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Option<PartitionPruningInfo> {
-        let partition_keys = self.linear_partition_keys(ctx);
-        (!partition_keys.is_empty()).then_some(PartitionPruningInfo {
-            partition_keys,
+        let key_exprs = self.resolve_partition_keys()?;
+        let keys = bind_partition_keys_for_pruning(ctx, Arc::new(self.clone()), key_exprs).ok()?;
+        Some(PartitionPruningInfo {
+            partition_keys: keys
+                .into_iter()
+                .map(|key| key.map(|key| self.key_to_remote_expr(key)))
+                .collect(),
             partition_key_id: self.partition_key_id(),
         })
     }
@@ -767,12 +772,14 @@ impl FuseTable {
 
     fn keys_to_remote_exprs(&self, keys: Vec<Expr<usize>>) -> Vec<RemoteExpr<String>> {
         keys.into_iter()
-            .map(|key| {
-                key.project_column_ref(|index| Ok(self.schema().field(*index).name().to_string()))
-                    .unwrap()
-                    .as_remote_expr()
-            })
+            .map(|key| self.key_to_remote_expr(key))
             .collect()
+    }
+
+    fn key_to_remote_expr(&self, key: Expr<usize>) -> RemoteExpr<String> {
+        key.project_column_ref(|index| Ok(self.schema().field(*index).name().to_string()))
+            .unwrap()
+            .as_remote_expr()
     }
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {

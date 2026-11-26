@@ -30,6 +30,9 @@ mod date_format;
 mod date_round;
 mod date_time_slice;
 mod fixed_offset;
+mod timezone_arg;
+
+pub use timezone_arg::TIMEZONE_ARGUMENT_FUNCTIONS;
 
 pub mod datetime;
 pub mod interval;

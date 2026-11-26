@@ -202,6 +202,7 @@ impl<'a> CoreExprArena<'a> {
             ASTIntervalKind::Quarter => "to_start_of_quarter",
             ASTIntervalKind::Month => "to_start_of_month",
             ASTIntervalKind::Week => {
+                self.reads_session_context = true;
                 let date = self.lower_ast_expr(date)?;
                 let week_start = self.literal(None, Literal::UInt64(week_start));
                 return Ok(self.call(span, "to_start_of_week", smallvec![date, week_start]));
