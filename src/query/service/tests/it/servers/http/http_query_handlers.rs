@@ -2140,7 +2140,6 @@ async fn test_txn_timeout() -> anyhow::Result<()> {
     let session = last.session.unwrap();
     sleep(Duration::from_secs(3)).await;
 
-    let session = session.clone();
     let last_query_id = session
         .internal
         .as_ref()
@@ -2155,14 +2154,53 @@ async fn test_txn_timeout() -> anyhow::Result<()> {
         "pagination": {"wait_time_secs": wait_time_secs}
     });
     let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
-    assert_eq!(reply.last().1.error.unwrap().code, 4003u16);
+    let response = reply.last().1;
+    let error = response.error.unwrap();
+    assert_eq!(error.code, 4051);
     assert_eq!(
-        reply.last().1.error.unwrap().message,
-        format!(
-            "Transaction timeout: last_query_id {} not found on this server",
-            last_query_id
-        )
+        error.message,
+        format!("Cannot resume transaction: no stored state for last_query_id {last_query_id}")
     );
+    let session = response.session.unwrap();
+    assert_eq!(session.txn_state, Some(TxnState::Fail));
+
+    let json = serde_json::json!({
+        "sql": "select 1",
+        "session": session,
+        "pagination": {"wait_time_secs": wait_time_secs}
+    });
+    let response = TestHttpQueryRequest::new(json)
+        .fetch_total()
+        .await?
+        .last()
+        .1;
+    assert_eq!(response.error.unwrap().code, 4050);
+
+    let json = serde_json::json!({
+        "sql": "rollback",
+        "session": response.session.unwrap(),
+        "pagination": {"wait_time_secs": wait_time_secs}
+    });
+    let response = TestHttpQueryRequest::new(json)
+        .fetch_total()
+        .await?
+        .last()
+        .1;
+    assert!(response.error.is_none());
+    let session = response.session.unwrap();
+    assert_eq!(session.txn_state, Some(TxnState::AutoCommit));
+
+    let json = serde_json::json!({
+        "sql": "select 1",
+        "session": session,
+        "pagination": {"wait_time_secs": wait_time_secs}
+    });
+    let response = TestHttpQueryRequest::new(json)
+        .fetch_total()
+        .await?
+        .last()
+        .1;
+    assert!(response.error.is_none());
     Ok(())
 }
 

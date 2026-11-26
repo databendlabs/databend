@@ -115,7 +115,7 @@ insert into merge_conflict_source values (1,100)
 statement ok
 insert into merge_conflict_source values (1,101)
 
-statement error 4001
+statement error 1135
 merge into merge_conflict_target as t using merge_conflict_source as s on t.id = s.id when matched then update set t.value = s.value
 
 query II
@@ -300,7 +300,7 @@ create table merge_overlap_source(id int, action string)
 statement ok
 insert into merge_overlap_source values (1,'update'),(8,'delete'),(6,'update'),(6,'delete')
 
-statement error 4001
+statement error 1135
 merge into merge_offset_reuse as t using merge_overlap_source as s on t.id = s.id when matched and s.action = 'update' then update set t.value = 999 when matched then delete
 
 query II rowsort
