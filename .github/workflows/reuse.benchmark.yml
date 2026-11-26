@@ -39,18 +39,20 @@ env:
 
 jobs:
   local:
-    timeout-minutes: 60
+    timeout-minutes: 90
     runs-on:
       - self-hosted
       - X64
       - Linux
-      - 8c
+      - "${{ matrix.size }}"
       - aws
     strategy:
       matrix:
-        dataset:
-          - internal
-          # - hits
+        include:
+          - { dataset: internal, size: 8c, timeout: 30 }
+          # ClickBench hits on fs storage, following ClickBench's databend setup
+          # (default config, CLUSTER BY table) on a 16-vCPU runner.
+          - { dataset: hits, size: 16c, timeout: 60 }
       fail-fast: true
       max-parallel: 1
     env:
@@ -84,7 +86,7 @@ jobs:
           databend-meta --version
       - uses: ./.github/actions/benchmark_local
         if: inputs.target == 'local' || inputs.target == 'all'
-        timeout-minutes: 30
+        timeout-minutes: ${{ matrix.timeout }}
         id: benchmark
         with:
           sha: ${{ inputs.sha }}
@@ -143,8 +145,7 @@ jobs:
         include:
           # The query suite completed before the previous 10m timeout. Allow another 10m
           # for queued system-history collection and cleanup without changing benchmark code.
-          - { dataset: hits, size: Small, database: hits, timeout: 20, cache_size: 0, tries: 3 }
-          - { dataset: hits, size: Large, database: hits, timeout: 20, cache_size: 0, tries: 3 }
+          # hits runs in the local job on fs storage.
           - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 0, tries: 1 }

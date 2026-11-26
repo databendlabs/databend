@@ -48,6 +48,9 @@ type = "fs"
 data_path = "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/"
 EOF
 
+# hits on fs storage opens many files during load and query; the default
+# 1024 fd limit can fail with "No file descriptors available (os error 24)".
+ulimit -n 65536 || true
 nohup databend-query --config-file config.toml --storage-allow-insecure &
 
 echo "Waiting on databend-query 10 seconds..."
@@ -72,6 +75,12 @@ echo "Instance type: ${instance_type}"
 
 echo "CREATE STAGE IF NOT EXISTS datasets url = 's3://repo.databend.rs' CONNECTION =(region='us-east-2');" | bendsql
 
+# Fetch source data outside the measured load window
+if [[ -f "${BENCHMARK_DATASET}/prepare.sh" ]]; then
+    echo "Preparing data..."
+    bash "${BENCHMARK_DATASET}"/prepare.sh
+fi
+
 # Load data
 echo "Loading data..."
 load_start=$(date +%s)
@@ -80,6 +89,8 @@ if [[ -f "${BENCHMARK_DATASET}/load.sh" ]]; then
 else
     bendsql <"${BENCHMARK_DATASET}/load.sql"
 fi
+# As in ClickBench, count flushing the loaded data to disk as part of the load.
+sync
 load_end=$(date +%s)
 load_time=$(python3 -c "print($load_end - $load_start)")
 echo "Data loaded in ${load_time}s."
