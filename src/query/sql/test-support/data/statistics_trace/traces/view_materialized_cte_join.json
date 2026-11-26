@@ -82,7 +82,7 @@
       "statistics": {
         "num_rows": 3,
         "data_size": 78,
-        "data_size_compressed": 567,
+        "data_size_compressed": 572,
         "index_size": 629,
         "bloom_index_size": 629,
         "ngram_index_size": null,
