@@ -37,7 +37,8 @@ use databend_common_users::UserApiProvider;
 use log::LevelFilter;
 use log::debug;
 
-use crate::binder::insert::STAGE_PLACEHOLDER;
+use crate::binder::insert::LEGACY_STREAMING_LOAD_PLACEHOLDER;
+use crate::binder::insert::streaming_load_placeholder_error;
 use crate::binder::location::apply_uri_connection;
 use crate::binder::location::get_storage_params_from_options;
 use crate::binder::location::parse_storage_params_from_uri;
@@ -73,10 +74,8 @@ pub fn parse_stage_location(location: &str) -> Result<(String, String)> {
             "stage path must include a stage name".to_string(),
         ));
     }
-    if names[0] == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments(
-            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.",
-        ));
+    if names[0] == LEGACY_STREAMING_LOAD_PLACEHOLDER {
+        return Err(streaming_load_placeholder_error(names[0]));
     }
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
@@ -97,10 +96,8 @@ pub fn parse_stage_name(location: &str) -> Result<String> {
             "stage path must include a stage name".to_string(),
         ));
     }
-    if stage_name == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments(
-            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.".to_string(),
-        ));
+    if stage_name == LEGACY_STREAMING_LOAD_PLACEHOLDER {
+        return Err(streaming_load_placeholder_error(stage_name));
     }
     if stage_name.contains('/') {
         return Err(ErrorCode::BadArguments(format!(

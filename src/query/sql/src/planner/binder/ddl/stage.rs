@@ -30,7 +30,7 @@ use databend_common_users::UserApiProvider;
 use crate::binder::Binder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
-use crate::binder::insert::STAGE_PLACEHOLDER;
+use crate::binder::insert::LEGACY_STREAMING_LOAD_PLACEHOLDER;
 use crate::binder::parse_file_format;
 use crate::binder::resolve_file_format;
 use crate::plans::AlterStageActionPlan;
@@ -77,9 +77,9 @@ impl Binder {
             comments: _,
         } = stmt;
 
-        if stage_name.to_lowercase() == STAGE_PLACEHOLDER {
+        if stage_name.to_lowercase() == LEGACY_STREAMING_LOAD_PLACEHOLDER {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Can not create stage with name `{STAGE_PLACEHOLDER}`, which is reserved"
+                "Can not create stage with name `{LEGACY_STREAMING_LOAD_PLACEHOLDER}`, which is reserved"
             )));
         }
 
