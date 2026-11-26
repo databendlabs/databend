@@ -24,6 +24,7 @@ mod http_query_context;
 mod http_query_manager;
 mod page_manager;
 mod query_token;
+mod result_cache_owner;
 pub mod sized_spsc;
 
 pub(crate) use execute_state::ExecuteState;

@@ -2212,14 +2212,35 @@ async fn test_result_scan_cache_key_from_session() -> anyhow::Result<()> {
     let tenant = fixture.default_tenant();
     let tenant = tenant.tenant_name();
 
-    async fn run(sql: &str, session: serde_json::Value) -> Result<TestHttpQueryFetchReply> {
+    async fn run(
+        sql: &str,
+        session: serde_json::Value,
+        (user, password): (&str, &str),
+    ) -> Result<TestHttpQueryFetchReply> {
         let json = serde_json::json!({
             "sql": sql,
             "session": session,
             "pagination": {"wait_time_secs": 5}
         });
-        TestHttpQueryRequest::new(json).fetch_total().await
+        TestHttpQueryRequest::new(json)
+            .with_basic_auth(user, password)
+            .fetch_total()
+            .await
     }
+
+    fn assert_no_cache_key(reply: &TestHttpQueryFetchReply, case: &str) {
+        let error = reply.error();
+        assert!(
+            error
+                .as_ref()
+                .is_some_and(|e| e.message.contains("No cache key found in current session")),
+            "{case}: error={error:?}, data={:?}",
+            reply.data()
+        );
+    }
+
+    let root = ("root", "");
+    let other_user = ("result_scan_user", "result_scan_password");
 
     let settings = serde_json::json!({"settings": {
         "enable_query_result_cache": "1",
@@ -2228,12 +2249,13 @@ async fn test_result_scan_cache_key_from_session() -> anyhow::Result<()> {
     for sql in [
         "create table t_result_scan(a int)",
         "insert into t_result_scan values (1), (2)",
+        "create user result_scan_user identified by 'result_scan_password'",
     ] {
-        let reply = run(sql, settings.clone()).await?;
+        let reply = run(sql, settings.clone(), root).await?;
         assert!(reply.error().is_none(), "{sql}: {:?}", reply.error());
     }
 
-    let reply = run("select a from t_result_scan order by a", settings).await?;
+    let reply = run("select a from t_result_scan order by a", settings, root).await?;
     assert!(reply.error().is_none(), "{:?}", reply.error());
     let session = reply.last().1.session.unwrap();
     let cache_key = session
@@ -2247,32 +2269,47 @@ async fn test_result_scan_cache_key_from_session() -> anyhow::Result<()> {
     );
 
     let result_scan = "select a from result_scan(last_query_id()) order by a";
-
-    // The key returned by the server is accepted.
-    let reply = run(result_scan, serde_json::to_value(&session)?).await?;
-    assert!(reply.error().is_none(), "{:?}", reply.error());
     let expected = vec![vec![Some("1".to_string())], vec![Some("2".to_string())]];
+
+    let with_key = |key: &str| -> anyhow::Result<serde_json::Value> {
+        let mut session = session.clone();
+        session
+            .internal
+            .as_mut()
+            .unwrap()
+            .last_query_result_cache_key = key.to_string();
+        Ok(serde_json::to_value(&session)?)
+    };
+
+    // The session state returned by the server works.
+    let reply = run(result_scan, serde_json::to_value(&session)?, root).await?;
+    assert!(reply.error().is_none(), "{:?}", reply.error());
     assert_eq!(reply.data(), expected);
 
-    // A key that is not a result cache key of the current tenant is ignored.
+    // The client's copy of the key only says that the last query has one: the server reads the
+    // key from its own record, so a key changed by the client is not used.
     let digest = cache_key.rsplit('/').next().unwrap();
     for key in [
         format!("__fd_database/{tenant}/default"),
         gen_result_cache_meta_key("other_tenant", digest),
         format!("{cache_key}/x"),
     ] {
-        let mut session = session.clone();
-        let internal = session.internal.as_mut().unwrap();
-        internal.last_query_result_cache_key = key.clone();
-        let reply = run(result_scan, serde_json::to_value(&session)?).await?;
-        let error = reply.error();
-        assert!(
-            error
-                .as_ref()
-                .is_some_and(|e| e.message.contains("No cache key found in current session")),
-            "key={key}, error={error:?}"
-        );
+        let reply = run(result_scan, with_key(&key)?, root).await?;
+        assert!(reply.error().is_none(), "key={key}: {:?}", reply.error());
+        assert_eq!(reply.data(), expected, "key={key}");
     }
+
+    // An empty key says that the last query has none.
+    let reply = run(result_scan, with_key("")?, root).await?;
+    assert_no_cache_key(&reply, "empty key");
+
+    // The record belongs to the user who ran the query: another user who sends the same session
+    // state cannot read the cached result.
+    let mut session = session.clone();
+    session.role = None;
+    session.secondary_roles = None;
+    let reply = run(result_scan, serde_json::to_value(&session)?, other_user).await?;
+    assert_no_cache_key(&reply, "another user");
 
     Ok(())
 }
