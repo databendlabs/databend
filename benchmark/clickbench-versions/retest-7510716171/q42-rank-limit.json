@@ -1,0 +1,222 @@
+{
+  "sql": {
+    "original": "SELECT DATE_TRUNC('minute', EventTime) AS M, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-14' AND EventDate <= '2013-07-15' AND IsRefresh = 0 AND DontCountHits = 0 GROUP BY DATE_TRUNC('minute', EventTime) ORDER BY DATE_TRUNC('minute', EventTime) LIMIT 10 OFFSET 1000;",
+    "order_by_cast": "SELECT DATE_TRUNC('minute', EventTime) AS M, COUNT(*) AS PageViews FROM hits WHERE CounterID = 62 AND EventDate >= '2013-07-14' AND EventDate <= '2013-07-15' AND IsRefresh = 0 AND DontCountHits = 0 GROUP BY DATE_TRUNC('minute', EventTime) ORDER BY to_int64(M) LIMIT 10 OFFSET 1000;"
+  },
+  "profile": {
+    "original": [
+      "TopN(Final)",
+      "├── cpu time: 80.899µs",
+      "├── output rows: 10",
+      "├── output bytes: 160.00 B",
+      "├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105)]",
+      "├── sort keys: [DATE_TRUNC(MINUTE, EventTime) ASC NULLS LAST]",
+      "├── limit: 10",
+      "├── offset: 1000",
+      "├── estimated rows: 10.00",
+      "└── TopN(Partial)",
+      "    ├── cpu time: 125.459µs",
+      "    ├── output rows: 1.16 thousand",
+      "    ├── output bytes: 18.16 KiB",
+      "    ├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105)]",
+      "    ├── sort keys: [DATE_TRUNC(MINUTE, EventTime) ASC NULLS LAST]",
+      "    ├── limit: 1010",
+      "    ├── offset: 0",
+      "    ├── estimated rows: 80.82",
+      "    └── AggregateFinal",
+      "        ├── cpu time: 3.934069ms",
+      "        ├── wait time: 167.438µs",
+      "        ├── output rows: 1.16 thousand",
+      "        ├── output bytes: 18.16 KiB",
+      "        ├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105)]",
+      "        ├── group by: [DATE_TRUNC(MINUTE, EventTime)]",
+      "        ├── aggregate functions: [count()]",
+      "        ├── estimated rows: 80.82",
+      "        └── AggregatePartial",
+      "            ├── cpu time: 35.667161ms",
+      "            ├── output rows: 8.08 thousand",
+      "            ├── output bytes: 189.38 KiB",
+      "            ├── group by: [DATE_TRUNC(MINUTE, EventTime)]",
+      "            ├── aggregate functions: [count()]",
+      "            ├── estimated rows: 80.82",
+      "            ├── rank limit: 1010",
+      "            └── EvalScalar",
+      "                ├── cpu time: 2.272691ms",
+      "                ├── output rows: 671.52 thousand",
+      "                ├── output bytes: 5.12 MiB",
+      "                ├── output columns: [DATE_TRUNC(MINUTE, EventTime) (#105)]",
+      "                ├── expressions: [to_start_of_minute(hits.eventtime (#4))]",
+      "                ├── estimated rows: 242.45",
+      "                └── TableScan",
+      "                    ├── cpu time: 30.364476ms",
+      "                    ├── wait time: 1.368958ms",
+      "                    ├── output rows: 671.52 thousand",
+      "                    ├── output bytes: 5.12 MiB",
+      "                    ├── bytes scanned: 20.11 MiB",
+      "                    ├── read from remote: 6.13 MiB",
+      "                    ├── runtime filter bloom time: 1.699µs",
+      "                    ├── runtime filter inlist/min-max time: 371ns",
+      "                    ├── table: default.default.hits",
+      "                    ├── scan id: 0",
+      "                    ├── output columns: [eventtime (#4)]",
+      "                    ├── read rows: 1054542",
+      "                    ├── read size: 6.13 MiB",
+      "                    ├── partitions total: 732",
+      "                    ├── partitions scanned: 8",
+      "                    ├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 42 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 732 to 9 cost: 1 ms, bloom index read cost: 1 ms, bloom pruning: 9 to 8 cost: 1 ms>]",
+      "                    ├── push downs: [filters: [hits.counterid (#6) = 62 and hits.isrefresh (#15) = 0 and hits.dontcounthits (#61) = 0 and hits.eventdate (#5) >= '2013-07-14' and hits.eventdate (#5) <= '2013-07-15'], limit: NONE]",
+      "                    └── estimated rows: 242.45"
+    ],
+    "order_by_cast": [
+      "TopN(Final)",
+      "├── cpu time: 122.721µs",
+      "├── output rows: 10",
+      "├── output bytes: 240.00 B",
+      "├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105), to_int64(M) (#107)]",
+      "├── sort keys: [to_int64(M) ASC NULLS LAST]",
+      "├── limit: 10",
+      "├── offset: 1000",
+      "├── estimated rows: 10.00",
+      "└── TopN(Partial)",
+      "    ├── cpu time: 202.119µs",
+      "    ├── output rows: 1.44 thousand",
+      "    ├── output bytes: 33.75 KiB",
+      "    ├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105), to_int64(M) (#107)]",
+      "    ├── sort keys: [to_int64(M) ASC NULLS LAST]",
+      "    ├── limit: 1010",
+      "    ├── offset: 0",
+      "    ├── estimated rows: 80.82",
+      "    └── EvalScalar",
+      "        ├── cpu time: 553.379µs",
+      "        ├── output rows: 1.44 thousand",
+      "        ├── output bytes: 33.75 KiB",
+      "        ├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105), to_int64(M) (#107)]",
+      "        ├── expressions: [CAST(group_item (#105) AS Int64)]",
+      "        ├── estimated rows: 80.82",
+      "        └── AggregateFinal",
+      "            ├── cpu time: 3.908151ms",
+      "            ├── wait time: 674.023µs",
+      "            ├── output rows: 1.44 thousand",
+      "            ├── output bytes: 22.50 KiB",
+      "            ├── output columns: [COUNT(*) (#106), DATE_TRUNC(MINUTE, EventTime) (#105)]",
+      "            ├── group by: [DATE_TRUNC(MINUTE, EventTime)]",
+      "            ├── aggregate functions: [count()]",
+      "            ├── estimated rows: 80.82",
+      "            └── AggregatePartial",
+      "                ├── cpu time: 4.43001ms",
+      "                ├── output rows: 11.33 thousand",
+      "                ├── output bytes: 265.64 KiB",
+      "                ├── group by: [DATE_TRUNC(MINUTE, EventTime)]",
+      "                ├── aggregate functions: [count()]",
+      "                ├── estimated rows: 80.82",
+      "                └── EvalScalar",
+      "                    ├── cpu time: 2.038781ms",
+      "                    ├── output rows: 671.52 thousand",
+      "                    ├── output bytes: 5.12 MiB",
+      "                    ├── output columns: [DATE_TRUNC(MINUTE, EventTime) (#105)]",
+      "                    ├── expressions: [to_start_of_minute(hits.eventtime (#4))]",
+      "                    ├── estimated rows: 242.45",
+      "                    └── TableScan",
+      "                        ├── cpu time: 30.991551ms",
+      "                        ├── wait time: 1.725177ms",
+      "                        ├── output rows: 671.52 thousand",
+      "                        ├── output bytes: 5.12 MiB",
+      "                        ├── bytes scanned: 20.11 MiB",
+      "                        ├── read from remote: 6.13 MiB",
+      "                        ├── runtime filter bloom time: 1.628µs",
+      "                        ├── runtime filter inlist/min-max time: 297ns",
+      "                        ├── table: default.default.hits",
+      "                        ├── scan id: 0",
+      "                        ├── output columns: [eventtime (#4)]",
+      "                        ├── read rows: 1054542",
+      "                        ├── read size: 6.13 MiB",
+      "                        ├── partitions total: 732",
+      "                        ├── partitions scanned: 8",
+      "                        ├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 43 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 732 to 9 cost: 1 ms, bloom index read cost: 1 ms, bloom pruning: 9 to 8 cost: 1 ms>]",
+      "                        ├── push downs: [filters: [hits.counterid (#6) = 62 and hits.isrefresh (#15) = 0 and hits.dontcounthits (#61) = 0 and hits.eventdate (#5) >= '2013-07-14' and hits.eventdate (#5) <= '2013-07-15'], limit: NONE]",
+      "                        └── estimated rows: 242.45"
+    ]
+  },
+  "paired_samples_ms": [
+    {
+      "original": 20.547,
+      "order_by_cast": 15.996
+    },
+    {
+      "order_by_cast": 14.836,
+      "original": 19.854
+    },
+    {
+      "original": 18.554,
+      "order_by_cast": 14.493
+    },
+    {
+      "order_by_cast": 14.492,
+      "original": 20.079
+    },
+    {
+      "original": 18.335,
+      "order_by_cast": 14.075
+    },
+    {
+      "order_by_cast": 14.587,
+      "original": 17.604
+    },
+    {
+      "original": 20.753,
+      "order_by_cast": 13.399
+    },
+    {
+      "order_by_cast": 14.061,
+      "original": 20.01
+    },
+    {
+      "original": 20.175,
+      "order_by_cast": 14.672
+    },
+    {
+      "order_by_cast": 13.539,
+      "original": 18.502
+    },
+    {
+      "original": 22.184,
+      "order_by_cast": 13.203
+    },
+    {
+      "order_by_cast": 14.881,
+      "original": 20.119
+    },
+    {
+      "original": 19.352,
+      "order_by_cast": 14.408
+    },
+    {
+      "order_by_cast": 15.09,
+      "original": 20.429
+    },
+    {
+      "original": 20.242,
+      "order_by_cast": 13.32
+    },
+    {
+      "order_by_cast": 13.771,
+      "original": 22.754
+    },
+    {
+      "original": 20.078,
+      "order_by_cast": 15.198
+    },
+    {
+      "order_by_cast": 13.831,
+      "original": 31.063
+    },
+    {
+      "original": 21.623,
+      "order_by_cast": 13.621
+    },
+    {
+      "order_by_cast": 14.367,
+      "original": 20.506
+    }
+  ]
+}

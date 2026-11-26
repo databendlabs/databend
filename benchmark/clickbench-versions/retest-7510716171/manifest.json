@@ -1,0 +1,98 @@
+{
+ "created": "2026-11-26T07:35:55Z",
+ "machine": {
+  "cpu": "Model name:                              12th Gen Intel(R) Core(TM) i9-12900KF",
+  "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           39 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  24\nOn-line CPU(s) list:                     0-23\nVendor ID:                               GenuineIntel\nModel name:                              12th Gen Intel(R) Core(TM) i9-12900KF\nCPU family:                              6\nModel:                                   151\nThread(s) per core:                      2\nCore(s) per socket:                      16\nSocket(s):                               1\nStepping:                                2\nCPU max MHz:                             5200.0000\nCPU min MHz:                             800.0000\nBogoMIPS:                                6374.40\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l2 cdp_l2 ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdt_a rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nL1d cache:                               640 KiB (16 instances)\nL1i cache:                               768 KiB (16 instances)\nL2 cache:                                14 MiB (10 instances)\nL3 cache:                                30 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-23\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Mitigation; Clear Register File\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace",
+  "kernel": "6.17.6-arch1-1",
+  "mem": "total        used        free      shared  buff/cache   available\nMem:     134799159296 19961118720 94100172800   252866560 20737867776 113358520320",
+  "governor": "powersave",
+  "thp": "[always] madvise never\nalways defer defer+madvise [madvise] never",
+  "cpu_pinning": "0-15",
+  "cpus_pinned_topology": "CPU CORE    MAXMHZ\n  0    0 5100.0000\n  1    0 5100.0000\n  2    1 5100.0000\n  3    1 5100.0000\n  4    2 5100.0000\n  5    2 5100.0000\n  6    3 5100.0000\n  7    3 5100.0000\n  8    4 5200.0000\n  9    4 5200.0000\n 10    5 5200.0000\n 11    5 5200.0000\n 12    6 5100.0000\n 13    6 5100.0000\n 14    7 5100.0000\n 15    7 5100.0000",
+  "cgroup_cpu_max": "max 100000",
+  "cgroup_mem_max": "max",
+  "data_fs": "Filesystem     Type  Size  Used Avail Use% Mounted on\n/dev/nvme1n1p1 xfs   1.9T  970G  938G  51% /home/kould",
+  "block_device": "NAME    MODEL                                      SIZE ROTA\nnvme1n1 ZHITAI TiPlus7100 2TB                      1.9T    0\nnvme0n1 SAMSUNG MZVL21T0HCLR-00BL7               953.9G    0",
+  "drop_caches_writable": "no: [Errno 30] Read-only file system: '/proc/sys/vm/drop_caches'"
+ },
+ "harness": {
+  "bench.py": "7b486fceea78fd5995cb77f409a742f9081cb3afae5ec0a46c2c6b897baf5b58",
+  "report.py": "e1939daf0ca24133534bb7911e3164bdcf20d497eb13b054c6e1500a2b016333",
+  "releases.json": "cb3231b8debcdf68ba7aec0c7446b1db15ad866c8d6ee70ee5cbad200e2def93",
+  "build-official.sh": "9338cd31440e74b53ebb0db2fdb469c27a6988fa42f0c48a2298145530ce806b",
+  "clickbench/create.sql": "cc2491c196a213b5e78a543997b8f07d100d95575dbfefecf113c0ff4f387537",
+  "clickbench/queries.sql": "98d4c0025e44b03cf76df2d7da904c7af7f40916a12803b585c25fa912d56ef5"
+ },
+ "source_data": {
+  "path": "/home/kould/tmp-build/clickbench-retest-21163/input/hits.parquet",
+  "bytes": 14779976446,
+  "sha256": "a390f6cb782f6aaef278c72fc1dd86c4f30bc843ebab3c159e9bd4d45ddb079f"
+ },
+ "config_template": "[query]\ntenant_id = \"default\"\ncluster_id = \"clickbench\"\n{users}\n[storage]\ntype = \"fs\"\nallow_insecure = true\n\n[storage.fs]\ndata_path = \"{vd}/_data\"\n\n[meta]\nendpoints = [\"127.0.0.1:9191\"]\nusername = \"root\"\npassword = \"root\"\nclient_timeout_in_second = 60\nauto_sync_interval = 60\n\n[log.file]\ndir = \"{vd}/logs\"\n",
+ "config_users_1x": "\n[[query.users]]\nname = \"root\"\nauth_type = \"no_password\"\n",
+ "query_client": "HTTP POST /v1/query, wait_time_secs=30, max_rows_per_page=100000, client-side wall time",
+ "releases": {
+  "v0.9.53": {
+   "source": "official release v0.9.53-nightly (the version ClickBench uses)",
+   "builtin_root": true,
+   "databend-query": {
+    "sha256": "ed24921e5697d9ad6fab51079a1e54e73b6f0e7809841ffb9a26290f7c792c8f",
+    "version": "databend-query v0.9.53-nightly-c960892(rust-1.68.0-nightly-2023-02-26T07:06:28.204406701Z)"
+   },
+   "databend-meta": {
+    "sha256": "0fb8f1c68582ecb34b7dc678fa43cc807353a30e1c99d895c2e3e1161ea9b6f8",
+    "version": "databend-meta v0.9.53-nightly-c960892-simd(1.68.0-nightly-2023-02-26T07:11:02.147177583Z)"
+   }
+  },
+  "official-main-prs": {
+   "source": "upstream/main 177b395dd3 + #21138 + #21144 (581c894436) built by build-official.sh; meta from the v1.2.967 package; freshly rebuilt from 581c894436 for this run",
+   "databend-query": {
+    "sha256": "0f7954d838865f21755be917080be65348f7f821c4841be005fd66b2ea93996c",
+    "version": "databend-query v1.2.967-581c894436(rust-1.101.0-nightly-2026-11-26T07:24:51.176181000Z)"
+   },
+   "databend-meta": {
+    "sha256": "0230a84f77e8ddf618542185564c6499c68060d75e147572b83350578929d60b",
+    "version": "databend-meta-cli-config v1.2.967-25ca45599d(rust-1.101.0-nightly-2026-11-20T04:42:21.196252733Z)"
+   },
+   "build_info": {
+    "git_sha": "581c89443690c8c9003e204b564ffbbf526fdadd",
+    "rustc": "rustc 1.101.0-nightly (12433c307 2026-10-24)\nbinary: rustc\ncommit-hash: 12433c307b5a497388ffe2f4e49dbf1ab8c71fa0\ncommit-date: 2026-10-24\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4",
+    "build_start": "2026-11-26T07:24:48+00:00",
+    "build_end": "2026-11-26T07:35:37+00:00",
+    "cargo_cmd": "cargo build --locked --jobs 20 --target x86_64-unknown-linux-gnu --features default --profile release --bin databend-query",
+    "CARGO_PROFILE_RELEASE_OPT_LEVEL": "s",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTFLAGS": "-C target-feature=+sse4.2 -C link-arg=-fuse-ld=mold",
+    "DATABEND_RELEASE_VERSION": "v1.2.967-nightly",
+    "post": "objcopy split debug, strip --strip-debug, add gnu debuglink",
+    "sha256": "0f7954d838865f21755be917080be65348f7f821c4841be005fd66b2ea93996c",
+    "version": "databend-query v1.2.967-581c894436(rust-1.101.0-nightly-2026-11-26T07:24:51.176181000Z)"
+   }
+  },
+  "main": {
+   "source": "upstream/main 7510716171d90a81ea3df8806ac4cc291a1473e5; same CI profile as official-main-prs",
+   "databend-query": {
+    "sha256": "91561dd4782f1185504a19345e95cacab40f96c8e8b8397a8221377fbf82e25c",
+    "version": "databend-query v1.2.969-7510716171(rust-1.101.0-nightly-2026-11-26T06:49:51.827331901Z)"
+   },
+   "databend-meta": {
+    "sha256": "0230a84f77e8ddf618542185564c6499c68060d75e147572b83350578929d60b",
+    "version": "databend-meta-cli-config v1.2.967-25ca45599d(rust-1.101.0-nightly-2026-11-20T04:42:21.196252733Z)"
+   },
+   "build_info": {
+    "git_sha": "7510716171d90a81ea3df8806ac4cc291a1473e5",
+    "rustc": "rustc 1.101.0-nightly (12433c307 2026-10-24)\nbinary: rustc\ncommit-hash: 12433c307b5a497388ffe2f4e49dbf1ab8c71fa0\ncommit-date: 2026-10-24\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4",
+    "build_start": "2026-11-26T06:48:24+00:00",
+    "build_end": "2026-11-26T07:07:52+00:00",
+    "cargo_cmd": "cargo build --locked --jobs 20 --target x86_64-unknown-linux-gnu --features default --profile release --bin databend-query",
+    "CARGO_PROFILE_RELEASE_OPT_LEVEL": "s",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTFLAGS": "-C target-feature=+sse4.2 -C link-arg=-fuse-ld=mold",
+    "DATABEND_RELEASE_VERSION": null,
+    "post": "objcopy split debug, strip --strip-debug, add gnu debuglink",
+    "sha256": "91561dd4782f1185504a19345e95cacab40f96c8e8b8397a8221377fbf82e25c",
+    "version": "databend-query v1.2.969-7510716171(rust-1.101.0-nightly-2026-11-26T06:49:51.827331901Z)"
+   }
+  }
+ }
+}
