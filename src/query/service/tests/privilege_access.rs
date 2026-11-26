@@ -27,6 +27,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
@@ -1085,5 +1086,131 @@ async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::R
         "SELECT * FROM select_access.t",
     )
     .await?;
+    Ok(())
+}
+
+/// MySQL and Flight SQL sessions authenticate once per connection, so the session must reload
+/// the user before each query: a revoke, disabling the user or DROP USER takes effect without
+/// reconnecting.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_connection_sessions_reload_user_before_each_query() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    setup_table(&fixture).await?;
+    for sql in [
+        "CREATE ROLE reload_reader",
+        "CREATE ROLE reload_limited",
+        "GRANT SELECT ON select_access.t TO ROLE reload_reader",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let tenant = fixture.default_tenant();
+    let select = "SELECT * FROM select_access.t";
+
+    for (index, (label, session_type)) in [
+        ("MySQL", SessionType::MySQL),
+        ("FlightSQL", SessionType::FlightSQL),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let name = format!("reload_user_{index}");
+        for sql in [
+            format!("CREATE USER {name} IDENTIFIED BY 'password'"),
+            format!("GRANT ROLE reload_reader TO {name}"),
+            format!("GRANT ROLE reload_limited TO {name}"),
+        ] {
+            fixture.execute_command(&sql).await?;
+        }
+        let user = UserApiProvider::instance()
+            .get_user(&tenant, UserIdentity::new(&name, "%"))
+            .await?;
+        let session = fixture.new_session_with_type(session_type).await?;
+        session.set_authed_user(user, None).await?;
+
+        // A revoked secondary role stops taking effect, and takes effect again once granted.
+        session.set_current_role_checked("reload_limited").await?;
+        session
+            .set_secondary_roles_checked(Some(vec!["reload_reader".into()]))
+            .await?;
+        check_access(session.create_query_context(&BUILD_INFO).await?, select).await?;
+        fixture
+            .execute_command(&format!("REVOKE ROLE reload_reader FROM {name}"))
+            .await?;
+        let error = check_access(session.create_query_context(&BUILD_INFO).await?, select)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{label}");
+        fixture
+            .execute_command(&format!("GRANT ROLE reload_reader TO {name}"))
+            .await?;
+        check_access(session.create_query_context(&BUILD_INFO).await?, select).await?;
+
+        // A revoked current role falls back to PUBLIC, as on login.
+        session.set_current_role_checked("reload_reader").await?;
+        session.set_secondary_roles_checked(Some(vec![])).await?;
+        fixture
+            .execute_command(&format!("REVOKE ROLE reload_reader FROM {name}"))
+            .await?;
+        let error = check_access(session.create_query_context(&BUILD_INFO).await?, select)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{label}");
+        assert_eq!(
+            session.get_current_role().map(|role| role.name),
+            Some("public".to_string())
+        );
+
+        // A disabled user can no longer run queries, and can once enabled again.
+        fixture
+            .execute_command(&format!("ALTER USER {name} WITH DISABLED = TRUE"))
+            .await?;
+        let Err(error) = session.create_query_context(&BUILD_INFO).await else {
+            panic!("{label}: a disabled user created a query context");
+        };
+        assert_eq!(error.code(), ErrorCode::AUTHENTICATE_FAILURE, "{label}");
+        fixture
+            .execute_command(&format!("ALTER USER {name} WITH DISABLED = FALSE"))
+            .await?;
+        session.create_query_context(&BUILD_INFO).await?;
+
+        // A dropped user can no longer run queries.
+        fixture
+            .execute_command(&format!("DROP USER {name}"))
+            .await?;
+        let Err(error) = session.create_query_context(&BUILD_INFO).await else {
+            panic!("{label}: a dropped user created a query context");
+        };
+        assert_eq!(error.code(), ErrorCode::UNKNOWN_USER, "{label}");
+    }
+    Ok(())
+}
+
+/// Login sets `need_change` in memory only: reloading the user keeps it until the password
+/// changes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_reload_user_keeps_need_change_password() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE USER reload_password_user IDENTIFIED BY 'password'")
+        .await?;
+    let identity = UserIdentity::new("reload_password_user", "%");
+    let mut user = UserApiProvider::instance()
+        .get_user(&fixture.default_tenant(), identity)
+        .await?;
+    user.update_auth_need_change_password();
+    let session = fixture.new_session_with_type(SessionType::MySQL).await?;
+    session.set_authed_user(user, None).await?;
+
+    let error = check_access(session.create_query_context(&BUILD_INFO).await?, "SELECT 1")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::NEED_CHANGE_PASSWORD_DENIED);
+    assert!(session.get_current_user()?.auth_info.get_need_change());
+
+    fixture
+        .execute_command("ALTER USER reload_password_user IDENTIFIED BY 'new-password'")
+        .await?;
+    check_access(session.create_query_context(&BUILD_INFO).await?, "SELECT 1").await?;
+    assert!(!session.get_current_user()?.auth_info.get_need_change());
     Ok(())
 }

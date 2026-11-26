@@ -141,19 +141,24 @@ impl UserApiProvider {
         user_info: UserInfo,
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
-        if let Some(disabled) = user_info.option.disabled() {
-            if *disabled {
-                return Err(ErrorCode::AuthenticateFailure(format!(
-                    "AuthenticateFailure: user {} is disabled. Not allowed to login",
-                    user_info.name
-                )));
-            }
-        }
+        Self::check_user_enabled(&user_info)?;
 
         if let Some(name) = user_info.option.network_policy() {
             self.enforce_network_policy(tenant, name, client_ip).await?;
         }
         Ok(user_info)
+    }
+
+    /// Fails if the user is disabled: on login, and before each query of a connection that
+    /// authenticated before the user was disabled.
+    pub fn check_user_enabled(user_info: &UserInfo) -> Result<()> {
+        if user_info.option.disabled() == Some(&true) {
+            return Err(ErrorCode::AuthenticateFailure(format!(
+                "AuthenticateFailure: user {} is disabled. Not allowed to login",
+                user_info.name
+            )));
+        }
+        Ok(())
     }
 
     pub async fn enforce_network_policy(

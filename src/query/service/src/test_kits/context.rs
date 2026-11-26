@@ -19,6 +19,9 @@ use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_users::UserApiProvider;
 use futures::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
@@ -26,6 +29,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::Session;
 use crate::sessions::TableContextSettings;
 use crate::sql::Planner;
 
@@ -45,6 +49,19 @@ pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> 
     let res = execute_query(ctx, query).await?;
     res.try_collect::<Vec<DataBlock>>().await?;
     Ok(())
+}
+
+/// Stores `user` in meta-service and authenticates `session` as it. A MySQL or Flight SQL
+/// session reloads its user from meta-service before each query, see `Session::reload_authed_user`.
+pub async fn set_meta_user(session: &Session, user: UserInfo) -> Result<()> {
+    UserApiProvider::instance()
+        .create_user(
+            &session.get_current_tenant(),
+            user.clone(),
+            &CreateOption::CreateOrReplace,
+        )
+        .await?;
+    session.set_authed_user(user, None).await
 }
 
 pub async fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
