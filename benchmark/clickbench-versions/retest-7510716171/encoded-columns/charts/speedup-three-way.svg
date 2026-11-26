@@ -1,0 +1,317 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="1083" viewBox="0 0 1300 1083">
+<rect width="100%" height="100%" fill="white"/>
+<text x="16.0" y="26.0" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">ClickBench hot time per query: v0.9.53, main, and main with encoded columns</text>
+<text x="16.0" y="46.0" font-size="12" text-anchor="start" font-weight="normal" fill="#444" font-family="Helvetica, Arial, sans-serif">Bars show each main variant relative to v0.9.53 (1×); values at right are mean hot times in ms.</text>
+<rect x="16.0" y="58.0" width="12.0" height="12.0" fill="#4e79a7"></rect>
+<text x="34.0" y="68.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">main (default)</text>
+<rect x="158.0" y="58.0" width="12.0" height="12.0" fill="#59a14f"></rect>
+<text x="176.0" y="68.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">main (encoded only)</text>
+<text x="310.0" y="68.0" font-size="12" text-anchor="start" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">Sorted by encoded vs v0.9.53</text>
+<line x1="380.0" y1="96.0" x2="380.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="380.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">32× faster</text>
+<line x1="432.0" y1="96.0" x2="432.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="432.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">16× faster</text>
+<line x1="484.0" y1="96.0" x2="484.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="484.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">8× faster</text>
+<line x1="536.0" y1="96.0" x2="536.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="536.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">4× faster</text>
+<line x1="588.0" y1="96.0" x2="588.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="588.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">2× faster</text>
+<line x1="640.0" y1="96.0" x2="640.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="640.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">1×</text>
+<line x1="692.0" y1="96.0" x2="692.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="692.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">2× slower</text>
+<line x1="744.0" y1="96.0" x2="744.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="744.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">4× slower</text>
+<line x1="796.0" y1="96.0" x2="796.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="796.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">8× slower</text>
+<line x1="848.0" y1="96.0" x2="848.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="848.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">16× slower</text>
+<line x1="900.0" y1="96.0" x2="900.0" y2="1046.0" stroke="#eee" stroke-width="1"/>
+<text x="900.0" y="91.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#666" font-family="Helvetica, Arial, sans-serif">32× slower</text>
+<text x="963.0" y="91.0" font-size="11" text-anchor="middle" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">v0.9.53 (ms)</text>
+<text x="1092.0" y="91.0" font-size="11" text-anchor="middle" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">main (ms)</text>
+<text x="1229.0" y="91.0" font-size="11" text-anchor="middle" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">main encoded (ms)</text>
+<rect x="0.0" y="100.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="115.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q17  SELECT UserID, SearchPhrase, COUNT(*) FROM hits GRO…</text>
+<rect x="424.1" y="103.0" width="215.9" height="7.0" fill="#4e79a7"><title>main (default): 17.78× faster vs v0.9.53</title></rect>
+<rect x="439.2" y="111.0" width="200.8" height="7.0" fill="#59a14f"><title>main (encoded only): 14.54× faster vs v0.9.53</title></rect>
+<text x="963.0" y="115.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">783.0</text>
+<text x="1092.0" y="115.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">44.0</text>
+<text x="1229.0" y="115.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">53.8</text>
+<text x="372.0" y="137.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q28  SELECT REGEXP_REPLACE(Referer, '^https?://(?:www\.)…</text>
+<rect x="580.7" y="125.0" width="59.3" height="7.0" fill="#4e79a7"><title>main (default): 2.20× faster vs v0.9.53</title></rect>
+<rect x="521.3" y="133.0" width="118.7" height="7.0" fill="#59a14f"><title>main (encoded only): 4.87× faster vs v0.9.53</title></rect>
+<text x="963.0" y="137.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">9806.7</text>
+<text x="1092.0" y="137.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">4450.1</text>
+<text x="1229.0" y="137.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2014.2</text>
+<rect x="0.0" y="144.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="159.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q32  SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefr…</text>
+<rect x="574.4" y="147.0" width="65.6" height="7.0" fill="#4e79a7"><title>main (default): 2.40× faster vs v0.9.53</title></rect>
+<rect x="575.9" y="155.0" width="64.1" height="7.0" fill="#59a14f"><title>main (encoded only): 2.35× faster vs v0.9.53</title></rect>
+<text x="963.0" y="159.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">3822.4</text>
+<text x="1092.0" y="159.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1593.9</text>
+<text x="1229.0" y="159.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1626.4</text>
+<text x="372.0" y="181.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q16  SELECT UserID, SearchPhrase, COUNT(*) FROM hits GRO…</text>
+<rect x="618.4" y="169.0" width="21.6" height="7.0" fill="#4e79a7"><title>main (default): 1.33× faster vs v0.9.53</title></rect>
+<rect x="580.3" y="177.0" width="59.7" height="7.0" fill="#59a14f"><title>main (encoded only): 2.22× faster vs v0.9.53</title></rect>
+<text x="963.0" y="181.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1562.5</text>
+<text x="1092.0" y="181.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1171.9</text>
+<text x="1229.0" y="181.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">704.6</text>
+<rect x="0.0" y="188.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="203.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q06  SELECT MIN(EventDate), MAX(EventDate) FROM hits</text>
+<rect x="640.0" y="191.0" width="7.1" height="7.0" fill="#4e79a7"><title>main (default): 1.10× slower vs v0.9.53</title></rect>
+<rect x="591.8" y="199.0" width="48.2" height="7.0" fill="#59a14f"><title>main (encoded only): 1.90× faster vs v0.9.53</title></rect>
+<text x="963.0" y="203.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">15.9</text>
+<text x="1092.0" y="203.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">17.5</text>
+<text x="1229.0" y="203.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">8.4</text>
+<text x="372.0" y="225.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q18  SELECT UserID, extract(minute FROM EventTime) AS m,…</text>
+<rect x="597.5" y="213.0" width="42.5" height="7.0" fill="#4e79a7"><title>main (default): 1.76× faster vs v0.9.53</title></rect>
+<rect x="592.6" y="221.0" width="47.4" height="7.0" fill="#59a14f"><title>main (encoded only): 1.88× faster vs v0.9.53</title></rect>
+<text x="963.0" y="225.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2629.2</text>
+<text x="1092.0" y="225.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1491.8</text>
+<text x="1229.0" y="225.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1398.5</text>
+<rect x="0.0" y="232.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="247.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q12  SELECT SearchPhrase, COUNT(*) AS c FROM hits WHERE …</text>
+<rect x="623.5" y="235.0" width="16.5" height="7.0" fill="#4e79a7"><title>main (default): 1.25× faster vs v0.9.53</title></rect>
+<rect x="610.0" y="243.0" width="30.0" height="7.0" fill="#59a14f"><title>main (encoded only): 1.49× faster vs v0.9.53</title></rect>
+<text x="963.0" y="247.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">481.0</text>
+<text x="1092.0" y="247.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">385.8</text>
+<text x="1229.0" y="247.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">322.3</text>
+<text x="372.0" y="269.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q14  SELECT SearchEngineID, SearchPhrase, COUNT(*) AS c …</text>
+<rect x="621.2" y="257.0" width="18.8" height="7.0" fill="#4e79a7"><title>main (default): 1.28× faster vs v0.9.53</title></rect>
+<rect x="614.7" y="265.0" width="25.3" height="7.0" fill="#59a14f"><title>main (encoded only): 1.40× faster vs v0.9.53</title></rect>
+<text x="963.0" y="269.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">532.6</text>
+<text x="1092.0" y="269.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">414.7</text>
+<text x="1229.0" y="269.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">380.1</text>
+<rect x="0.0" y="276.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="291.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q15  SELECT UserID, COUNT(*) FROM hits GROUP BY UserID O…</text>
+<rect x="612.1" y="279.0" width="27.9" height="7.0" fill="#4e79a7"><title>main (default): 1.45× faster vs v0.9.53</title></rect>
+<rect x="614.7" y="287.0" width="25.3" height="7.0" fill="#59a14f"><title>main (encoded only): 1.40× faster vs v0.9.53</title></rect>
+<text x="963.0" y="291.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">463.4</text>
+<text x="1092.0" y="291.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">319.5</text>
+<text x="1229.0" y="291.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">330.9</text>
+<text x="372.0" y="313.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q35  SELECT ClientIP, ClientIP - 1, ClientIP - 2, Client…</text>
+<rect x="614.4" y="301.0" width="25.6" height="7.0" fill="#4e79a7"><title>main (default): 1.41× faster vs v0.9.53</title></rect>
+<rect x="615.4" y="309.0" width="24.6" height="7.0" fill="#59a14f"><title>main (encoded only): 1.39× faster vs v0.9.53</title></rect>
+<text x="963.0" y="313.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">405.6</text>
+<text x="1092.0" y="313.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">288.4</text>
+<text x="1229.0" y="313.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">292.0</text>
+<rect x="0.0" y="320.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="335.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q34  SELECT 1, URL, COUNT(*) AS c FROM hits GROUP BY 1, …</text>
+<rect x="620.9" y="323.0" width="19.1" height="7.0" fill="#4e79a7"><title>main (default): 1.29× faster vs v0.9.53</title></rect>
+<rect x="621.1" y="331.0" width="18.9" height="7.0" fill="#59a14f"><title>main (encoded only): 1.29× faster vs v0.9.53</title></rect>
+<text x="963.0" y="335.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2480.8</text>
+<text x="1092.0" y="335.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1923.0</text>
+<text x="1229.0" y="335.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1929.6</text>
+<text x="372.0" y="357.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q33  SELECT URL, COUNT(*) AS c FROM hits GROUP BY URL OR…</text>
+<rect x="622.0" y="345.0" width="18.0" height="7.0" fill="#4e79a7"><title>main (default): 1.27× faster vs v0.9.53</title></rect>
+<rect x="621.9" y="353.0" width="18.1" height="7.0" fill="#59a14f"><title>main (encoded only): 1.27× faster vs v0.9.53</title></rect>
+<text x="963.0" y="357.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2399.2</text>
+<text x="1092.0" y="357.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1887.9</text>
+<text x="1229.0" y="357.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1886.0</text>
+<rect x="0.0" y="364.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="379.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q05  SELECT COUNT(DISTINCT SearchPhrase) FROM hits</text>
+<rect x="623.5" y="367.0" width="16.5" height="7.0" fill="#4e79a7"><title>main (default): 1.25× faster vs v0.9.53</title></rect>
+<rect x="622.1" y="375.0" width="17.9" height="7.0" fill="#59a14f"><title>main (encoded only): 1.27× faster vs v0.9.53</title></rect>
+<text x="963.0" y="379.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">420.1</text>
+<text x="1092.0" y="379.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">337.0</text>
+<text x="1229.0" y="379.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">331.0</text>
+<text x="372.0" y="401.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q04  SELECT COUNT(DISTINCT UserID) FROM hits</text>
+<rect x="620.7" y="389.0" width="19.3" height="7.0" fill="#4e79a7"><title>main (default): 1.29× faster vs v0.9.53</title></rect>
+<rect x="622.6" y="397.0" width="17.4" height="7.0" fill="#59a14f"><title>main (encoded only): 1.26× faster vs v0.9.53</title></rect>
+<text x="963.0" y="401.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">351.4</text>
+<text x="1092.0" y="401.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">271.7</text>
+<text x="1229.0" y="401.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">278.8</text>
+<rect x="0.0" y="408.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="423.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q10  SELECT MobilePhoneModel, COUNT(DISTINCT UserID) AS …</text>
+<rect x="640.0" y="411.0" width="0.5" height="7.0" fill="#4e79a7"><title>main (default): 1.00× slower vs v0.9.53</title></rect>
+<rect x="623.2" y="419.0" width="16.8" height="7.0" fill="#59a14f"><title>main (encoded only): 1.25× faster vs v0.9.53</title></rect>
+<text x="963.0" y="423.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">129.1</text>
+<text x="1092.0" y="423.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">129.7</text>
+<text x="1229.0" y="423.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">103.2</text>
+<text x="372.0" y="445.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q08  SELECT RegionID, COUNT(DISTINCT UserID) AS u FROM h…</text>
+<rect x="623.5" y="433.0" width="16.5" height="7.0" fill="#4e79a7"><title>main (default): 1.25× faster vs v0.9.53</title></rect>
+<rect x="625.2" y="441.0" width="14.8" height="7.0" fill="#59a14f"><title>main (encoded only): 1.22× faster vs v0.9.53</title></rect>
+<text x="963.0" y="445.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">408.3</text>
+<text x="1092.0" y="445.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">327.8</text>
+<text x="1229.0" y="445.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">335.0</text>
+<rect x="0.0" y="452.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="467.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q13  SELECT SearchPhrase, COUNT(DISTINCT UserID) AS u FR…</text>
+<rect x="633.0" y="455.0" width="7.0" height="7.0" fill="#4e79a7"><title>main (default): 1.10× faster vs v0.9.53</title></rect>
+<rect x="627.3" y="463.0" width="12.7" height="7.0" fill="#59a14f"><title>main (encoded only): 1.18× faster vs v0.9.53</title></rect>
+<text x="963.0" y="467.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">712.0</text>
+<text x="1092.0" y="467.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">648.2</text>
+<text x="1229.0" y="467.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">601.4</text>
+<text x="372.0" y="489.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q31  SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefr…</text>
+<rect x="640.0" y="477.0" width="0.5" height="7.0" fill="#4e79a7"><title>main (default): 1.00× slower vs v0.9.53</title></rect>
+<rect x="630.6" y="485.0" width="9.4" height="7.0" fill="#59a14f"><title>main (encoded only): 1.13× faster vs v0.9.53</title></rect>
+<text x="963.0" y="489.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">634.5</text>
+<text x="1092.0" y="489.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">636.6</text>
+<text x="1229.0" y="489.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">559.7</text>
+<rect x="0.0" y="496.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="511.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q11  SELECT MobilePhone, MobilePhoneModel, COUNT(DISTINC…</text>
+<rect x="640.0" y="499.0" width="10.3" height="7.0" fill="#4e79a7"><title>main (default): 1.15× slower vs v0.9.53</title></rect>
+<rect x="633.7" y="507.0" width="6.3" height="7.0" fill="#59a14f"><title>main (encoded only): 1.09× faster vs v0.9.53</title></rect>
+<text x="963.0" y="511.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">124.0</text>
+<text x="1092.0" y="511.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">142.4</text>
+<text x="1229.0" y="511.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">114.1</text>
+<text x="372.0" y="533.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q29  SELECT SUM(ResolutionWidth), SUM(ResolutionWidth + …</text>
+<rect x="640.0" y="521.0" width="5.3" height="7.0" fill="#4e79a7"><title>main (default): 1.07× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="529.0" width="6.0" height="7.0" fill="#59a14f"><title>main (encoded only): 1.08× slower vs v0.9.53</title></rect>
+<text x="963.0" y="533.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">54.8</text>
+<text x="1092.0" y="533.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">58.8</text>
+<text x="1229.0" y="533.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">59.3</text>
+<rect x="0.0" y="540.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="555.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q25  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…</text>
+<rect x="640.0" y="543.0" width="34.9" height="7.0" fill="#4e79a7"><title>main (default): 1.59× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="551.0" width="8.9" height="7.0" fill="#59a14f"><title>main (encoded only): 1.13× slower vs v0.9.53</title></rect>
+<text x="963.0" y="555.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">110.1</text>
+<text x="1092.0" y="555.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">175.2</text>
+<text x="1229.0" y="555.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">124.0</text>
+<text x="372.0" y="577.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q36  SELECT URL, COUNT(*) AS PageViews FROM hits WHERE C…</text>
+<rect x="640.0" y="565.0" width="11.1" height="7.0" fill="#4e79a7"><title>main (default): 1.16× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="573.0" width="15.0" height="7.0" fill="#59a14f"><title>main (encoded only): 1.22× slower vs v0.9.53</title></rect>
+<text x="963.0" y="577.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">35.8</text>
+<text x="1092.0" y="577.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">41.5</text>
+<text x="1229.0" y="577.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">43.7</text>
+<rect x="0.0" y="584.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="599.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q39  SELECT TraficSourceID, SearchEngineID, AdvEngineID,…</text>
+<rect x="640.0" y="587.0" width="13.4" height="7.0" fill="#4e79a7"><title>main (default): 1.20× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="595.0" width="15.2" height="7.0" fill="#59a14f"><title>main (encoded only): 1.22× slower vs v0.9.53</title></rect>
+<text x="963.0" y="599.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">66.0</text>
+<text x="1092.0" y="599.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">79.0</text>
+<text x="1229.0" y="599.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">80.8</text>
+<text x="372.0" y="621.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q30  SELECT SearchEngineID, ClientIP, COUNT(*) AS c, SUM…</text>
+<rect x="640.0" y="609.0" width="22.4" height="7.0" fill="#4e79a7"><title>main (default): 1.35× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="617.0" width="15.9" height="7.0" fill="#59a14f"><title>main (encoded only): 1.24× slower vs v0.9.53</title></rect>
+<text x="963.0" y="621.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">314.9</text>
+<text x="1092.0" y="621.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">424.3</text>
+<text x="1229.0" y="621.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">389.0</text>
+<rect x="0.0" y="628.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="643.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q09  SELECT RegionID, SUM(AdvEngineID), COUNT(*) AS c, A…</text>
+<rect x="640.0" y="631.0" width="16.4" height="7.0" fill="#4e79a7"><title>main (default): 1.24× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="639.0" width="17.5" height="7.0" fill="#59a14f"><title>main (encoded only): 1.26× slower vs v0.9.53</title></rect>
+<text x="963.0" y="643.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">443.3</text>
+<text x="1092.0" y="643.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">551.4</text>
+<text x="1229.0" y="643.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">559.3</text>
+<text x="372.0" y="665.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q00  SELECT COUNT(*) FROM hits</text>
+<rect x="640.0" y="653.0" width="33.2" height="7.0" fill="#4e79a7"><title>main (default): 1.56× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="661.0" width="27.1" height="7.0" fill="#59a14f"><title>main (encoded only): 1.43× slower vs v0.9.53</title></rect>
+<text x="963.0" y="665.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">8.0</text>
+<text x="1092.0" y="665.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">12.4</text>
+<text x="1229.0" y="665.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">11.4</text>
+<rect x="0.0" y="672.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="687.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q19  SELECT UserID FROM hits WHERE UserID = 435090932899…</text>
+<rect x="640.0" y="675.0" width="42.0" height="7.0" fill="#4e79a7"><title>main (default): 1.75× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="683.0" width="31.6" height="7.0" fill="#59a14f"><title>main (encoded only): 1.52× slower vs v0.9.53</title></rect>
+<text x="963.0" y="687.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">4.2</text>
+<text x="1092.0" y="687.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">7.4</text>
+<text x="1229.0" y="687.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">6.5</text>
+<text x="372.0" y="709.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q37  SELECT Title, COUNT(*) AS PageViews FROM hits WHERE…</text>
+<rect x="640.0" y="697.0" width="16.2" height="7.0" fill="#4e79a7"><title>main (default): 1.24× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="705.0" width="32.6" height="7.0" fill="#59a14f"><title>main (encoded only): 1.54× slower vs v0.9.53</title></rect>
+<text x="963.0" y="709.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">19.9</text>
+<text x="1092.0" y="709.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">24.7</text>
+<text x="1229.0" y="709.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">30.7</text>
+<rect x="0.0" y="716.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="731.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q22  SELECT SearchPhrase, MIN(URL), MIN(Title), COUNT(*)…</text>
+<rect x="640.0" y="719.0" width="41.9" height="7.0" fill="#4e79a7"><title>main (default): 1.75× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="727.0" width="36.0" height="7.0" fill="#59a14f"><title>main (encoded only): 1.61× slower vs v0.9.53</title></rect>
+<text x="963.0" y="731.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">767.9</text>
+<text x="1092.0" y="731.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1341.4</text>
+<text x="1229.0" y="731.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1240.0</text>
+<text x="372.0" y="753.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q23  SELECT * FROM hits WHERE URL LIKE '%google%' ORDER …</text>
+<rect x="640.0" y="741.0" width="44.3" height="7.0" fill="#4e79a7"><title>main (default): 1.81× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="749.0" width="39.7" height="7.0" fill="#59a14f"><title>main (encoded only): 1.70× slower vs v0.9.53</title></rect>
+<text x="963.0" y="753.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">120.2</text>
+<text x="1092.0" y="753.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">217.2</text>
+<text x="1229.0" y="753.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">204.3</text>
+<rect x="0.0" y="760.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="775.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q07  SELECT AdvEngineID, COUNT(*) FROM hits WHERE AdvEng…</text>
+<rect x="640.0" y="763.0" width="47.0" height="7.0" fill="#4e79a7"><title>main (default): 1.87× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="771.0" width="49.7" height="7.0" fill="#59a14f"><title>main (encoded only): 1.94× slower vs v0.9.53</title></rect>
+<text x="963.0" y="775.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">20.2</text>
+<text x="1092.0" y="775.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">37.7</text>
+<text x="1229.0" y="775.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">39.1</text>
+<text x="372.0" y="797.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q02  SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWi…</text>
+<rect x="640.0" y="785.0" width="50.8" height="7.0" fill="#4e79a7"><title>main (default): 1.97× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="793.0" width="49.7" height="7.0" fill="#59a14f"><title>main (encoded only): 1.94× slower vs v0.9.53</title></rect>
+<text x="963.0" y="797.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">27.1</text>
+<text x="1092.0" y="797.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">53.2</text>
+<text x="1229.0" y="797.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">52.5</text>
+<rect x="0.0" y="804.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="819.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q21  SELECT SearchPhrase, MIN(URL), COUNT(*) AS c FROM h…</text>
+<rect x="640.0" y="807.0" width="54.7" height="7.0" fill="#4e79a7"><title>main (default): 2.07× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="815.0" width="52.2" height="7.0" fill="#59a14f"><title>main (encoded only): 2.01× slower vs v0.9.53</title></rect>
+<text x="963.0" y="819.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">401.2</text>
+<text x="1092.0" y="819.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">831.9</text>
+<text x="1229.0" y="819.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">805.0</text>
+<text x="372.0" y="841.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q01  SELECT COUNT(*) FROM hits WHERE AdvEngineID &lt;&gt; 0</text>
+<rect x="640.0" y="829.0" width="54.4" height="7.0" fill="#4e79a7"><title>main (default): 2.07× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="837.0" width="54.9" height="7.0" fill="#59a14f"><title>main (encoded only): 2.08× slower vs v0.9.53</title></rect>
+<text x="963.0" y="841.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">16.9</text>
+<text x="1092.0" y="841.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">35.0</text>
+<text x="1229.0" y="841.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">35.3</text>
+<rect x="0.0" y="848.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="863.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q20  SELECT COUNT(*) FROM hits WHERE URL LIKE '%google%'</text>
+<rect x="640.0" y="851.0" width="59.9" height="7.0" fill="#4e79a7"><title>main (default): 2.22× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="859.0" width="60.7" height="7.0" fill="#59a14f"><title>main (encoded only): 2.25× slower vs v0.9.53</title></rect>
+<text x="963.0" y="863.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">323.3</text>
+<text x="1092.0" y="863.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">718.6</text>
+<text x="1229.0" y="863.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">726.1</text>
+<text x="372.0" y="885.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q38  SELECT URL, COUNT(*) AS PageViews FROM hits WHERE C…</text>
+<rect x="640.0" y="873.0" width="66.0" height="7.0" fill="#4e79a7"><title>main (default): 2.41× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="881.0" width="61.6" height="7.0" fill="#59a14f"><title>main (encoded only): 2.27× slower vs v0.9.53</title></rect>
+<text x="963.0" y="885.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">14.7</text>
+<text x="1092.0" y="885.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">35.3</text>
+<text x="1229.0" y="885.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">33.3</text>
+<rect x="0.0" y="892.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="907.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q40  SELECT URLHash, EventDate, COUNT(*) AS PageViews FR…</text>
+<rect x="640.0" y="895.0" width="39.7" height="7.0" fill="#4e79a7"><title>main (default): 1.70× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="903.0" width="62.5" height="7.0" fill="#59a14f"><title>main (encoded only): 2.30× slower vs v0.9.53</title></rect>
+<text x="963.0" y="907.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">13.4</text>
+<text x="1092.0" y="907.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">22.7</text>
+<text x="1229.0" y="907.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">30.7</text>
+<text x="372.0" y="929.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q41  SELECT WindowClientWidth, WindowClientHeight, COUNT…</text>
+<rect x="640.0" y="917.0" width="48.3" height="7.0" fill="#4e79a7"><title>main (default): 1.90× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="925.0" width="66.3" height="7.0" fill="#59a14f"><title>main (encoded only): 2.42× slower vs v0.9.53</title></rect>
+<text x="963.0" y="929.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">9.7</text>
+<text x="1092.0" y="929.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">18.5</text>
+<text x="1229.0" y="929.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">23.5</text>
+<rect x="0.0" y="936.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="951.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q03  SELECT AVG(UserID) FROM hits</text>
+<rect x="640.0" y="939.0" width="57.4" height="7.0" fill="#4e79a7"><title>main (default): 2.15× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="947.0" width="67.5" height="7.0" fill="#59a14f"><title>main (encoded only): 2.46× slower vs v0.9.53</title></rect>
+<text x="963.0" y="951.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">27.5</text>
+<text x="1092.0" y="951.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">59.1</text>
+<text x="1229.0" y="951.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">67.6</text>
+<text x="372.0" y="973.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q24  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…</text>
+<rect x="640.0" y="961.0" width="86.2" height="7.0" fill="#4e79a7"><title>main (default): 3.15× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="969.0" width="72.8" height="7.0" fill="#59a14f"><title>main (encoded only): 2.64× slower vs v0.9.53</title></rect>
+<text x="963.0" y="973.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">16.7</text>
+<text x="1092.0" y="973.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">52.7</text>
+<text x="1229.0" y="973.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">44.1</text>
+<rect x="0.0" y="980.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="995.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q27  SELECT CounterID, AVG(length(URL)) AS l, COUNT(*) A…</text>
+<rect x="640.0" y="983.0" width="82.1" height="7.0" fill="#4e79a7"><title>main (default): 2.99× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="991.0" width="73.2" height="7.0" fill="#59a14f"><title>main (encoded only): 2.65× slower vs v0.9.53</title></rect>
+<text x="963.0" y="995.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">307.8</text>
+<text x="1092.0" y="995.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">919.2</text>
+<text x="1229.0" y="995.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">816.0</text>
+<text x="372.0" y="1017.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q42  SELECT DATE_TRUNC('minute', EventTime) AS M, COUNT(…</text>
+<rect x="640.0" y="1005.0" width="73.6" height="7.0" fill="#4e79a7"><title>main (default): 2.67× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="1013.0" width="78.0" height="7.0" fill="#59a14f"><title>main (encoded only): 2.83× slower vs v0.9.53</title></rect>
+<text x="963.0" y="1017.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">9.9</text>
+<text x="1092.0" y="1017.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">26.3</text>
+<text x="1229.0" y="1017.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">27.9</text>
+<rect x="0.0" y="1024.0" width="1300.0" height="22.0" fill="#f5f5f5"></rect>
+<text x="372.0" y="1039.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q26  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…</text>
+<rect x="640.0" y="1027.0" width="98.3" height="7.0" fill="#4e79a7"><title>main (default): 3.71× slower vs v0.9.53</title></rect>
+<rect x="640.0" y="1035.0" width="90.2" height="7.0" fill="#59a14f"><title>main (encoded only): 3.33× slower vs v0.9.53</title></rect>
+<text x="963.0" y="1039.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">17.6</text>
+<text x="1092.0" y="1039.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">65.1</text>
+<text x="1229.0" y="1039.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">58.4</text>
+<line x1="640.0" y1="96.0" x2="640.0" y2="1046.0" stroke="#333" stroke-width="1.2"/>
+<text x="16.0" y="1070.0" font-size="11" text-anchor="start" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">v0.9.53 (Native) is from the version retest; both main runs read the same Parquet snapshot in the settings retest.</text>
+</svg>

@@ -15,6 +15,28 @@ This follow-up compares `enable_encoded_columns=0` (default) and `1` on the same
 
 ## Charts
 
+The three-way charts add `v0.9.53` from the [default-settings version retest](../README.md) as the old-version reference. It reads Native and was timed in a separate run. Both `main` series use the same Parquet snapshot and are the controlled comparison for encoding. All three series use the mean over the two rounds, with each round's hot time taken as the faster of runs 2 and 3. That gives `v0.9.53` a hot sum of 31.31 s instead of the 31.00 s reported in the version retest, which takes the best hot time across rounds.
+
+| configuration | cold sum | hot sum | peak RSS |
+|---|---:|---:|---:|
+| `v0.9.53` (Native) | 39.06 s | 31.31 s | 13.92 GiB |
+| `main` (default) | 30.58 s | 22.29 s | 13.79 GiB |
+| `main` (encoded columns only) | 26.58 s | 18.78 s | 13.54 GiB |
+
+**Against `v0.9.53`** (1× baseline); both `main` variants have a bar and all three hot times are shown at right:
+
+![Per-query hot speedup across all three configurations](charts/speedup-three-way.svg)
+
+**Peak RSS per query** (GiB):
+
+![Per-query peak RSS across all three configurations](charts/peak-rss-three-way.svg)
+
+**Sum over the 43 queries** (seconds), cold and hot:
+
+![Cold and hot sums across all three configurations](charts/summary-three-way.svg)
+
+### Same-snapshot charts (main only)
+
 ![Per-query hot speedup, encoded columns only vs default](charts/speedup-vs-default.svg)
 
 ![Per-query peak RSS, encoded columns only vs default](charts/peak-rss.svg)
