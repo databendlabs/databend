@@ -37,7 +37,7 @@ use databend_common_users::UserApiProvider;
 use log::LevelFilter;
 use log::debug;
 
-use crate::binder::insert::LEGACY_STREAMING_LOAD_PLACEHOLDER;
+use crate::binder::insert::is_streaming_load_placeholder;
 use crate::binder::insert::streaming_load_placeholder_error;
 use crate::binder::location::apply_uri_connection;
 use crate::binder::location::get_storage_params_from_options;
@@ -74,7 +74,7 @@ pub fn parse_stage_location(location: &str) -> Result<(String, String)> {
             "stage path must include a stage name".to_string(),
         ));
     }
-    if names[0] == LEGACY_STREAMING_LOAD_PLACEHOLDER {
+    if is_streaming_load_placeholder(names[0]) {
         return Err(streaming_load_placeholder_error(names[0]));
     }
 
@@ -96,7 +96,7 @@ pub fn parse_stage_name(location: &str) -> Result<String> {
             "stage path must include a stage name".to_string(),
         ));
     }
-    if stage_name == LEGACY_STREAMING_LOAD_PLACEHOLDER {
+    if is_streaming_load_placeholder(stage_name) {
         return Err(streaming_load_placeholder_error(stage_name));
     }
     if stage_name.contains('/') {

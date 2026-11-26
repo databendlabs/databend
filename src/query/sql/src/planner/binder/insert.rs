@@ -46,8 +46,9 @@ use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::plans::StreamingLoadPlan;
 
-const STREAMING_LOAD_PLACEHOLDER: &str = "_streaming_load";
-pub(super) const LEGACY_STREAMING_LOAD_PLACEHOLDER: &str = "_databend_load";
+pub(super) fn is_streaming_load_placeholder(name: &str) -> bool {
+    matches!(name, "_streaming_load" | "_databend_load")
+}
 
 pub(super) fn streaming_load_placeholder_error(name: &str) -> ErrorCode {
     ErrorCode::BadArguments(format!(
@@ -197,11 +198,11 @@ impl Binder {
                 let settings = self.ctx.get_settings();
                 let file_format_params =
                     parse_file_format(FileFormatOptionsReader::from_ast(&format_options))?;
-                match (location.as_str(), self.ctx.get_session_type()) {
-                    (
-                        STREAMING_LOAD_PLACEHOLDER | LEGACY_STREAMING_LOAD_PLACEHOLDER,
-                        SessionType::HTTPStreamingLoad,
-                    ) => {
+                match location.as_str() {
+                    name if is_streaming_load_placeholder(name) => {
+                        if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
+                            return Err(streaming_load_placeholder_error(name));
+                        }
                         let (required_source_schema, values_consts) = if let Some(value) = value {
                             self.prepared_values(value, &required_values_schema, settings)
                                 .await?
@@ -232,11 +233,7 @@ impl Binder {
                             required_source_schema,
                         }))
                     }
-                    (LEGACY_STREAMING_LOAD_PLACEHOLDER, _) => {
-                        Err(streaming_load_placeholder_error(&location))
-                    }
-                    // Unlike the legacy name, _streaming_load can be a real stage in ordinary SQL.
-                    (loc, _) => {
+                    loc => {
                         let (stage_info, path) = StageResolver::from_table_context(
                             self.ctx.clone(),
                             databend_common_users::UserApiProvider::instance(),

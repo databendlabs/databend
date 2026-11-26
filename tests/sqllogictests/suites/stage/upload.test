@@ -64,7 +64,7 @@ list @data/unload/upload.test/case1
 statement ok
 truncate table t1
 
-# case 4: the legacy placeholder remains reserved outside streaming load
+# case 4: both placeholder names are reserved outside streaming load
 
 statement error reserved
 create stage _databend_load;
@@ -75,25 +75,17 @@ insert into t1 from @_databend_load file_format=(type='csv')
 statement error placeholder @_databend_load
 list @_databend_load
 
-# case 5: the new placeholder is a regular stage name outside streaming load
+statement error reserved
+create stage _streaming_load
 
-statement ok
-create or replace stage _streaming_load
+statement error reserved
+create stage _STREAMING_LOAD
 
-statement ok
-copy into @_streaming_load/ from (select 4, 'a') file_format=(type=csv)
-
-statement ok
+statement error placeholder @_streaming_load
 insert into t1 from @_streaming_load file_format=(type='csv')
 
-query IT
-select * from t1
-----
-4 a
+statement error placeholder @_streaming_load
+list @_streaming_load/files/
 
-query TITTT
-list @_streaming_load
-----
-
-statement ok
-drop stage _streaming_load
+statement error placeholder @_streaming_load
+select read_file('@_streaming_load', 'file.csv')
