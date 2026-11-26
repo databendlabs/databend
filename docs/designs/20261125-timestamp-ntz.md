@@ -399,7 +399,12 @@ Parser notes:
   (`src/query/ast/src/parser/expr.rs:2408-2409`).
 - The precision argument `p` is accepted and ignored for all four type names
   when `p <= 6`, and rejected when `p` is 7..=9 (see "Deliberate divergences").
-  All timestamp types are stored as microseconds regardless.
+  All timestamp types are stored as microseconds regardless. P1 applies this
+  to `TIMESTAMP_NTZ(p)` only, where nothing existing depends on it.
+  `TIMESTAMP(p)` and `DATETIME(p)` still accept any `p`; rejecting
+  `TIMESTAMP(9)` changes the behaviour of existing DDL, including DDL exported
+  from Snowflake, so it is decided in P2 together with
+  `timestamp_type_mapping`.
 
 ### Resolving a settings-dependent type name
 
@@ -503,12 +508,13 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
     `GROUP BY`, `DISTINCT`, joins, and `min` / `max` / `count(distinct)`;
   - the enabled rows of the "P0 audit" table, including min/max block pruning;
   - `COPY` unload and load in Parquet (the type survives the round trip) and
-    CSV, and cast to `VARIANT` as text.
+    CSV, and cast to `VARIANT` as text;
+  - the precision rule for `TIMESTAMP_NTZ(p)` only: `p` from 0 to 6 is
+    accepted and ignored, 7 or more is a parse error.
 
   Not yet: anything that converts to or from `TIMESTAMP` / `TIMESTAMP_TZ` /
-  `DATE` or a number, interval arithmetic, date functions, and the precision
-  argument (`TIMESTAMP_NTZ(6)` does not parse yet). These fail at bind or
-  parse time with an error, never with a silently converted value.
+  `DATE` or a number, interval arithmetic, and date functions. These fail at
+  bind time with an error, never with a silently converted value.
 - **P2 — Snowflake-shaped behaviour.** The conversion model (implicit
   precedence, both explicit spellings, the numeric-effect table),
   `timestamp_type_mapping`, the `DATETIME` mapping, the v1 function set, and
