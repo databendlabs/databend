@@ -69,8 +69,6 @@ pub struct BloomRuntimeFilterRef {
     pub sample_rows: u64,
 }
 
-/// The executor of a prewhere predicate. A single comparison is evaluated as a boolean
-/// column, as the selector has nothing to short-circuit in it.
 fn prewhere_executor(
     filter: &Expr,
     func_ctx: &FunctionContext,
@@ -84,7 +82,6 @@ fn prewhere_executor(
         &BUILTIN_FUNCTIONS,
         false,
     )
-    .evaluate_single_comparison()
 }
 
 /// The conjuncts of a filter, split at the non-nullable ANDs.

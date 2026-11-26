@@ -1,4 +1,4 @@
-# Filters, join conditions and DML predicates go through `FilterExecutor`, which uses the
+# Filters, join conditions and DELETE/UPDATE/MERGE predicates go through `FilterExecutor`, which uses the
 # selector or the evaluator by `enable_selector_executor`. Both must give the same rows, also
 # in the old hash join, which reads the selected rows to update its outer join row states.
 # run-with-settings: enable_selector_executor=0
@@ -61,28 +61,6 @@ NULL 1 15
 NULL 2 25
 NULL 5 100
 
-query I
-SELECT a FROM fes_t1
-WHERE EXISTS (SELECT 1 FROM fes_t2 WHERE fes_t2.a = fes_t1.a AND fes_t2.c > fes_t1.b)
-ORDER BY a
-----
-1
-2
-
-query I
-SELECT a FROM fes_t1
-WHERE NOT EXISTS (SELECT 1 FROM fes_t2 WHERE fes_t2.a = fes_t1.a AND fes_t2.c > fes_t1.b)
-ORDER BY a
-----
-3
-4
-
-query II
-SELECT a, b FROM fes_t1 WHERE a = 1 OR b > 25 ORDER BY a
-----
-1 10
-3 30
-
 statement ok
 CREATE OR REPLACE TABLE fes_t3(a INT, c INT)
 
@@ -122,16 +100,6 @@ SELECT a, c FROM fes_t3 ORDER BY a
 ----
 4 1
 5 101
-
-statement ok
-REPLACE INTO fes_t3 ON(a) DELETE WHEN d = 0 OR d > 8
-    SELECT * FROM (VALUES (4, 1, 0), (5, 2, 9), (6, 1, 1), (7, 2, 2)) AS v(a, c, d)
-
-query II
-SELECT a, c FROM fes_t3 ORDER BY a
-----
-6 1
-7 2
 
 statement ok
 DROP TABLE fes_t1

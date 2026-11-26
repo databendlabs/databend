@@ -15,10 +15,8 @@
 use core::ops::Range;
 
 use databend_common_column::bitmap::MutableBitmap;
-use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::Result;
 
-use crate::Column;
 use crate::ColumnSet;
 use crate::DataBlock;
 use crate::Evaluator;
@@ -26,33 +24,26 @@ use crate::Expr;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::SELECTIVITY_THRESHOLD;
-use crate::Scalar;
 use crate::SelectExprBuilder;
-use crate::Value;
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
 use crate::types::BooleanType;
 use crate::utils::filter_helper::FilterHelpers;
 
-/// How [`FilterExecutor`] evaluates its predicate, chosen by the
-/// `enable_selector_executor` setting.
+/// How [`FilterExecutor`] evaluates its predicate, chosen by `enable_selector_executor`.
 enum Strategy {
-    /// The [`Selector`] evaluates each AND/OR child only on the rows that the earlier
-    /// children left undecided, and writes the selected row indexes.
+    /// Short-circuits AND/OR and writes the selected row indexes.
     Selector {
         select_expr: Box<SelectExpr>,
         /// With OR, the selected indexes may be out of row order.
         has_or: bool,
         false_selection: Vec<u32>,
     },
-    /// The [`Evaluator`] computes the predicate on every row as a boolean column.
+    /// Evaluates the predicate on every row as a boolean column.
     Evaluator,
 }
 
-/// Filters a [`DataBlock`] by a predicate.
-///
-/// Both strategies select the same rows and fill [`Self::true_selection`], so callers do not
-/// depend on the `enable_selector_executor` setting.
+/// Filters a [`DataBlock`] by a predicate. Both strategies fill [`Self::true_selection`].
 pub struct FilterExecutor {
     expr: Expr,
     strategy: Strategy,
@@ -76,15 +67,14 @@ impl FilterExecutor {
     ) -> Self {
         let strategy = if func_ctx.enable_selector_executor {
             let (select_expr, has_or) = SelectExprBuilder::new(fn_registry).build(&expr).into();
-            let false_selection = if has_or {
-                vec![0; max_block_size]
-            } else {
-                vec![]
-            };
             Strategy::Selector {
                 select_expr: Box::new(select_expr),
                 has_or,
-                false_selection,
+                false_selection: if has_or {
+                    vec![0; max_block_size]
+                } else {
+                    vec![]
+                },
             }
         } else {
             Strategy::Evaluator
@@ -103,18 +93,6 @@ impl FilterExecutor {
         }
     }
 
-    /// Uses the evaluator if the predicate is a single comparison: the selector has nothing to
-    /// short-circuit in it, and the evaluator yields the bitmap of [`Self::select_to_bitmap`]
-    /// directly.
-    pub fn evaluate_single_comparison(mut self) -> Self {
-        if let Strategy::Selector { select_expr, .. } = &self.strategy
-            && let SelectExpr::Compare(_) = **select_expr
-        {
-            self.strategy = Strategy::Evaluator;
-        }
-        self
-    }
-
     // Filter a DataBlock, return the filtered DataBlock.
     pub fn filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let origin_count = data_block.num_rows();
@@ -128,51 +106,39 @@ impl FilterExecutor {
         if self.max_block_size < num_rows {
             self.incr_max_block_size(num_rows);
         }
+        let Strategy::Selector {
+            select_expr,
+            false_selection,
+            ..
+        } = &mut self.strategy
+        else {
+            let bitmap = self.evaluate(data_block)?;
+            return Ok(self.from_bitmap(bitmap));
+        };
         let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
-        match &mut self.strategy {
-            Strategy::Selector {
-                select_expr,
-                false_selection,
-                ..
-            } => Selector::new(evaluator, num_rows).select(
-                select_expr,
-                &mut self.true_selection,
-                false_selection,
-            ),
-            Strategy::Evaluator => {
-                let selection = &mut self.true_selection[..num_rows];
-                match Self::evaluate(&evaluator, &self.expr)? {
-                    Value::Scalar(false) => Ok(0),
-                    Value::Scalar(true) => {
-                        for (row, index) in selection.iter_mut().enumerate() {
-                            *index = row as u32;
-                        }
-                        Ok(num_rows)
-                    }
-                    Value::Column(bitmap) => {
-                        let rows = TrueIdxIter::new(num_rows, Some(&bitmap));
-                        let mut count = 0;
-                        for (index, row) in selection.iter_mut().zip(rows) {
-                            *index = row as u32;
-                            count += 1;
-                        }
-                        Ok(count)
-                    }
-                }
-            }
-        }
+        Selector::new(evaluator, num_rows).select(
+            select_expr,
+            &mut self.true_selection,
+            false_selection,
+        )
     }
 
     /// The rows of `data_block` that the predicate selects, as a bitmap.
     pub fn select_to_bitmap(&mut self, data_block: &DataBlock) -> Result<MutableBitmap> {
-        let num_rows = data_block.num_rows();
-        if let Strategy::Evaluator = self.strategy {
-            let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
-            let predicate = Self::evaluate(&evaluator, &self.expr)?;
-            return Ok(FilterHelpers::filter_to_bitmap(predicate, num_rows));
+        // A single comparison has nothing to short-circuit, and the evaluator yields the
+        // bitmap directly.
+        let evaluate = match &self.strategy {
+            Strategy::Evaluator => true,
+            Strategy::Selector { select_expr, .. } => {
+                matches!(**select_expr, SelectExpr::Compare(_))
+            }
+        };
+        if evaluate {
+            return self.evaluate(data_block);
         }
         // The block is selected in slices of `max_block_size` rows, as the `Filter` operator
         // does. The selected indexes are not sorted when the predicate contains OR.
+        let num_rows = data_block.num_rows();
         let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
         for offset in (0..num_rows).step_by(self.max_block_size.max(1)) {
             let end = (offset + self.max_block_size).min(num_rows);
@@ -184,13 +150,16 @@ impl FilterExecutor {
         Ok(bitmap)
     }
 
-    /// The predicate on every row of the evaluator's block, with NULL as false.
-    fn evaluate(evaluator: &Evaluator, expr: &Expr) -> Result<Value<BooleanType>> {
-        let value = match evaluator.run(expr)?.decode_owned() {
-            Value::Column(Column::Null { .. }) => Value::Scalar(Scalar::Null),
-            value => value,
-        };
-        Ok(FilterHelpers::decode_predicate(value))
+    fn evaluate(&self, data_block: &DataBlock) -> Result<MutableBitmap> {
+        let evaluator = Evaluator::new(data_block, &self.func_ctx, self.fn_registry);
+        let predicate = evaluator
+            .run(&self.expr)?
+            .try_downcast::<BooleanType>()
+            .unwrap();
+        Ok(FilterHelpers::filter_to_bitmap(
+            predicate,
+            data_block.num_rows(),
+        ))
     }
 
     fn has_or(&self) -> bool {

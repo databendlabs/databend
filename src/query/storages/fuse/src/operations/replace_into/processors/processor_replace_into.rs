@@ -22,12 +22,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::FilterExecutor;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchema;
-use databend_common_expression::types::Bitmap;
+use databend_common_expression::Value;
+use databend_common_expression::types::BooleanType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;
@@ -188,21 +189,19 @@ impl Processor for ReplaceIntoProcessor {
             if let Some((expr, delete_column)) = &self.delete_when {
                 let expr = expr.project_column_ref(|_| Ok(*delete_column))?;
                 let func_ctx = self.ctx.get_function_context()?;
-                let predicates: Bitmap = FilterExecutor::new(
-                    expr,
-                    func_ctx,
-                    data_block.num_rows(),
-                    None,
-                    &BUILTIN_FUNCTIONS,
-                    false,
-                )
-                .select_to_bitmap(&data_block)
-                .map_err(|e| e.add_message("eval filter failed:"))?
-                .into();
-                if predicates.null_count() == 0 {
-                    all_delete = true;
-                } else if predicates.null_count() < predicates.len() {
-                    filter = Some(predicates.not());
+                let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let predicates = evaluator
+                    .run(&expr)
+                    .map_err(|e| e.add_message("eval filter failed:"))?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
+                match predicates {
+                    Value::Scalar(scalar) => {
+                        all_delete = scalar;
+                    }
+                    Value::Column(column) => {
+                        filter = Some(column.not());
+                    }
                 }
 
                 let column_num = data_block.num_columns();
