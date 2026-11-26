@@ -74,7 +74,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 2
-└── Result size: 205
+└── Result size: 195
 
 ## ========================================
 ## Step 2: SET var=b, EXPLAIN SELECT (should NOT hit cache)
@@ -140,7 +140,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 2
-└── Result size: 205
+└── Result size: 195
 
 ## Verify data is correct for app_a
 query ITT
