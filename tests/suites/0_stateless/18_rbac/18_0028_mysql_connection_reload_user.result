@@ -9,6 +9,10 @@ current role: public
 == revoked account_admin
 granted: ok
 revoked: PermissionDenied 1063
+== password changed on the connection
+must change: NeedChangePasswordDenied 1066
+changed: ok
+after change: 1
 == disabled user
 disabled: AuthenticateFailure 5100
 enabled again: 1

@@ -18,7 +18,6 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
-use databend_common_ast::ast::SetType;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,10 +43,6 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextAuthorization;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
-use databend_query::sql::plans::Plan;
-use databend_query::sql::plans::RewriteKind;
-use databend_query::sql::plans::SetPlan;
-use databend_query::sql::plans::SetScalarsOrQuery;
 use databend_query::test_kits::TestFixture;
 use fastrace::Span;
 use fastrace::collector::SpanContext;
@@ -69,200 +64,6 @@ async fn user_context(
 async fn check_access(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
     let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
     InterpreterFactory::get(ctx, &plan).await.map(|_| ())
-}
-
-async fn assert_plan_denied(ctx: Arc<QueryContext>, plan: &Plan) {
-    let err = InterpreterFactory::get(ctx, plan)
-        .await
-        .err()
-        .expect("expected permission denial before execution");
-    assert_eq!(err.code(), ErrorCode::PERMISSION_DENIED, "{err}");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_set_checks_query_source_privileges() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let (db_id, table_id) = setup_table(&fixture).await?;
-    let object = GrantObject::TableById("default".into(), db_id, table_id);
-
-    for (has_select, has_super) in [(false, false), (true, false), (false, true), (true, true)] {
-        let mut user = UserInfo::new_no_auth("set_reader", "%");
-        if has_select {
-            user.grants
-                .grant_privileges(&object, UserPrivilegeType::Select.into());
-        }
-        if has_super {
-            user.grants
-                .grant_privileges(&GrantObject::Global, UserPrivilegeType::Super.into());
-        }
-        let ctx = user_context(&fixture, user, None).await?;
-        let (query, _) = Planner::new(ctx.clone())
-            .plan_sql("SELECT a FROM select_access.t")
-            .await?;
-        // Exercise the SET authorization boundary without running the embedded query.
-        for (set_type, name) in [
-            (SetType::Variable, "value"),
-            (SetType::SettingsSession, "max_threads"),
-            (SetType::SettingsGlobal, "max_threads"),
-        ] {
-            let global = matches!(set_type, SetType::SettingsGlobal);
-            let plan = Plan::Set(Box::new(SetPlan {
-                set_type,
-                idents: vec![name.into()],
-                values: SetScalarsOrQuery::Query(Box::new(query.clone())),
-            }));
-            if has_select && (!global || has_super) {
-                InterpreterFactory::get(ctx.clone(), &plan).await?;
-            } else {
-                assert_plan_denied(ctx.clone(), &plan).await;
-            }
-        }
-        check_access(ctx, "SET VARIABLE value = 1").await?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_show_checks_user_references() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let (db_id, table_id) = setup_table(&fixture).await?;
-    let object = GrantObject::TableById("default".into(), db_id, table_id);
-    fixture
-        .execute_command("CREATE TABLE select_access.show_target(a INT)")
-        .await?;
-    let show_target = GrantObject::Table(
-        "default".into(),
-        "select_access".into(),
-        "show_target".into(),
-    );
-    for (sql, needs_target_grant) in [
-        ("SHOW DATABASES", false),
-        ("SHOW ENGINES", false),
-        ("SHOW TABLE_FUNCTIONS", false),
-        ("SHOW TABLES FROM select_access", true),
-        ("SHOW COLUMNS FROM select_access.show_target", true),
-    ] {
-        for has_select in [false, true] {
-            let mut user = UserInfo::new_no_auth("show_reader", "%");
-            if needs_target_grant {
-                user.grants
-                    .grant_privileges(&show_target, UserPrivilegeType::Select.into());
-            }
-            if has_select {
-                user.grants
-                    .grant_privileges(&object, UserPrivilegeType::Select.into());
-            }
-            let ctx = user_context(&fixture, user, None).await?;
-            let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
-            InterpreterFactory::get(ctx.clone(), &plan).await?;
-            let Plan::Query { metadata, .. } = &plan else {
-                panic!("expected a rewritten query for {sql}");
-            };
-            // Register a user reference in the authorization metadata without changing
-            // the executable query. Permissions must apply to both kinds of SHOW plans.
-            let table = ctx.get_table("default", "select_access", "t").await?;
-            metadata.write().add_table(
-                "default".into(),
-                "select_access".into(),
-                table,
-                None,
-                false,
-                false,
-                None,
-            );
-            if has_select {
-                InterpreterFactory::get(ctx.clone(), &plan).await?;
-            } else {
-                assert_plan_denied(ctx.clone(), &plan).await;
-            }
-        }
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_show_checks_additional_reference_to_generated_system_table() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = user_context(&fixture, UserInfo::new_no_auth("show_only", "%"), None).await?;
-    let (plan, _) = Planner::new(ctx.clone()).plan_sql("SHOW ENGINES").await?;
-    InterpreterFactory::get(ctx.clone(), &plan).await?;
-    let Plan::Query { metadata, .. } = &plan else {
-        panic!("expected a rewritten SHOW query");
-    };
-    {
-        let mut metadata = metadata.write();
-        let generated = metadata
-            .tables()
-            .iter()
-            .find(|table| table.is_show_system_table())
-            .expect("the generated FROM must be exempt");
-        let table = generated.table();
-        metadata.add_table(
-            "default".into(),
-            "system".into(),
-            table,
-            None,
-            false,
-            false,
-            None,
-        );
-    }
-    assert_plan_denied(ctx, &plan).await;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_show_checks_udf_privileges() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture
-        .execute_command("CREATE FUNCTION show_test_predicate AS (p) -> (p > 0)")
-        .await?;
-    // Fixture DDL may run with PUBLIC as the current role; the readers must not own the UDF.
-    UserApiProvider::instance()
-        .grant_ownership_to_role(
-            &fixture.default_tenant(),
-            &OwnershipObject::UDF {
-                name: "show_test_predicate".into(),
-            },
-            BUILTIN_ROLE_ACCOUNT_ADMIN,
-        )
-        .await?;
-    for has_usage in [false, true] {
-        let mut user = UserInfo::new_no_auth("show_udf_reader", "%");
-        if has_usage {
-            user.grants.grant_privileges(
-                &GrantObject::UDF("show_test_predicate".into()),
-                UserPrivilegeType::Usage.into(),
-            );
-        }
-        let ctx = user_context(&fixture, user, None).await?;
-        // Project the boolean UDF call so it stays in the plan inspected by the access checker.
-        let (mut plan, _) = Planner::new(ctx.clone())
-            .plan_sql("SELECT show_test_predicate(number) FROM numbers(2)")
-            .await?;
-        let Plan::Query {
-            rewrite_kind,
-            s_expr,
-            ..
-        } = &mut plan
-        else {
-            panic!("expected a query plan");
-        };
-        assert!(
-            s_expr
-                .get_udfs()?
-                .iter()
-                .any(|name| *name == "show_test_predicate")
-        );
-        // Test authorization of a SHOW plan containing a UDF, not the UDF's execution.
-        *rewrite_kind = Some(RewriteKind::ShowDatabases);
-        if has_usage {
-            InterpreterFactory::get(ctx, &plan).await?;
-        } else {
-            assert_plan_denied(ctx, &plan).await;
-        }
-    }
-    Ok(())
 }
 
 /// Spans of every test in this target. The reporter is process-wide, so it is installed once;
@@ -1089,128 +890,39 @@ async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::R
     Ok(())
 }
 
-/// MySQL and Flight SQL sessions authenticate once per connection, so the session must reload
-/// the user before each query: a revoke, disabling the user or DROP USER takes effect without
-/// reconnecting.
+/// Flight SQL sessions authenticate once per connection and reload the user before each query,
+/// like MySQL sessions (covered by `18_0028_mysql_connection_reload_user`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_connection_sessions_reload_user_before_each_query() -> anyhow::Result<()> {
+async fn test_flight_sql_session_reloads_user_before_each_query() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     setup_table(&fixture).await?;
     for sql in [
         "CREATE ROLE reload_reader",
-        "CREATE ROLE reload_limited",
         "GRANT SELECT ON select_access.t TO ROLE reload_reader",
+        "CREATE USER reload_user IDENTIFIED BY 'password'",
+        "GRANT ROLE reload_reader TO reload_user",
     ] {
         fixture.execute_command(sql).await?;
     }
-    let tenant = fixture.default_tenant();
-    let select = "SELECT * FROM select_access.t";
-
-    for (index, (label, session_type)) in [
-        ("MySQL", SessionType::MySQL),
-        ("FlightSQL", SessionType::FlightSQL),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let name = format!("reload_user_{index}");
-        for sql in [
-            format!("CREATE USER {name} IDENTIFIED BY 'password'"),
-            format!("GRANT ROLE reload_reader TO {name}"),
-            format!("GRANT ROLE reload_limited TO {name}"),
-        ] {
-            fixture.execute_command(&sql).await?;
-        }
-        let user = UserApiProvider::instance()
-            .get_user(&tenant, UserIdentity::new(&name, "%"))
-            .await?;
-        let session = fixture.new_session_with_type(session_type).await?;
-        session.set_authed_user(user, None).await?;
-
-        // A revoked secondary role stops taking effect, and takes effect again once granted.
-        session.set_current_role_checked("reload_limited").await?;
-        session
-            .set_secondary_roles_checked(Some(vec!["reload_reader".into()]))
-            .await?;
-        check_access(session.create_query_context(&BUILD_INFO).await?, select).await?;
-        fixture
-            .execute_command(&format!("REVOKE ROLE reload_reader FROM {name}"))
-            .await?;
-        let error = check_access(session.create_query_context(&BUILD_INFO).await?, select)
-            .await
-            .unwrap_err();
-        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{label}");
-        fixture
-            .execute_command(&format!("GRANT ROLE reload_reader TO {name}"))
-            .await?;
-        check_access(session.create_query_context(&BUILD_INFO).await?, select).await?;
-
-        // A revoked current role falls back to PUBLIC, as on login.
-        session.set_current_role_checked("reload_reader").await?;
-        session.set_secondary_roles_checked(Some(vec![])).await?;
-        fixture
-            .execute_command(&format!("REVOKE ROLE reload_reader FROM {name}"))
-            .await?;
-        let error = check_access(session.create_query_context(&BUILD_INFO).await?, select)
-            .await
-            .unwrap_err();
-        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{label}");
-        assert_eq!(
-            session.get_current_role().map(|role| role.name),
-            Some("public".to_string())
-        );
-
-        // A disabled user can no longer run queries, and can once enabled again.
-        fixture
-            .execute_command(&format!("ALTER USER {name} WITH DISABLED = TRUE"))
-            .await?;
-        let Err(error) = session.create_query_context(&BUILD_INFO).await else {
-            panic!("{label}: a disabled user created a query context");
-        };
-        assert_eq!(error.code(), ErrorCode::AUTHENTICATE_FAILURE, "{label}");
-        fixture
-            .execute_command(&format!("ALTER USER {name} WITH DISABLED = FALSE"))
-            .await?;
-        session.create_query_context(&BUILD_INFO).await?;
-
-        // A dropped user can no longer run queries.
-        fixture
-            .execute_command(&format!("DROP USER {name}"))
-            .await?;
-        let Err(error) = session.create_query_context(&BUILD_INFO).await else {
-            panic!("{label}: a dropped user created a query context");
-        };
-        assert_eq!(error.code(), ErrorCode::UNKNOWN_USER, "{label}");
-    }
-    Ok(())
-}
-
-/// Login sets `need_change` in memory only: reloading the user keeps it until the password
-/// changes.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_reload_user_keeps_need_change_password() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture
-        .execute_command("CREATE USER reload_password_user IDENTIFIED BY 'password'")
+    let user = UserApiProvider::instance()
+        .get_user(
+            &fixture.default_tenant(),
+            UserIdentity::new("reload_user", "%"),
+        )
         .await?;
-    let identity = UserIdentity::new("reload_password_user", "%");
-    let mut user = UserApiProvider::instance()
-        .get_user(&fixture.default_tenant(), identity)
+    let session = fixture
+        .new_session_with_type(SessionType::FlightSQL)
         .await?;
-    user.update_auth_need_change_password();
-    let session = fixture.new_session_with_type(SessionType::MySQL).await?;
     session.set_authed_user(user, None).await?;
+    let select = "SELECT * FROM select_access.t";
+    check_access(session.create_query_context(&BUILD_INFO).await?, select).await?;
 
-    let error = check_access(session.create_query_context(&BUILD_INFO).await?, "SELECT 1")
+    fixture
+        .execute_command("REVOKE ROLE reload_reader FROM reload_user")
+        .await?;
+    let error = check_access(session.create_query_context(&BUILD_INFO).await?, select)
         .await
         .unwrap_err();
-    assert_eq!(error.code(), ErrorCode::NEED_CHANGE_PASSWORD_DENIED);
-    assert!(session.get_current_user()?.auth_info.get_need_change());
-
-    fixture
-        .execute_command("ALTER USER reload_password_user IDENTIFIED BY 'new-password'")
-        .await?;
-    check_access(session.create_query_context(&BUILD_INFO).await?, "SELECT 1").await?;
-    assert!(!session.get_current_user()?.auth_info.get_need_change());
+    assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
     Ok(())
 }

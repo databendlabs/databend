@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 # A MySQL connection authenticates once, but reloads its user before each query: a REVOKE,
-# disabling the user or DROP USER takes effect on an open connection without reconnecting.
+# disabling the user or DROP USER takes effect on an open connection without reconnecting,
+# and a password changed on the connection lifts MUST_CHANGE_PASSWORD there.
 
 import os
 import re
@@ -14,6 +15,7 @@ USER = os.getenv("QUERY_MYSQL_HANDLER_USER", "root")
 PASSWORD = os.getenv("QUERY_MYSQL_HANDLER_PASSWORD", "root")
 
 NAME = "reload_user_18_0028"
+NAME_MUST_CHANGE = "reload_must_change_18_0028"
 TABLE = "reload_db_18_0028.t"
 
 
@@ -41,6 +43,7 @@ root_connection = connect(USER, PASSWORD)
 root = root_connection.cursor()
 for sql in [
     f"DROP USER IF EXISTS {NAME}",
+    f"DROP USER IF EXISTS {NAME_MUST_CHANGE}",
     "DROP DATABASE IF EXISTS reload_db_18_0028",
     "DROP ROLE IF EXISTS reload_reader_18_0028",
     "DROP ROLE IF EXISTS reload_limited_18_0028",
@@ -92,6 +95,18 @@ run(root, f"REVOKE ROLE account_admin FROM {NAME}")
 query("revoked", user, "DROP TABLE reload_db_18_0028.t2")
 same_connection()
 
+print("== password changed on the connection")
+run(
+    root,
+    f"CREATE USER {NAME_MUST_CHANGE} IDENTIFIED BY 'password' WITH MUST_CHANGE_PASSWORD = TRUE",
+)
+must_change_connection = connect(NAME_MUST_CHANGE, "password")
+must_change = must_change_connection.cursor()
+query("must change", must_change, "SELECT 1")
+query("changed", must_change, "ALTER USER USER() IDENTIFIED BY 'new-password'")
+query("after change", must_change, "SELECT 1")
+must_change_connection.close()
+
 print("== disabled user")
 run(root, f"ALTER USER {NAME} WITH DISABLED = TRUE")
 query("disabled", user, "SELECT 1")
@@ -104,6 +119,7 @@ run(root, f"DROP USER {NAME}")
 query("dropped", user, "SELECT 1")
 
 for sql in [
+    f"DROP USER IF EXISTS {NAME_MUST_CHANGE}",
     "DROP DATABASE IF EXISTS reload_db_18_0028",
     "DROP ROLE IF EXISTS reload_reader_18_0028",
     "DROP ROLE IF EXISTS reload_limited_18_0028",

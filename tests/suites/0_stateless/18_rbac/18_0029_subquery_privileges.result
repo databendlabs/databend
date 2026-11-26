@@ -1,0 +1,24 @@
+== SET with a query
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret_view' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Read] is required on STAGE subquery_stage for user 'subquery_user'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+error: [1063]Permission denied: privilege [Usage] is required on UDF subquery_udf for user 'subquery_user'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+1
+== SHOW with a subquery in WHERE
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret_view' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Read] is required on STAGE subquery_stage for user 'subquery_user'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+error: [1063]Permission denied: privilege [Usage] is required on UDF subquery_udf for user 'subquery_user'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'subquery_db'.'secret' for user 'subquery_user'@'%' with roles [public]
+-- the SHOW source itself is exempt only as the FROM of the rewrite
+error: [1063]Permission denied: privilege [Select] is required on 'default'.'system'.'engines' for user 'subquery_user'@'%' with roles [public]
+subquery_db
+MEMORY	MEMORY Storage Engine
+== after granting
+42
+subquery_db
+subquery_db
