@@ -1215,7 +1215,9 @@ impl QueryCoordinator {
             }
         }
 
-        Ok(())
+        // Every fragment of the query on this node is built, and a consumer takes its
+        // channel while its fragment is built.
+        query_context.check_materialized_cte_receivers_taken()
     }
 
     pub fn subscribe_fragment(

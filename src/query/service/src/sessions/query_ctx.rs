@@ -1049,6 +1049,29 @@ impl QueryContext {
         let receivers = receivers.get_mut(cte_name).unwrap();
         receivers.pop().unwrap()
     }
+
+    /// Fails if a materialized CTE producer has a channel that no consumer took.
+    ///
+    /// Call it once every pipeline of the query on this node is built. Nobody reads such a
+    /// channel: a bounded one fills up and blocks the producer, and the query would hang
+    /// instead of failing.
+    pub fn check_materialized_cte_receivers_taken(&self) -> Result<()> {
+        let receivers = self.shared.materialized_cte_receivers.lock();
+        let mut untaken = receivers
+            .iter()
+            .filter(|(_, receivers)| !receivers.is_empty())
+            .map(|(name, receivers)| format!("{name} ({})", receivers.len()))
+            .collect::<Vec<_>>();
+        if untaken.is_empty() {
+            return Ok(());
+        }
+
+        untaken.sort();
+        Err(ErrorCode::Internal(format!(
+            "Materialized CTE channels without a consumer: {}",
+            untaken.join(", ")
+        )))
+    }
 }
 
 impl QueryContext {
