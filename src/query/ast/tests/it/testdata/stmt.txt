@@ -17516,6 +17516,93 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE TABLE t (a TIMESTAMP_NTZ, b TIMESTAMP_NTZ(0), c TIMESTAMP_NTZ(6) NOT NULL);
+---------- Output ---------
+CREATE TABLE t (a TIMESTAMP_NTZ, b TIMESTAMP_NTZ, c TIMESTAMP_NTZ NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: TimestampNtz,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                33..34,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: TimestampNtz,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                53..54,
+                            ),
+                            name: "c",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: NotNull(
+                            TimestampNtz,
+                        ),
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE t (ttl int);
 ---------- Output ---------
 CREATE TABLE t (ttl Int32)

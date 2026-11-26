@@ -2168,6 +2168,61 @@ TryCast {
 
 
 ---------- Input ----------
+CAST(col1 AS TIMESTAMP_NTZ(3))
+---------- Output ---------
+CAST(col1 AS TIMESTAMP_NTZ)
+---------- AST ------------
+Cast {
+    span: Some(
+        0..30,
+    ),
+    expr: ColumnRef {
+        span: Some(
+            5..9,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        5..9,
+                    ),
+                    name: "col1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    target_type: TimestampNtz,
+    pg_style: false,
+}
+
+
+---------- Input ----------
+TIMESTAMP_NTZ '2024-03-10 02:30:00'
+---------- Output ---------
+CAST('2024-03-10 02:30:00' AS TIMESTAMP_NTZ)
+---------- AST ------------
+Cast {
+    span: Some(
+        0..35,
+    ),
+    expr: Literal {
+        span: Some(
+            14..35,
+        ),
+        value: String(
+            "2024-03-10 02:30:00",
+        ),
+    },
+    target_type: TimestampNtz,
+    pg_style: false,
+}
+
+
+---------- Input ----------
 trim(leading 'abc' from 'def')
 ---------- Output ---------
 TRIM(LEADING 'abc' FROM 'def')

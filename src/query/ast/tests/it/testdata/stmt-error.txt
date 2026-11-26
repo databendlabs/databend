@@ -64,6 +64,21 @@ error:
 
 
 ---------- Input ----------
+create table a (c timestamp_ntz(7))
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | create table a (c timestamp_ntz(7))
+  | ------          - ^^^^^^^^^^^^^
+  | |               | |
+  | |               | TIMESTAMP_NTZ stores microseconds, so its precision must be between 0 and 6
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
 create table a (c tuple())
 ---------- Output ---------
 error: 

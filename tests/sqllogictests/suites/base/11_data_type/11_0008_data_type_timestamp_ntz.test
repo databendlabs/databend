@@ -65,12 +65,25 @@ select '0001-01-01 00:00:00'::TIMESTAMP_NTZ, '9999-12-31 23:59:59.999999'::TIMES
 statement error 1006
 select '0000-12-31 23:59:59'::TIMESTAMP_NTZ
 
+## Values are stored as microseconds: a precision of 0 to 6 is accepted and
+## ignored, a larger one is rejected instead of truncating.
+query ??
+select '2024-01-01 00:00:00.123456'::TIMESTAMP_NTZ(0), cast('2024-01-01 00:00:00.5' as TIMESTAMP_NTZ(6))
+----
+2024-01-01 00:00:00.123456 2024-01-01 00:00:00.500000
+
+statement error 1005
+select cast('2024-01-01 00:00:00' as TIMESTAMP_NTZ(7))
+
+statement error 1005
+create or replace table t_ntz_precision(ts TIMESTAMP_NTZ(9))
+
 ## No implicit conversion between a wall clock and an instant yet.
 statement error 1065
 select '2024-01-01'::TIMESTAMP_NTZ = '2024-01-01'::TIMESTAMP
 
 statement ok
-create or replace table t_ntz(id int, ts TIMESTAMP_NTZ, n TIMESTAMP_NTZ NULL)
+create or replace table t_ntz(id int, ts TIMESTAMP_NTZ, n TIMESTAMP_NTZ(3) NULL)
 
 query TTTTT
 desc t_ntz

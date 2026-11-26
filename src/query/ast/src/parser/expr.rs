@@ -2395,7 +2395,17 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { TIMESTAMP ~ WITH ~ TIME ~ ZONE },
     );
     let ty_timestamp_tz_simply = value(TypeName::TimestampTz, rule! { TIMESTAMP_TZ });
-    let ty_timestamp_ntz = value(TypeName::TimestampNtz, rule! { TIMESTAMP_NTZ });
+    // Values are stored as microseconds. A smaller precision is accepted and
+    // ignored; a larger one would be silently truncated, so it is rejected.
+    let ty_timestamp_ntz = map_res(
+        rule! { TIMESTAMP_NTZ ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        |(_, opt_precision)| match opt_precision {
+            Some((_, precision, _)) if precision > 6 => Err(nom::Err::Failure(ErrorKind::other(
+                "TIMESTAMP_NTZ stores microseconds, so its precision must be between 0 and 6",
+            ))),
+            _ => Ok(TypeName::TimestampNtz),
+        },
+    );
     map_res(
         alt((
             rule! {
