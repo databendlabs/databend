@@ -300,11 +300,16 @@ impl TaskMgr {
         Ok(())
     }
 
-    /// mark the corresponding execute task as accepted and delete it from the queue
+    /// Removes the message at `key` from the queue, if its seq matches `seq`. Returns whether this
+    /// call removed it.
+    ///
+    /// A node that handles a message it received from the watch stream passes the seq it
+    /// received. Every message of a task and type shares one key, so a later message may have
+    /// replaced the one received, and it must stay for the node that handles it.
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn accept(&self, key: &TaskMessageIdent) -> Result<bool, MetaError> {
-        let req = UpsertPB::delete(key.clone()).with(MatchSeq::GE(1));
+    pub async fn accept(&self, key: &TaskMessageIdent, seq: MatchSeq) -> Result<bool, MetaError> {
+        let req = UpsertPB::delete(key.clone()).with(seq);
         let change = self.kv_api.upsert_pb(&req).await?;
 
         Ok(change.is_changed())
