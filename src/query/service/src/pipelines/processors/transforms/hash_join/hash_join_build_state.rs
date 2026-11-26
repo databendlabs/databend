@@ -175,6 +175,21 @@ impl HashJoinBuildState {
         Ok(())
     }
 
+    /// A right mark join is NULL, rather than false, for a probe row without match when the
+    /// build key has a NULL anywhere. A spilled build block is only built in the round of its
+    /// partition, after the probe rows of other partitions are marked, so the NULLs of every
+    /// build block are recorded as it is collected, before the probe starts.
+    pub(super) fn record_mark_nulls(&self, data_blocks: &[DataBlock]) -> Result<()> {
+        let desc = &self.hash_join_state.hash_join_desc;
+        if desc.join_type != JoinType::RightMark {
+            return Ok(());
+        }
+        for data_block in data_blocks {
+            desc.record_mark_nulls(data_block, &desc.build_keys, &self.func_ctx)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
         let block_outer_scan_map = if self.hash_join_state.need_outer_scan()
             || matches!(
@@ -627,7 +642,6 @@ impl HashJoinBuildState {
         let chunk_index = task;
         let chunk = &mut build_state.generation_state.chunks[chunk_index];
 
-        let mut _has_null = false;
         let mut _nullable_chunk = None;
         let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
@@ -707,31 +721,14 @@ impl HashJoinBuildState {
             }
         };
 
-        match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::LeftMark => {
-                let markers = &mut build_state.mark_scan_map[chunk_index];
-                self.hash_join_state.init_markers(
-                    (&keys_entries).into(),
-                    chunk.num_rows(),
-                    markers,
-                );
-            }
-            JoinType::RightMark if !_has_null && !keys_entries.is_empty() => {
-                if let Some(validity) = keys_entries[0].as_column().unwrap().validity().1 {
-                    if validity.null_count() > 0 {
-                        _has_null = true;
-                        let mut has_null_ref = self
-                            .hash_join_state
-                            .hash_join_desc
-                            .marker_join_desc
-                            .has_null
-                            .write();
-                        *has_null_ref = true;
-                    }
-                }
-            }
-            _ => {}
-        };
+        // The NULLs of a right mark join's build keys are recorded as its blocks are collected,
+        // see `record_mark_nulls`.
+        let desc = &self.hash_join_state.hash_join_desc;
+        if desc.join_type == JoinType::LeftMark && desc.mark_nulls_from_key {
+            let markers = &mut build_state.mark_scan_map[chunk_index];
+            self.hash_join_state
+                .init_markers((&keys_entries).into(), chunk.num_rows(), markers);
+        }
 
         keys_entries
             .iter_mut()

@@ -111,7 +111,8 @@ pub struct HashJoin {
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<Symbol>,
-    pub from_correlated_subquery: bool,
+    // See `mark_nulls_from_key`.
+    pub mark_nulls_from_key: bool,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
@@ -242,7 +243,7 @@ impl IPhysicalPlan for HashJoin {
             non_equi_conditions: self.non_equi_conditions.clone(),
             join_type: self.join_type,
             marker_index: self.marker_index,
-            from_correlated_subquery: self.from_correlated_subquery,
+            mark_nulls_from_key: self.mark_nulls_from_key,
             probe_to_build: self.probe_to_build.clone(),
             output_schema: self.output_schema.clone(),
             stat_info: self.stat_info.clone(),
@@ -301,6 +302,26 @@ impl IPhysicalPlan for HashJoin {
             .main_pipeline
             .resize(builder.main_pipeline.output_len(), true)
     }
+}
+
+/// Whether the NULLs of the keys of a mark join make marks NULL, rather than false: a NULL in the
+/// first key of the subquery side the mark of every row without match, a NULL key of the other
+/// side the mark of its row.
+///
+/// It does for `x IN (subquery)` without correlation, the only mark join whose key is the IN
+/// comparison. The other mark joins find NULL marks by pair, in their other conditions, or never
+/// have one. The planner does not record which subquery a mark join comes from, so it is told by
+/// the shape of the join as decorrelation makes it:
+/// - a correlated EXISTS or ANY subquery (`from_correlated_subquery`) joins on the correlation;
+/// - an ANY subquery with other conditions compares in them, `x > ANY (subquery)` for example;
+/// - a row value IN subquery joins on two keys or more, or has other conditions.
+///
+/// This relies on the optimizer keeping the conditions of a mark join as decorrelation makes them.
+fn mark_nulls_from_key(join: &Join) -> bool {
+    join.join_type.is_mark_join()
+        && !join.from_correlated_subquery
+        && join.non_equi_conditions.is_empty()
+        && join.equi_conditions.len() == 1
 }
 
 impl HashJoin {
@@ -1227,7 +1248,7 @@ impl PhysicalPlanBuilder {
             non_equi_conditions,
             marker_index: join.marker_index,
             meta: PhysicalPlanMeta::new("HashJoin"),
-            from_correlated_subquery: join.from_correlated_subquery,
+            mark_nulls_from_key: mark_nulls_from_key(join),
             probe_to_build,
             output_schema,
             stat_info: Some(stat_info),
@@ -1280,7 +1301,7 @@ mod tests {
             non_equi_conditions: vec![],
             join_type: JoinType::Cross,
             marker_index: None,
-            from_correlated_subquery: false,
+            mark_nulls_from_key: false,
             probe_to_build: vec![],
             output_schema: DataSchemaRefExt::create(vec![DataField::new("build", int64_type())]),
             stat_info: None,

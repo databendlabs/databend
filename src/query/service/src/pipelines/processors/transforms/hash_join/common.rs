@@ -146,7 +146,10 @@ impl HashJoinProbeState {
 }
 
 impl HashJoinState {
-    /// if all cols in the same row are all null, we mark this row as null.
+    /// Marks NULL a row whose keys are all NULL. It is for the outer keys of a mark join that
+    /// marks NULLs from its key, see `HashJoin::mark_nulls_from_key`: `NULL IN (subquery)` is
+    /// NULL. The keys of other mark joins are correlations, and a NULL correlation equals no
+    /// subquery row.
     pub(crate) fn init_markers(&self, cols: ProjectedBlock, num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()

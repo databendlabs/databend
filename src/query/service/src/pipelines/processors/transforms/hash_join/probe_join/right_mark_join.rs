@@ -126,12 +126,8 @@ impl HashJoinProbeState {
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
         let input_num_rows = process_state.input.num_rows();
+        // The other conditions find the NULL marks by pair.
         let markers = probe_state.markers.as_mut().unwrap();
-        self.hash_join_state.init_markers(
-            process_state.input.columns().into(),
-            input_num_rows,
-            markers,
-        );
 
         // Build states.
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };

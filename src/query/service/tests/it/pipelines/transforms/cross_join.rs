@@ -86,7 +86,7 @@ fn cross_join(probe: DataBlock, build: DataBlock, predicate: Option<Expr>) -> Ha
         non_equi_conditions: predicate.into_iter().map(|p| p.as_remote_expr()).collect(),
         join_type: JoinType::Cross,
         marker_index: None,
-        from_correlated_subquery: false,
+        mark_nulls_from_key: false,
         probe_to_build: vec![],
         output_schema: Arc::new(DataSchema::new(fields)),
         stat_info: None,

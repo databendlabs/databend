@@ -236,7 +236,7 @@ impl TransformHashJoinProbe {
 
         if self.input_port.has_data() {
             let data_block = self.input_port.pull_data().unwrap()?;
-            self.add_data_block(data_block);
+            self.add_data_block(data_block)?;
         }
 
         if !self.data_blocks_need_to_spill.is_empty() {
@@ -585,7 +585,8 @@ impl TransformHashJoinProbe {
         }
     }
 
-    fn add_data_block(&mut self, data_block: DataBlock) {
+    fn add_data_block(&mut self, data_block: DataBlock) -> Result<()> {
+        self.join_probe_state.record_mark_nulls(&data_block)?;
         if self.is_spill_happened() {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
@@ -596,6 +597,7 @@ impl TransformHashJoinProbe {
                 self.max_block_size,
             );
         }
+        Ok(())
     }
 
     // Split data block by max_block_size.

@@ -264,6 +264,9 @@ impl Processor for TransformHashJoinBuild {
                 // If spill happens, we buffer data blocks to SpillBuffer, but if the data blocks
                 // are restored from spilled partitions, we can build the hash table directly.
                 let spill_happened = self.is_spill_happened();
+                if !self.is_from_restore() {
+                    self.build_state.record_mark_nulls(&self.data_blocks)?;
+                }
                 if spill_happened && !self.is_from_restore() {
                     let data_blocks = std::mem::take(&mut self.data_blocks);
                     self.spiller.buffer(data_blocks)?;
@@ -345,6 +348,7 @@ impl Processor for TransformHashJoinBuild {
             }
             Step::Async(AsyncStep::Spill) => {
                 let data_blocks = std::mem::take(&mut self.data_blocks);
+                self.build_state.record_mark_nulls(&data_blocks)?;
                 self.spiller.spill(data_blocks, None).await?;
                 self.build_state
                     .hash_join_state
@@ -524,7 +528,7 @@ mod tests {
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),
             },
-            from_correlated_subquery: false,
+            mark_nulls_from_key: false,
             runtime_filter: RuntimeFiltersDesc { filters: vec![] },
             build_projection: build_projection.clone(),
             probe_projection: BTreeSet::new(),

@@ -1,0 +1,154 @@
+# A mark join, the join of IN and NOT IN subqueries, is NULL rather than false
+# for a row without match when the subquery has a NULL. The subquery side is
+# partitioned when the join spills, and its NULL can be in any partition: every
+# row must still see it.
+
+statement ok
+create or replace database spill_mark_join_nulls
+
+statement ok
+use spill_mark_join_nulls
+
+statement ok
+create or replace table outer_large(x int null)
+
+statement ok
+insert into outer_large select number from numbers(20)
+
+statement ok
+create or replace table sub_small(y int null)
+
+statement ok
+insert into sub_small values (1), (null)
+
+statement ok
+create or replace table sub_small_not_null(y int null)
+
+statement ok
+insert into sub_small_not_null values (1)
+
+statement ok
+create or replace table outer_small(x int null)
+
+statement ok
+insert into outer_small values (1), (2), (3), (14), (null)
+
+statement ok
+create or replace table sub_large(y int null)
+
+statement ok
+insert into sub_large select number + 100 from numbers(1000)
+
+statement ok
+insert into sub_large values (1), (null)
+
+statement ok
+create or replace table sub_large_not_null(y int null)
+
+statement ok
+insert into sub_large_not_null select number + 100 from numbers(1000)
+
+statement ok
+insert into sub_large_not_null values (1)
+
+# right mark: the subquery is the build side
+query BI
+select x in (select y from sub_small) as m, count(*) from outer_large group by m order by m nulls first
+----
+NULL 19
+1 1
+
+# right mark, NOT IN
+query I
+select count(*) from outer_large where x not in (select y from sub_small)
+----
+0
+
+# right mark, no NULL in the subquery
+query BI
+select x in (select y from sub_small_not_null) as m, count(*) from outer_large group by m order by m nulls first
+----
+0 19
+1 1
+
+# left mark: the subquery is the probe side
+query IB
+select x, x in (select y from sub_large) from outer_small order by x nulls first
+----
+NULL 1
+1 1
+2 NULL
+3 NULL
+14 NULL
+
+# left mark, NOT IN
+query I
+select count(*) from outer_small where x not in (select y from sub_large)
+----
+0
+
+# left mark, no NULL in the subquery
+query IB
+select x, x in (select y from sub_large_not_null) from outer_small order by x nulls first
+----
+NULL NULL
+1 1
+2 0
+3 0
+14 0
+
+# The same joins when they spill.
+statement ok
+set force_join_data_spill = 1
+
+# right mark: the subquery is the build side
+query BI
+select x in (select y from sub_small) as m, count(*) from outer_large group by m order by m nulls first
+----
+NULL 19
+1 1
+
+# right mark, NOT IN
+query I
+select count(*) from outer_large where x not in (select y from sub_small)
+----
+0
+
+# right mark, no NULL in the subquery
+query BI
+select x in (select y from sub_small_not_null) as m, count(*) from outer_large group by m order by m nulls first
+----
+0 19
+1 1
+
+# left mark: the subquery is the probe side
+query IB
+select x, x in (select y from sub_large) from outer_small order by x nulls first
+----
+NULL 1
+1 1
+2 NULL
+3 NULL
+14 NULL
+
+# left mark, NOT IN
+query I
+select count(*) from outer_small where x not in (select y from sub_large)
+----
+0
+
+# left mark, no NULL in the subquery
+query IB
+select x, x in (select y from sub_large_not_null) from outer_small order by x nulls first
+----
+NULL NULL
+1 1
+2 0
+3 0
+14 0
+
+statement ok
+unset force_join_data_spill
+
+statement ok
+drop database spill_mark_join_nulls

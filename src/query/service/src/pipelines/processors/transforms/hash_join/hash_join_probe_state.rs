@@ -224,13 +224,8 @@ impl HashJoinProbeState {
             })
             .collect::<Result<_>>()?;
 
-        if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark
-            && self
-                .hash_join_state
-                .hash_join_desc
-                .other_predicate
-                .is_none()
-        {
+        let desc = &self.hash_join_state.hash_join_desc;
+        if desc.join_type == JoinType::RightMark && desc.mark_nulls_from_key {
             self.hash_join_state.init_markers(
                 (&keys_entries).into(),
                 input_num_rows,
@@ -271,17 +266,6 @@ impl HashJoinProbeState {
             });
         let probe_keys = (&keys_entries).into();
 
-        let probe_has_null = if self.join_type() == JoinType::LeftMark {
-            match input.get_by_offset(0) {
-                BlockEntry::Const(scalar, _, _) => scalar.is_null(),
-                BlockEntry::Column(column) => column
-                    .as_nullable()
-                    .map(|c| c.validity().null_count() > 0)
-                    .unwrap_or(false),
-            }
-        } else {
-            false
-        };
         input = input.project(&self.probe_projections);
 
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
@@ -335,7 +319,6 @@ impl HashJoinProbeState {
 
                 probe_state.pending = Some(PendingProbe::Hash(ProcessState {
                     input,
-                    probe_has_null,
                     keys_state,
                     next_idx: 0,
                 }));
@@ -741,5 +724,17 @@ impl HashJoinProbeState {
 
     pub(crate) fn join_type(&self) -> JoinType {
         self.hash_join_state.hash_join_desc.join_type
+    }
+
+    /// A left mark join is NULL, rather than false, for a build row without match when the
+    /// probe key has a NULL anywhere. Every probe block is recorded as it is received, before
+    /// any build row is marked: a spilled block is only probed in the round of its partition,
+    /// after the build rows of other partitions are marked.
+    pub(crate) fn record_mark_nulls(&self, data_block: &DataBlock) -> Result<()> {
+        let desc = &self.hash_join_state.hash_join_desc;
+        if desc.join_type != JoinType::LeftMark {
+            return Ok(());
+        }
+        desc.record_mark_nulls(data_block, &desc.probe_keys, &self.func_ctx)
     }
 }

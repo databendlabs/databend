@@ -22,6 +22,17 @@ create or replace table i(k int, y int null)
 statement ok
 insert into i values (1, 1), (1, null), (2, 3), (3, 4), (3, null)
 
+# A NULL correlation equals no subquery row: the subquery of its row is empty,
+# so IN is false whatever the row's other columns.
+statement ok
+create or replace table o_null_key(k int null, x int null)
+
+statement ok
+insert into o_null_key values (null, null), (null, 1), (1, null), (1, 1)
+
+statement ok
+insert into o_null_key select 100, 1 from numbers(50)
+
 # The subquery is small, so it is the build side of a right mark join.
 query IIB
 select k, x, x in (select y from i where i.k = o.k) from o order by k, x nulls first
@@ -44,6 +55,24 @@ select k, x, x not in (select y from i where i.k = o.k) from o order by k, x nul
 3 5 NULL
 4 7 1
 6 NULL 1
+
+query IIBI
+select k, x, x in (select y from i where i.k = o_null_key.k), count(*) from o_null_key group by 1, 2, 3 order by 1 nulls first, 2 nulls first
+----
+NULL NULL 0 1
+NULL 1 0 1
+1 NULL NULL 1
+1 1 1 1
+100 1 0 50
+
+query IIBI
+select k, x, x not in (select y from i where i.k = o_null_key.k), count(*) from o_null_key group by 1, 2, 3 order by 1 nulls first, 2 nulls first
+----
+NULL NULL 1 1
+NULL 1 1 1
+1 NULL NULL 1
+1 1 0 1
+100 1 1 50
 
 # Rows that match no outer row make the subquery the probe side of a left mark
 # join.
@@ -72,6 +101,24 @@ select k, x, x not in (select y from i where i.k = o.k) from o order by k, x nul
 4 7 1
 6 NULL 1
 
+query IIBI
+select k, x, x in (select y from i where i.k = o_null_key.k), count(*) from o_null_key group by 1, 2, 3 order by 1 nulls first, 2 nulls first
+----
+NULL NULL 0 1
+NULL 1 0 1
+1 NULL NULL 1
+1 1 1 1
+100 1 0 50
+
+query IIBI
+select k, x, x not in (select y from i where i.k = o_null_key.k), count(*) from o_null_key group by 1, 2, 3 order by 1 nulls first, 2 nulls first
+----
+NULL NULL 1 1
+NULL 1 1 1
+1 NULL NULL 1
+1 1 0 1
+100 1 1 50
+
 statement ok
 set force_join_data_spill = 1
 
@@ -85,6 +132,24 @@ select k, x, x in (select y from i where i.k = o.k) from o order by k, x nulls f
 3 5 NULL
 4 7 0
 6 NULL 0
+
+query IIBI
+select k, x, x in (select y from i where i.k = o_null_key.k), count(*) from o_null_key group by 1, 2, 3 order by 1 nulls first, 2 nulls first
+----
+NULL NULL 0 1
+NULL 1 0 1
+1 NULL NULL 1
+1 1 1 1
+100 1 0 50
+
+query IIBI
+select k, x, x not in (select y from i where i.k = o_null_key.k), count(*) from o_null_key group by 1, 2, 3 order by 1 nulls first, 2 nulls first
+----
+NULL NULL 1 1
+NULL 1 1 1
+1 NULL NULL 1
+1 1 0 1
+100 1 1 50
 
 statement ok
 unset force_join_data_spill

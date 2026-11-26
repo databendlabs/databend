@@ -25,6 +25,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Value;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -59,8 +60,8 @@ pub struct HashJoinDesc {
     /// to wrap `e > f` as a other_predicate to do next step's check.
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
-    /// Whether the Join are derived from correlated subquery.
-    pub(crate) from_correlated_subquery: bool,
+    /// See `HashJoin::mark_nulls_from_key`.
+    pub(crate) mark_nulls_from_key: bool,
     pub(crate) runtime_filter: RuntimeFiltersDesc,
 
     pub(crate) build_projection: BTreeSet<usize>,
@@ -163,7 +164,7 @@ impl HashJoinDesc {
                 has_null: RwLock::new(false),
                 // marker_index: join.marker_index,
             },
-            from_correlated_subquery: join.from_correlated_subquery,
+            mark_nulls_from_key: join.mark_nulls_from_key,
             single_to_inner: join.single_to_inner,
             runtime_filter: (&join.runtime_filter).into(),
             probe_to_build: join.probe_to_build.clone(),
@@ -296,6 +297,37 @@ impl HashJoinDesc {
                 *entry = entry.clone().remove_nullable();
             }
         }
+    }
+
+    /// Records a NULL in the first key of the subquery side of a mark join, see
+    /// `HashJoin::mark_nulls_from_key`.
+    pub(crate) fn record_mark_nulls(
+        &self,
+        data_block: &DataBlock,
+        keys: &[Expr],
+        func_ctx: &FunctionContext,
+    ) -> Result<()> {
+        let Some(key) = keys.first() else {
+            return Ok(());
+        };
+        if !self.mark_nulls_from_key
+            || !key.data_type().is_nullable_or_null()
+            || *self.marker_join_desc.has_null.read()
+        {
+            return Ok(());
+        }
+        let evaluator = Evaluator::new(data_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let has_null = match evaluator.run(key)? {
+            Value::Scalar(scalar) => scalar.is_null(),
+            Value::Column(column) => column
+                .validity()
+                .1
+                .is_some_and(|valids| valids.null_count() > 0),
+        };
+        if has_null {
+            *self.marker_join_desc.has_null.write() = true;
+        }
+        Ok(())
     }
 }
 
