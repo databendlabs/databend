@@ -349,6 +349,27 @@ SELECT count(*) FROM (SELECT a + rand() * 0, grouping(a) AS g FROM t GROUP BY RO
 ----
 3
 
+# A form that fails to bind matches no key. Unfolded, the shift amount is
+# Int64, which no overload of bit_shift_left takes; after the aggregate it
+# folds to a UInt8 literal and binds.
+query ITI rowsort
+SELECT a, ['x', 'y'] AS f, bit_shift_left(1, length(f) - array_indexof(f, 'y')) FROM t GROUP BY ROLLUP(a)
+----
+1 ["x","y"] 1
+2 ["x","y"] 1
+NULL ["x","y"] 1
+
+query II rowsort
+SELECT a, bit_and(grouping(a), bit_shift_left(1, length(['a']) - array_indexof(['a'], 'a'))) FROM t GROUP BY ROLLUP(a)
+----
+1 0
+2 0
+NULL 1
+
+# A form that also fails after the aggregate is still an error.
+statement error (?s)1065.*no function matches signature `bit_shift_left
+SELECT a, bit_shift_left(1, a - 5) FROM t GROUP BY ROLLUP(a)
+
 ## Clauses before and after the aggregate
 
 # WHERE reads the input, even through an alias of a key.

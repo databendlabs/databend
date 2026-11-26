@@ -762,8 +762,9 @@ where A: TypeCheckAdapter
     }
 
     /// Bind the pre-aggregate form of the node for the scope at `position`, or
-    /// `None` if it refers to an alias whose item has no pre-aggregate form.
-    /// Binding errors are returned as is.
+    /// `None` if it refers to an alias whose item has no pre-aggregate form,
+    /// or if the form fails to bind: every key bound, so such a form matches
+    /// none.
     fn resolve_grouping_key_input(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -774,13 +775,15 @@ where A: TypeCheckAdapter
         let effects = self.phase_effects();
         let (result, input) =
             self.with_grouping_key_input(position, |checker| checker.resolve_core_bound(arena, id));
-        let bound = result?;
         #[cfg(debug_assertions)]
         debug_assert_eq!(
             effects,
             self.phase_effects(),
             "matching a node to grouping keys must not have phase-sensitive effects"
         );
+        let Ok(bound) = result else {
+            return Ok(None);
+        };
         // A form with a deferred error refers to an ungrouped input column of
         // an enclosing scope, which no key of this scope does.
         Ok((!input.input_unavailable && input.deferred_error.is_none()).then_some(bound))
