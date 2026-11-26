@@ -998,13 +998,8 @@ impl Binder {
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-        // Other SHOW sources already follow ordinary system-table access rules.
-        let show_system_table = match rewrite_kind_r {
-            RewriteKind::ShowEngines => Some("engines"),
-            RewriteKind::ShowTableFunctions => Some("table_functions"),
-            RewriteKind::ShowTags => Some("tags"),
-            _ => None,
-        };
+        // SHOW TAGS checks SUPER separately; exempt only its generated FROM reference.
+        let show_system_table = matches!(rewrite_kind_r, RewriteKind::ShowTags).then_some("tags");
         let previous = mem::replace(&mut self.show_system_table, show_system_table);
         let result = self.bind_statement(bind_context, &stmt).await;
         self.show_system_table = previous;

@@ -26,6 +26,7 @@ DROP DATABASE IF EXISTS subquery_db;
 DROP USER IF EXISTS subquery_user;
 DROP STAGE IF EXISTS subquery_stage;
 DROP FUNCTION IF EXISTS subquery_udf;
+DROP TAG IF EXISTS subquery_tag;
 "
 }
 
@@ -40,6 +41,7 @@ CREATE TABLE subquery_db.visible(a INT);
 CREATE STAGE subquery_stage;
 COPY INTO @subquery_stage FROM subquery_db.secret FILE_FORMAT = (TYPE = CSV);
 CREATE FUNCTION subquery_udf AS (p) -> (p > 0);
+CREATE TAG subquery_tag;
 CREATE USER subquery_user IDENTIFIED BY 'password';
 GRANT SELECT ON subquery_db.visible TO subquery_user;
 "
@@ -61,10 +63,21 @@ check "SHOW ENGINES WHERE \"Engine\" = 'MEMORY' AND (SELECT v FROM subquery_db.s
 check "SHOW TABLE_FUNCTIONS WHERE name = 'numbers' AND (SELECT v FROM subquery_db.secret) = 42"
 check "SHOW TABLES FROM subquery_db WHERE (SELECT v FROM subquery_db.secret) = 42"
 check "SHOW COLUMNS FROM subquery_db.visible WHERE (SELECT v FROM subquery_db.secret) = 42"
-echo "-- the SHOW source itself is exempt only as the FROM of the rewrite"
-check "SHOW ENGINES WHERE \"Engine\" IN (SELECT \"Engine\" FROM system.engines) LIMIT 1"
+echo "-- built-in metadata is readable without SELECT grants"
 check "SHOW DATABASES WHERE name = 'subquery_db'"
 check "SHOW ENGINES WHERE \"Engine\" = 'MEMORY'"
+check "SELECT count(*) > 0 FROM system.engines"
+check "SELECT count(*) > 0 FROM system.table_functions"
+
+echo "== SHOW TAGS needs SUPER, and only its generated FROM is exempt"
+check "SELECT count(*) FROM system.tags"
+check "SHOW TAGS"
+bendsql_connect_root_null --query="GRANT SUPER ON *.* TO subquery_user"
+# Only the name: SHOW TAGS also prints when the tag was created.
+check "SHOW TAGS WHERE name = 'subquery_tag'" | cut -f1
+check "SHOW TAGS WHERE name IN (SELECT name FROM system.tags)"
+check "SHOW TAGS WHERE (SELECT v FROM subquery_db.secret) = 42"
+bendsql_connect_root_null --query="REVOKE SUPER ON *.* FROM subquery_user"
 
 echo "== after granting"
 bendsql_connect_root_null --query="
