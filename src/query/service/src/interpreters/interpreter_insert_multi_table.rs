@@ -20,14 +20,21 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
@@ -37,7 +44,6 @@ use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::Else;
-use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
@@ -148,7 +154,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     pub async fn build_physical_plan(&self, dry_run: bool) -> Result<PhysicalPlan> {
-        let (mut root, _) = self.build_source_physical_plan().await?;
+        let (mut root, route_columns) = self.build_source_physical_plan().await?;
         let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
@@ -158,7 +164,7 @@ impl InsertMultiTableInterpreter {
         let deduplicated_serializable_tables = branches
             .build_deduplicated_serializable_target_tables(self.ctx.clone(), dry_run)
             .await?;
-        let predicates = branches.build_predicates(source_schema.as_ref())?;
+        let predicates = branches.build_predicates(source_schema.as_ref(), &route_columns)?;
         let eval_scalars = branches.build_eval_scalars(source_schema.as_ref())?;
 
         // Source schemas for each branch to be casted to the target schema
@@ -308,102 +314,150 @@ impl InsertMultiTableInterpreter {
         })
     }
 
-    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
-        match &self.plan.input_source {
-            Plan::Query {
-                s_expr,
-                metadata,
-                bind_context,
-                ..
-            } => {
-                let mut builder1 =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                let source_required = self.source_required_columns();
-                let result_columns = bind_context.result_columns();
-                let projected_columns =
-                    ordered_source_projection_columns(&result_columns, &source_required);
-                let mut required = bind_context.column_set();
-                required.extend(source_required);
-                let input_source = builder1.build_query(s_expr.planned()?, required).await?;
+    /// Plans the source query and appends the routing decision of every row.
+    ///
+    /// The output starts with the source's logical result columns, in order, followed by the
+    /// route columns. Branches without VALUES(...) insert the leading columns positionally.
+    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, RouteColumns)> {
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = &self.plan.input_source
+        else {
+            unreachable!()
+        };
 
-                // Lazy materialization (triggered by WHERE + LIMIT) may reorder physical output
-                // columns and inject internal columns like _row_id.  Add a reorder EvalScalar
-                // that projects logical output columns first and appends any extra source-side
-                // columns needed by WHEN predicates. This keeps branch filters resolvable while
-                // preserving positional insert semantics for branches that don't define VALUES(...)
-                // expressions.
-                let physical_schema = input_source.output_schema()?;
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+        let mut required = bind_context.column_set();
+        required.extend(self.source_required_columns());
+        let input_source = builder.build_query(s_expr.planned()?, required).await?;
 
-                // Build (phys_pos, symbol) pairs for projected columns in the exact schema order
-                // we need after source projection.
-                let col_refs: Vec<(usize, Symbol)> = projected_columns
-                    .iter()
-                    .map(|sym| {
-                        let phys_pos =
-                            physical_schema.index_of(&sym.to_string()).map_err(|_| {
-                                ErrorCode::Internal(format!(
-                                    "Failed to map source column {sym} for multi-table insert"
-                                ))
-                            })?;
-                        Ok((phys_pos, *sym))
-                    })
-                    .collect::<Result<_>>()?;
+        // Lazy materialization (triggered by WHERE + LIMIT) may reorder physical output columns
+        // and inject internal columns like _row_id, and WHEN conditions may read columns outside
+        // the logical output. Project the logical output columns first, in order.
+        let physical_schema = input_source.output_schema()?;
+        let col_refs: Vec<(usize, Symbol)> = bind_context
+            .result_columns()
+            .iter()
+            .map(|(sym, _)| {
+                let phys_pos = physical_schema.index_of(&sym.to_string()).map_err(|_| {
+                    ErrorCode::Internal(format!(
+                        "Failed to map source column {sym} for multi-table insert"
+                    ))
+                })?;
+                Ok((phys_pos, *sym))
+            })
+            .collect::<Result<_>>()?;
+        let (route_exprs, route_columns) = self.build_route_columns(&physical_schema, metadata)?;
 
-                // If the schema already matches the projected column order and contains nothing
-                // else, skip the reorder node.
-                let needs_reorder = physical_schema.num_fields() != col_refs.len()
-                    || col_refs
-                        .iter()
-                        .enumerate()
-                        .any(|(logical_pos, &(phys_pos, _))| logical_pos != phys_pos);
+        // If the schema already matches the logical column order, contains nothing else and no
+        // route column is needed, skip the projection node.
+        let needs_eval = !route_exprs.is_empty()
+            || physical_schema.num_fields() != col_refs.len()
+            || col_refs
+                .iter()
+                .enumerate()
+                .any(|(logical_pos, &(phys_pos, _))| logical_pos != phys_pos);
+        if !needs_eval {
+            return Ok((input_source, route_columns));
+        }
 
-                if !needs_reorder {
-                    return Ok((input_source, metadata.clone()));
-                }
-
-                // Build ColumnRef expressions that pick each logical column in order.
-                let exprs: Vec<(RemoteExpr, databend_common_sql::Symbol)> = col_refs
-                    .iter()
-                    .map(|&(phys_pos, sym)| {
-                        let data_type = physical_schema.field(phys_pos).data_type().clone();
-                        let remote_expr = RemoteExpr::ColumnRef {
-                            span: None,
-                            id: phys_pos,
-                            data_type,
-                            display_name: sym.to_string(),
-                        };
-                        (remote_expr, sym)
-                    })
-                    .collect();
-
-                // Project only the new expr columns (input_col_num .. input_col_num + n).
-                let input_col_num = physical_schema.num_fields();
-                let projections: BTreeSet<usize> =
-                    (input_col_num..input_col_num + exprs.len()).collect();
-
-                // `build_physical_plan` distributes the write only when the source root is a Merge
-                // exchange. The reorder is positional and the exchange output follows its input, so
-                // put the reorder below the exchange rather than wrapping (and hiding) it.
-                let reordered = match Exchange::from_physical_plan(&input_source) {
-                    Some(exchange) if exchange.kind == FragmentKind::Merge => {
-                        let input = exchange.input.clone();
-                        exchange.derive(vec![PhysicalPlan::new(EvalScalar::create(
-                            input,
-                            exprs,
-                            projections,
-                            None,
-                        ))])
-                    }
-                    _ => PhysicalPlan::new(EvalScalar::create(
-                        input_source,
-                        exprs,
-                        projections,
-                        None,
-                    )),
+        let mut exprs: Vec<(RemoteExpr, Symbol)> = col_refs
+            .iter()
+            .map(|&(phys_pos, sym)| {
+                let data_type = physical_schema.field(phys_pos).data_type().clone();
+                let remote_expr = RemoteExpr::ColumnRef {
+                    span: None,
+                    id: phys_pos,
+                    data_type,
+                    display_name: sym.to_string(),
                 };
-                Ok((reordered, metadata.clone()))
+                (remote_expr, sym)
+            })
+            .collect();
+        exprs.extend(route_exprs);
+
+        // Project only the new expr columns (input_col_num .. input_col_num + n).
+        let input_col_num = physical_schema.num_fields();
+        let projections: BTreeSet<usize> = (input_col_num..input_col_num + exprs.len()).collect();
+
+        // `build_physical_plan` distributes the write only when the source root is a Merge
+        // exchange. The projection is positional and the exchange output follows its input, so
+        // put it below the exchange rather than wrapping (and hiding) it.
+        let projected = match Exchange::from_physical_plan(&input_source) {
+            Some(exchange) if exchange.kind == FragmentKind::Merge => {
+                let input = exchange.input.clone();
+                exchange.derive(vec![PhysicalPlan::new(EvalScalar::create(
+                    input,
+                    exprs,
+                    projections,
+                    None,
+                ))])
             }
-            _ => unreachable!(),
+            _ => PhysicalPlan::new(EvalScalar::create(input_source, exprs, projections, None)),
+        };
+        Ok((projected, route_columns))
+    }
+
+    /// Evaluates every WHEN condition exactly once per source row, before the rows fan out to
+    /// the branches. All branches then filter on the same decision, which keeps volatile
+    /// conditions consistent across INTO clauses and lets a NULL condition mean "not matched"
+    /// without affecting the WHEN clauses after it.
+    fn build_route_columns(
+        &self,
+        schema: &DataSchema,
+        metadata: &MetadataRef,
+    ) -> Result<(Vec<(RemoteExpr, Symbol)>, RouteColumns)> {
+        if self.plan.whens.is_empty() {
+            return Ok((vec![], RouteColumns::Unconditional));
+        }
+        let conditions = self
+            .plan
+            .whens
+            .iter()
+            .map(|when| {
+                let expr = when
+                    .condition
+                    .as_expr()?
+                    .project_column_ref(|col| schema.index_of(&col.index.to_string()))?;
+                cast_expr_to_non_null_boolean(expr)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let add_route_column = |name: String, expr: Expr| {
+            let symbol = metadata
+                .write()
+                .add_derived_column(name.clone(), expr.data_type().clone());
+            ((expr.as_remote_expr(), symbol), RouteColumn {
+                symbol,
+                name,
+            })
+        };
+
+        if self.plan.is_first {
+            // if(c1, 1, c2, 2, ..., 0) evaluates each condition only for the rows that no earlier
+            // WHEN has taken.
+            let mut args = Vec::with_capacity(conditions.len() * 2 + 1);
+            for (idx, condition) in conditions.into_iter().enumerate() {
+                args.push(condition);
+                args.push(when_number(idx + 1));
+            }
+            args.push(when_number(0));
+            let expr = check_function(None, "if", &[], &args, &BUILTIN_FUNCTIONS)?;
+            let (remote_expr, column) =
+                add_route_column("_insert_multi_first_when".to_string(), expr);
+            Ok((vec![remote_expr], RouteColumns::First(column)))
+        } else {
+            let (exprs, columns) = conditions
+                .into_iter()
+                .enumerate()
+                .map(|(idx, condition)| {
+                    add_route_column(format!("_insert_multi_matched_{idx}"), condition)
+                })
+                .unzip();
+            Ok((exprs, RouteColumns::Matched(columns)))
         }
     }
 
@@ -421,47 +475,35 @@ impl InsertMultiTableInterpreter {
             whens,
             opt_else,
             overwrite: _,
-            is_first,
+            is_first: _,
             intos,
             target_tables: _,
             meta_data: _,
         } = &self.plan;
         let mut branches = InsertIntoBranches::default();
-        let mut condition_intos = vec![];
-        let mut previous_not: Option<ScalarExpr> = None;
-        for when in whens {
-            let mut condition = when.condition.clone();
-            if *is_first {
-                if let Some(prev_not) = &previous_not {
-                    let merged_condition = and(prev_not.clone(), condition.clone());
-                    previous_not = Some(and(prev_not.clone(), not(condition.clone())));
-                    condition = merged_condition;
-                } else {
-                    previous_not = Some(not(condition.clone()));
-                };
-            }
+        let mut route_intos = vec![];
+        for (idx, when) in whens.iter().enumerate() {
             for into in &when.intos {
-                condition_intos.push((Some(condition.clone()), into));
+                route_intos.push((BranchRoute::When(idx), into));
             }
         }
         if let Some(Else { intos }) = opt_else {
-            let condition = if *is_first { previous_not.take() } else { None };
             for into in intos {
-                condition_intos.push((condition.clone(), into));
+                route_intos.push((BranchRoute::Else, into));
             }
         }
         for into in intos {
-            condition_intos.push((None, into));
+            route_intos.push((BranchRoute::Always, into));
         }
 
-        condition_intos.sort_by(|a, b| {
+        route_intos.sort_by(|a, b| {
             a.1.catalog
                 .cmp(&b.1.catalog)
                 .then(a.1.database.cmp(&b.1.database))
                 .then(a.1.table.cmp(&b.1.table))
         });
 
-        for (condition, into) in condition_intos {
+        for (route, into) in route_intos {
             let Into {
                 catalog,
                 database,
@@ -481,7 +523,7 @@ impl InsertMultiTableInterpreter {
             );
             branches.push(
                 table,
-                condition,
+                route,
                 source_scalar_exprs.clone(),
                 casted_schema.clone(),
             );
@@ -491,47 +533,97 @@ impl InsertMultiTableInterpreter {
     }
 }
 
-fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "and".to_string(),
-        params: vec![],
-        arguments: vec![left, right],
-        return_type: Box::new(return_type),
-    })
+/// The rows an INTO branch receives.
+#[derive(Clone, Copy)]
+enum BranchRoute {
+    /// An unconditional INTO: every source row.
+    Always,
+    /// An INTO of the WHEN clause at this position.
+    When(usize),
+    /// An INTO of the ELSE clause: the rows for which no WHEN condition is true.
+    Else,
 }
 
-fn not(expr: ScalarExpr) -> ScalarExpr {
-    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&expr]);
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "not".to_string(),
-        params: vec![],
-        arguments: vec![expr],
-        return_type: Box::new(return_type),
-    })
+/// A column the source appends to carry the routing decision of each row.
+struct RouteColumn {
+    symbol: Symbol,
+    name: String,
 }
 
-fn ordered_source_projection_columns(
-    result_columns: &[(Symbol, String)],
-    source_required: &ColumnSet,
-) -> Vec<Symbol> {
-    let logical_output_columns = result_columns
-        .iter()
-        .map(|(sym, _)| *sym)
-        .collect::<ColumnSet>();
-    let mut projected_columns = result_columns
-        .iter()
-        .map(|(sym, _)| *sym)
-        .collect::<Vec<_>>();
-    projected_columns.extend(
-        source_required
-            .iter()
-            .copied()
-            .filter(|sym| !logical_output_columns.contains(sym)),
-    );
-    projected_columns
+/// The routing decision of each source row, computed once before the rows fan out.
+enum RouteColumns {
+    /// There is no WHEN clause.
+    Unconditional,
+    /// INSERT ALL: one non-null boolean column per WHEN clause, true when its condition is true.
+    Matched(Vec<RouteColumn>),
+    /// INSERT FIRST: the 1-based position of the first WHEN clause whose condition is true, or
+    /// 0 when there is none.
+    First(RouteColumn),
+}
+
+impl RouteColumns {
+    fn branch_filter(&self, route: BranchRoute, schema: &DataSchema) -> Result<Option<RemoteExpr>> {
+        let filter = match (self, route) {
+            (_, BranchRoute::Always) => return Ok(None),
+            (RouteColumns::Matched(columns), BranchRoute::When(idx)) => {
+                route_column_ref(&columns[idx], schema)?
+            }
+            (RouteColumns::Matched(columns), BranchRoute::Else) => {
+                let mut matched_any: Option<Expr> = None;
+                for column in columns {
+                    let matched = route_column_ref(column, schema)?;
+                    matched_any = Some(match matched_any {
+                        None => matched,
+                        Some(prev) => {
+                            check_function(None, "or", &[], &[prev, matched], &BUILTIN_FUNCTIONS)?
+                        }
+                    });
+                }
+                let matched_any = matched_any.ok_or_else(|| {
+                    ErrorCode::Internal("multi-table insert ELSE requires a WHEN clause")
+                })?;
+                check_function(None, "not", &[], &[matched_any], &BUILTIN_FUNCTIONS)?
+            }
+            (RouteColumns::First(column), BranchRoute::When(idx)) => {
+                first_when_is(column, idx + 1, schema)?
+            }
+            (RouteColumns::First(column), BranchRoute::Else) => first_when_is(column, 0, schema)?,
+            (RouteColumns::Unconditional, BranchRoute::When(_) | BranchRoute::Else) => {
+                return Err(ErrorCode::Internal(
+                    "multi-table insert branch is conditional but there is no WHEN clause",
+                ));
+            }
+        };
+        Ok(Some(filter.as_remote_expr()))
+    }
+}
+
+fn route_column_ref(column: &RouteColumn, schema: &DataSchema) -> Result<Expr> {
+    let id = schema.index_of(&column.symbol.to_string())?;
+    Ok(Expr::ColumnRef(ColumnRef {
+        span: None,
+        id,
+        data_type: schema.field(id).data_type().clone(),
+        display_name: format!("{} (#{})", column.name, column.symbol),
+    }))
+}
+
+fn first_when_is(column: &RouteColumn, number: usize, schema: &DataSchema) -> Result<Expr> {
+    check_function(
+        None,
+        "eq",
+        &[],
+        &[route_column_ref(column, schema)?, when_number(number)],
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
+fn when_number(number: usize) -> Expr {
+    Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::UInt32(number as u32)),
+        data_type: DataType::Number(NumberDataType::UInt32),
+    })
 }
 
 pub(crate) fn scalar_expr_to_remote_expr(
@@ -547,7 +639,7 @@ pub(crate) fn scalar_expr_to_remote_expr(
 #[derive(Default)]
 struct InsertIntoBranches {
     tables: Vec<Arc<dyn Table>>,
-    conditions: Vec<Option<ScalarExpr>>,
+    routes: Vec<BranchRoute>,
     source_exprs: Vec<Option<Vec<ScalarExpr>>>,
     casted_schemas: Vec<DataSchemaRef>,
     len: usize,
@@ -557,12 +649,12 @@ impl InsertIntoBranches {
     fn push(
         &mut self,
         table: Arc<dyn Table>,
-        condition: Option<ScalarExpr>,
+        route: BranchRoute,
         source_exprs: Option<Vec<ScalarExpr>>,
         casted_schema: DataSchemaRef,
     ) {
         self.tables.push(table);
-        self.conditions.push(condition);
+        self.routes.push(route);
         self.source_exprs.push(source_exprs);
         self.casted_schemas.push(casted_schema);
         self.len += 1;
@@ -634,23 +726,15 @@ impl InsertIntoBranches {
         Ok(serializable_tables)
     }
 
-    fn build_predicates(&self, source_schema: &DataSchema) -> Result<Vec<Option<RemoteExpr>>> {
-        let mut predicates = vec![];
-        let prepare_filter = |expr: ScalarExpr| {
-            let expr = cast_expr_to_non_null_boolean(
-                expr.as_expr()?
-                    .project_column_ref(|col| source_schema.index_of(&col.index.to_string()))?,
-            )?;
-            Ok::<RemoteExpr, ErrorCode>(expr.as_remote_expr())
-        };
-        for opt_scalar_expr in self.conditions.iter() {
-            if let Some(scalar_expr) = opt_scalar_expr {
-                predicates.push(Some(prepare_filter(scalar_expr.clone())?));
-            } else {
-                predicates.push(None);
-            }
-        }
-        Ok(predicates)
+    fn build_predicates(
+        &self,
+        source_schema: &DataSchema,
+        route_columns: &RouteColumns,
+    ) -> Result<Vec<Option<RemoteExpr>>> {
+        self.routes
+            .iter()
+            .map(|route| route_columns.branch_filter(*route, source_schema))
+            .collect()
     }
 
     fn build_eval_scalars(

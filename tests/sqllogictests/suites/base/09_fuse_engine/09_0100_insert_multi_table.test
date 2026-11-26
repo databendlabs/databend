@@ -833,3 +833,137 @@ DROP TABLE multi_partitioned_a
 
 statement ok
 DROP TABLE multi_partitioned_b
+
+# Each WHEN condition is evaluated once per source row, and a NULL condition is not matched.
+statement ok
+CREATE OR REPLACE TABLE route_src(a INT NULL, b INT)
+
+statement ok
+INSERT INTO route_src VALUES (NULL, 1), (NULL, 0), (20, 0), (20, 1)
+
+statement ok
+CREATE OR REPLACE TABLE route_t1(a INT NULL, b INT)
+
+statement ok
+CREATE OR REPLACE TABLE route_t2(a INT NULL, b INT)
+
+statement ok
+CREATE OR REPLACE TABLE route_t3(a INT NULL, b INT)
+
+# INSERT FIRST: a NULL condition falls through to the next WHEN and to ELSE.
+query III
+INSERT FIRST
+    WHEN a > 10 THEN INTO route_t1
+    WHEN b = 1 THEN INTO route_t2
+    ELSE INTO route_t3
+SELECT a, b FROM route_src
+----
+2 1 1
+
+query II
+SELECT * FROM route_t1 ORDER BY a, b
+----
+20 0
+20 1
+
+query II
+SELECT * FROM route_t2 ORDER BY a, b
+----
+NULL 1
+
+query II
+SELECT * FROM route_t3 ORDER BY a, b
+----
+NULL 0
+
+statement ok
+TRUNCATE TABLE route_t1
+
+statement ok
+TRUNCATE TABLE route_t2
+
+statement ok
+TRUNCATE TABLE route_t3
+
+# INSERT ALL: ELSE only receives the rows for which no WHEN condition is true.
+query III
+INSERT ALL
+    WHEN a > 10 THEN INTO route_t1
+    WHEN b = 1 THEN INTO route_t2
+    ELSE INTO route_t3
+SELECT a, b FROM route_src
+----
+2 2 1
+
+query II
+SELECT * FROM route_t1 ORDER BY a, b
+----
+20 0
+20 1
+
+query II
+SELECT * FROM route_t2 ORDER BY a, b
+----
+20 1
+NULL 1
+
+query II
+SELECT * FROM route_t3 ORDER BY a, b
+----
+NULL 0
+
+statement ok
+CREATE OR REPLACE TABLE route_rand_1(n BIGINT)
+
+statement ok
+CREATE OR REPLACE TABLE route_rand_2(n BIGINT)
+
+# The INTO clauses of one WHEN receive the same rows, even for a volatile condition.
+statement ok
+INSERT ALL
+    WHEN rand() < 0.5 THEN INTO route_rand_1 INTO route_rand_2
+SELECT number AS n FROM numbers(10000)
+
+query B
+SELECT (SELECT count(*) FROM route_rand_1) = (SELECT count(*) FROM route_rand_2)
+    AND (SELECT count(*) FROM route_rand_1) = (SELECT count(*) FROM route_rand_1 WHERE n IN (SELECT n FROM route_rand_2))
+----
+1
+
+statement ok
+TRUNCATE TABLE route_rand_1
+
+statement ok
+TRUNCATE TABLE route_rand_2
+
+# INSERT FIRST with a volatile condition puts each row into exactly one branch.
+statement ok
+INSERT FIRST
+    WHEN rand() < 0.5 THEN INTO route_rand_1
+    ELSE INTO route_rand_2
+SELECT number AS n FROM numbers(10000)
+
+query II
+SELECT
+    (SELECT count(*) FROM route_rand_1) + (SELECT count(*) FROM route_rand_2),
+    (SELECT count(*) FROM route_rand_1 WHERE n IN (SELECT n FROM route_rand_2))
+----
+10000 0
+
+statement ok
+DROP TABLE route_src
+
+statement ok
+DROP TABLE route_t1
+
+statement ok
+DROP TABLE route_t2
+
+statement ok
+DROP TABLE route_t3
+
+statement ok
+DROP TABLE route_rand_1
+
+statement ok
+DROP TABLE route_rand_2
