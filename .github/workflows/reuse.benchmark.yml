@@ -145,7 +145,6 @@ jobs:
         include:
           # The query suite completed before the previous 10m timeout. Allow another 10m
           # for queued system-history collection and cleanup without changing benchmark code.
-          # hits runs in the local job on fs storage.
           - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 0, tries: 1 }
