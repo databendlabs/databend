@@ -66,6 +66,54 @@ where
         self.rows.last()
     }
 
+    /// Compares the current row with the current row of `other`.
+    #[inline]
+    pub fn cmp_current(&self, other: &Self) -> Ordering {
+        self.rows
+            .cmp_rows(self.row_index, &other.rows, other.row_index)
+    }
+
+    /// Whether the current row equals the current row of `other`.
+    #[inline]
+    pub fn eq_current(&self, other: &Self) -> bool {
+        self.rows
+            .eq_rows(self.row_index, &other.rows, other.row_index)
+    }
+
+    /// Whether the current row equals the last row, so the rest of the cursor is one value.
+    #[inline]
+    pub fn current_eq_last(&self) -> bool {
+        self.rows
+            .eq_rows(self.row_index, &self.rows, self.rows.len() - 1)
+    }
+
+    /// Compares the last row with the current row of `other`.
+    #[inline]
+    pub fn cmp_last_with_current(&self, other: &Self) -> Ordering {
+        self.rows
+            .cmp_rows(self.rows.len() - 1, &other.rows, other.row_index)
+    }
+
+    /// The number of rows from the current row up to `end` that equal the current row.
+    #[inline]
+    pub fn run_len_eq(&self, end: usize) -> usize {
+        debug_assert!(self.row_index < end && end <= self.rows.len());
+        1 + self
+            .rows
+            .leading_rows_eq(self.row_index + 1..end, &self.rows, self.row_index)
+    }
+
+    /// The number of rows from the current row up to `end` that are less than or equal to the
+    /// current row of `other`. The current row is counted without a comparison, so it must not
+    /// be greater than that of `other`.
+    #[inline]
+    pub fn run_len_le(&self, end: usize, other: &Self) -> usize {
+        debug_assert!(self.row_index < end && end <= self.rows.len());
+        1 + self
+            .rows
+            .leading_rows_le(self.row_index + 1..end, &other.rows, other.row_index)
+    }
+
     #[inline]
     pub fn num_rows(&self) -> usize {
         self.rows.len()

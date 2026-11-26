@@ -138,7 +138,9 @@ impl<R: Rows> TopNCandidates<R> {
         {
             if incoming_index == rows.len()
                 || (current_index < current_rows.len()
-                    && current_rows.row(current_index) <= rows.row(incoming_index))
+                    && current_rows
+                        .cmp_rows(current_index, &rows, incoming_index)
+                        .is_le())
             {
                 selected.push_merge(0, current_index as u32);
                 current_index += 1;
@@ -213,11 +215,11 @@ impl<R: Rows> TopNCandidates<R> {
         let mut permutation: Vec<u32> = (0..rows.len() as u32).collect();
         if permutation.len() > self.capacity {
             permutation.select_nth_unstable_by(self.capacity - 1, |&a, &b| {
-                rows.row(a as usize).cmp(&rows.row(b as usize))
+                rows.cmp_rows(a as usize, &rows, b as usize)
             });
             permutation.truncate(self.capacity);
         }
-        permutation.sort_unstable_by(|&a, &b| rows.row(a as usize).cmp(&rows.row(b as usize)));
+        permutation.sort_unstable_by(|&a, &b| rows.cmp_rows(a as usize, &rows, b as usize));
 
         let block = block.take(permutation.as_slice())?;
         let rows = self.order_rows(&block)?;

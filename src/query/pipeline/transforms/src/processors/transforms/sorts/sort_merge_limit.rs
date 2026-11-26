@@ -131,15 +131,14 @@ struct LocalCursorOrder;
 
 impl<R: Rows> CursorOrder<R> for LocalCursorOrder {
     fn eq(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> bool {
-        (a.input_index == b.input_index && a.row_index == b.row_index) || a.current() == b.current()
+        (a.input_index == b.input_index && a.row_index == b.row_index) || a.eq_current(b)
     }
 
     fn cmp(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> Ordering {
         if a.input_index == b.input_index {
             return a.row_index.cmp(&b.row_index);
         }
-        a.current()
-            .cmp(&b.current())
+        a.cmp_current(b)
             .then_with(|| a.input_index.cmp(&b.input_index))
     }
 }

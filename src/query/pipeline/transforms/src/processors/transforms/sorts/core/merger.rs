@@ -225,36 +225,24 @@ where A: SortAlgorithm
             .num_rows()
             .min(start + max_rows - self.buffers.output_len());
 
-        if self.sorted_cursors.len() == 1 || cursor.current() == cursor.last() {
+        if self.sorted_cursors.len() == 1 || cursor.current_eq_last() {
             return row_index_limit - start;
         }
 
         if !A::SHOULD_PEEK_TOP2 {
-            let mut p = cursor.cursor_mut();
-            p.advance();
-            let item = &cursor.current();
-            while p.row_index < row_index_limit && p.current() == *item {
-                p.advance();
-            }
-            return p.row_index - start;
+            return cursor.run_len_eq(row_index_limit);
         }
 
         let next_cursor = &self.sorted_cursors.peek_top2().0;
-        if cursor.last() <= next_cursor.current() {
+        if cursor.cmp_last_with_current(next_cursor).is_le() {
             // Short Path:
             // If the last row of current block is smaller than the next cursor,
             // we can drain the whole block.
             return row_index_limit - start;
         }
 
-        let mut p = cursor.cursor_mut();
-        p.advance();
-        let item = &next_cursor.current();
-        while p.row_index < row_index_limit && p.current() <= *item {
-            // If the cursor is equals or smaller than the next cursor, continue advance.
-            p.advance();
-        }
-        p.row_index - start
+        // The current row is the smallest, so it is not greater than the next cursor.
+        cursor.run_len_le(row_index_limit, next_cursor)
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {

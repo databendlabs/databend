@@ -3890,6 +3890,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-tracing",
  "databend-storages-common-cache",
+ "divan",
  "enum-as-inner",
  "fastrace",
  "futures",

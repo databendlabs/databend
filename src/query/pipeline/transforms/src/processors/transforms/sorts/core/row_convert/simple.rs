@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -23,12 +24,100 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::IntervalType;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 
 use super::RowConverter;
 use super::Rows;
 use super::SortKeyDescription;
+
+/// A type that [`SimpleRowsAsc`] and [`SimpleRowsDesc`] sort by, with how two of its column
+/// values are compared.
+pub trait SimpleRowsType: ArgType
+where for<'a> Self::ScalarRef<'a>: Ord + Send
+{
+    /// Compares row `i` of `a` with row `j` of `b`, the same as comparing their values.
+    #[inline(always)]
+    fn compare_rows(a: &Self::Column, i: usize, b: &Self::Column, j: usize) -> Ordering {
+        unsafe { Self::index_column_unchecked(a, i).cmp(&Self::index_column_unchecked(b, j)) }
+    }
+
+    /// Whether row `i` of `a` equals row `j` of `b`.
+    #[inline(always)]
+    fn equal_rows(a: &Self::Column, i: usize, b: &Self::Column, j: usize) -> bool {
+        unsafe { Self::index_column_unchecked(a, i) == Self::index_column_unchecked(b, j) }
+    }
+
+    /// The number of rows at the start of `rows` of `a` whose order against row `j` of `b`
+    /// satisfies `keep`.
+    #[inline]
+    fn leading_rows(
+        a: &Self::Column,
+        rows: Range<usize>,
+        b: &Self::Column,
+        j: usize,
+        keep: impl Fn(Ordering) -> bool,
+    ) -> usize {
+        let value = unsafe { Self::index_column_unchecked(b, j) };
+        rows.take_while(|&i| keep(unsafe { Self::index_column_unchecked(a, i) }.cmp(&value)))
+            .count()
+    }
+
+    /// The number of rows at the start of `rows` of `a` that equal row `j` of `b`.
+    #[inline]
+    fn leading_rows_eq(a: &Self::Column, rows: Range<usize>, b: &Self::Column, j: usize) -> usize {
+        let value = unsafe { Self::index_column_unchecked(b, j) };
+        rows.take_while(|&i| unsafe { Self::index_column_unchecked(a, i) } == value)
+            .count()
+    }
+}
+
+impl<N: Number> SimpleRowsType for NumberType<N> {}
+impl SimpleRowsType for BooleanType {}
+impl SimpleRowsType for DateType {}
+impl SimpleRowsType for TimestampType {}
+impl SimpleRowsType for IntervalType {}
+
+/// Compares the views first, so the value bytes are only read when the length and the first
+/// bytes kept in the views do not decide.
+impl SimpleRowsType for StringType {
+    #[inline(always)]
+    fn compare_rows(a: &Self::Column, i: usize, b: &Self::Column, j: usize) -> Ordering {
+        Self::Column::compare(a, i, b, j)
+    }
+
+    #[inline(always)]
+    fn equal_rows(a: &Self::Column, i: usize, b: &Self::Column, j: usize) -> bool {
+        Self::Column::equal(a, i, b, j)
+    }
+
+    /// Takes the view of row `j` once, so each row is compared with it in place.
+    #[inline]
+    fn leading_rows(
+        a: &Self::Column,
+        rows: Range<usize>,
+        b: &Self::Column,
+        j: usize,
+        keep: impl Fn(Ordering) -> bool,
+    ) -> usize {
+        let probe = b.probe(j);
+        rows.take_while(|&i| keep(a.compare_probe(i, &probe)))
+            .count()
+    }
+
+    #[inline]
+    fn leading_rows_eq(a: &Self::Column, rows: Range<usize>, b: &Self::Column, j: usize) -> usize {
+        let probe = b.probe(j);
+        rows.take_while(|&i| a.equal_probe(i, &probe)).count()
+    }
+}
 
 /// Rows structure for single simple types. (numbers, date, timestamp)
 #[derive(Clone, Debug)]
@@ -38,7 +127,7 @@ pub struct SimpleRowsAsc<T: ValueType> {
 
 impl<T> Rows for SimpleRowsAsc<T>
 where
-    T: ArgType,
+    T: SimpleRowsType,
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     const IS_ASC_COLUMN: bool = true;
@@ -55,6 +144,26 @@ where
 
     fn row(&self, index: usize) -> T::ScalarRef<'_> {
         unsafe { T::index_column_unchecked(&self.inner, index) }
+    }
+
+    #[inline(always)]
+    fn cmp_rows(&self, i: usize, other: &Self, j: usize) -> Ordering {
+        T::compare_rows(&self.inner, i, &other.inner, j)
+    }
+
+    #[inline(always)]
+    fn eq_rows(&self, i: usize, other: &Self, j: usize) -> bool {
+        T::equal_rows(&self.inner, i, &other.inner, j)
+    }
+
+    #[inline]
+    fn leading_rows_le(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
+        T::leading_rows(&self.inner, rows, &other.inner, j, Ordering::is_le)
+    }
+
+    #[inline]
+    fn leading_rows_eq(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
+        T::leading_rows_eq(&self.inner, rows, &other.inner, j)
     }
 
     fn to_column(&self) -> Column {
@@ -92,7 +201,7 @@ pub struct SimpleRowsDesc<T: ValueType> {
 
 impl<T> Rows for SimpleRowsDesc<T>
 where
-    T: ArgType,
+    T: SimpleRowsType,
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     const IS_ASC_COLUMN: bool = false;
@@ -110,6 +219,26 @@ where
     fn row(&self, index: usize) -> Reverse<T::ScalarRef<'_>> {
         let value = unsafe { T::index_column_unchecked(&self.inner, index) };
         Reverse(value)
+    }
+
+    #[inline(always)]
+    fn cmp_rows(&self, i: usize, other: &Self, j: usize) -> Ordering {
+        T::compare_rows(&other.inner, j, &self.inner, i)
+    }
+
+    #[inline(always)]
+    fn eq_rows(&self, i: usize, other: &Self, j: usize) -> bool {
+        T::equal_rows(&self.inner, i, &other.inner, j)
+    }
+
+    #[inline]
+    fn leading_rows_le(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
+        T::leading_rows(&self.inner, rows, &other.inner, j, Ordering::is_ge)
+    }
+
+    #[inline]
+    fn leading_rows_eq(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
+        T::leading_rows_eq(&self.inner, rows, &other.inner, j)
     }
 
     fn to_column(&self) -> Column {
@@ -149,7 +278,7 @@ pub struct SimpleRowConverter<T> {
 
 impl<T> RowConverter<SimpleRowsAsc<T>> for SimpleRowConverter<T>
 where
-    T: ArgType,
+    T: SimpleRowsType,
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     fn new(desc: SortKeyDescription) -> Result<Self> {
@@ -171,7 +300,7 @@ where
 
 impl<T> RowConverter<SimpleRowsDesc<T>> for SimpleRowConverter<T>
 where
-    T: ArgType,
+    T: SimpleRowsType,
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
     fn new(desc: SortKeyDescription) -> Result<Self> {
