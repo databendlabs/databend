@@ -40,6 +40,7 @@ use databend_common_settings::Settings;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_common_users::UserApiProvider;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
@@ -197,6 +198,7 @@ impl Session {
         self: &Arc<Self>,
         version: BuildInfoRef,
     ) -> Result<Arc<QueryContext>> {
+        self.reload_authed_user().await?;
         let config = GlobalConfig::instance();
         let cluster = if databend_common_config::GlobalConfig::is_embedded_mode() {
             // Use single node cluster for embedded/local mode
@@ -331,6 +333,41 @@ impl Session {
 
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.privilege_mgr().get_current_user()
+    }
+
+    /// MySQL and Flight SQL sessions authenticate once per connection: reload the user before
+    /// each query, so that a change since then, such as REVOKE ROLE, DROP USER or disabling the
+    /// user, takes effect on open connections. HTTP requests authenticate, and so load the user,
+    /// each time. The user may come from the watched copy and lag a change by the watch delay,
+    /// see `UserApiProvider::get_auth_user`.
+    #[async_backtrace::framed]
+    async fn reload_authed_user(&self) -> Result<()> {
+        if !matches!(self.get_type(), SessionType::MySQL | SessionType::FlightSQL) {
+            return Ok(());
+        }
+        // The MySQL handler creates a query context to authenticate the user.
+        let Some(user) = self.session_ctx.get_current_user() else {
+            return Ok(());
+        };
+        let user_api = UserApiProvider::instance();
+        let identity = user.identity();
+        let reloaded = user_api
+            .get_auth_user(&self.get_current_tenant(), identity.clone())
+            .await?;
+        // A user dropped and created again under the same name is another account, whose
+        // password this connection has not proven: the connection stays dropped. ALTER USER
+        // keeps `created_on`; a configured user is built anew, with a new one, on each read.
+        if user_api.get_configured_user(&identity.username).is_none()
+            && reloaded.created_on != user.created_on
+        {
+            return Err(ErrorCode::UnknownUser(format!(
+                "User {} was dropped or replaced after this connection logged in, reconnect",
+                identity.display()
+            )));
+        }
+        let user = reloaded;
+        UserApiProvider::check_user_enabled(&user)?;
+        self.privilege_mgr().reload_authed_user(user).await
     }
 
     pub fn privilege_mgr(&self) -> SessionPrivilegeManagerImpl<'_> {
