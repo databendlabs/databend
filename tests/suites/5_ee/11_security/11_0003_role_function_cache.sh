@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # IS_ROLE_IN_SESSION, CURRENT_SECONDARY_ROLES and CURRENT_AVAILABLE_ROLES resolve to the roles
-# enabled for the session. Neither a cached plan nor a cached result may carry them over to a
-# later query after a revoke, or to another user. CURRENT_USER and CURRENT_ROLE are part of the
-# secure plan cache key, but not of the result cache key: a cached result must not be served to
-# another user or role.
+# enabled for the session, CURRENT_USER and CURRENT_ROLE to the user and the role. The plan cache
+# key does not hold the roles, so these plans are not cached. The result cache key holds each
+# value: a cached result is reused by the same user and role, but never served after a revoke or
+# to another user or role, including when a plan cache hit skips binding.
 
 set -euo pipefail
 
@@ -44,6 +44,18 @@ cleanup() {
 
 PLAN_CACHE="SET enable_planner_cache = 1; SET enable_query_result_cache = 0;"
 RESULT_CACHE="SET enable_planner_cache = 0; SET enable_query_result_cache = 1; SET query_result_cache_min_execute_secs = 0;"
+BOTH_CACHES="SET enable_planner_cache = 1; SET enable_query_result_cache = 1; SET query_result_cache_min_execute_secs = 0;"
+
+# Prints hit if the statement would read a cached result. $3 runs first, such as SET ROLE.
+cache_status() {
+	local plan
+	plan=$(user_query "$1" "${RESULT_CACHE} ${3:-} EXPLAIN $2")
+	if grep -q '^ReadQueryResultCache' <<<"${plan}"; then
+		echo "hit"
+	else
+		echo "miss"
+	fi
+}
 
 comment "setup"
 root_sql "SET GLOBAL enable_experimental_row_access_policy = 1"
@@ -106,19 +118,38 @@ user_query "${USER_A}" "${RESULT_CACHE} SELECT secret AS s FROM rc_mask_t ORDER 
 user_query "${USER_A}" "${RESULT_CACHE} SELECT CURRENT_AVAILABLE_ROLES() AS r, count(*) AS c FROM rc_mask_t;"
 user_query "${USER_A}" "${RESULT_CACHE} SELECT CURRENT_SECONDARY_ROLES() AS r, count(*) AS c FROM rc_mask_t;"
 
+comment "result cache: user a reads its own results"
+cache_status "${USER_A}" "SELECT id AS rid FROM rc_rap_t ORDER BY id;"
+cache_status "${USER_A}" "SELECT secret AS s FROM rc_mask_t ORDER BY id;"
+cache_status "${USER_A}" "SELECT CURRENT_AVAILABLE_ROLES() AS r, count(*) AS c FROM rc_mask_t;"
+
 comment "result cache: user b does not read the results of user a"
+cache_status "${USER_B}" "SELECT id AS rid FROM rc_rap_t ORDER BY id;"
+cache_status "${USER_B}" "SELECT secret AS s FROM rc_mask_t ORDER BY id;"
 user_query "${USER_B}" "${RESULT_CACHE} SELECT id AS rid FROM rc_rap_t ORDER BY id;"
 user_query "${USER_B}" "${RESULT_CACHE} SELECT secret AS s FROM rc_mask_t ORDER BY id;"
 user_query "${USER_B}" "${RESULT_CACHE} SELECT CURRENT_AVAILABLE_ROLES() AS r, count(*) AS c FROM rc_mask_t;"
 user_query "${USER_B}" "${RESULT_CACHE} SELECT CURRENT_SECONDARY_ROLES() AS r, count(*) AS c FROM rc_mask_t;"
+
+root_sql "REVOKE ROLE ${ADMIN_ROLE} FROM ${USER_A}"
+
+comment "result cache: after the revoke, user a reads the results cached for the roles it keeps"
+cache_status "${USER_A}" "SELECT id AS rid FROM rc_rap_t ORDER BY id;"
+cache_status "${USER_A}" "SELECT secret AS s FROM rc_mask_t ORDER BY id;"
+user_query "${USER_A}" "${RESULT_CACHE} SELECT secret AS s FROM rc_mask_t ORDER BY id;"
+
+root_sql "GRANT ROLE ${ADMIN_ROLE} TO ${USER_A}"
 
 comment "result cache: user a caches results that depend on its user and role"
 user_query "${USER_A}" "${RESULT_CACHE} SELECT secret FROM rc_user_mask_t ORDER BY id;"
 user_query "${USER_A}" "${RESULT_CACHE} SET ROLE ${ADMIN_ROLE}; SELECT secret FROM rc_role_mask_t ORDER BY id;"
 user_query "${USER_A}" "${RESULT_CACHE} SELECT id FROM rc_owner_v ORDER BY id;"
 user_query "${USER_A}" "${RESULT_CACHE} SELECT current_user() AS u, count(*) AS c FROM rc_owner_t;"
+cache_status "${USER_A}" "SELECT secret FROM rc_user_mask_t ORDER BY id;"
+cache_status "${USER_A}" "SELECT secret FROM rc_role_mask_t ORDER BY id;" "SET ROLE ${ADMIN_ROLE};"
 
 comment "result cache: user a with another role does not read them"
+cache_status "${USER_A}" "SELECT secret FROM rc_role_mask_t ORDER BY id;" "SET ROLE ${READER_ROLE};"
 user_query "${USER_A}" "${RESULT_CACHE} SET ROLE ${READER_ROLE}; SELECT secret FROM rc_role_mask_t ORDER BY id;"
 
 comment "result cache: user b does not read them"
@@ -127,5 +158,20 @@ user_query "${USER_B}" "${RESULT_CACHE} SELECT secret FROM rc_role_mask_t ORDER 
 user_query "${USER_B}" "${RESULT_CACHE} SELECT id FROM rc_owner_v ORDER BY id;"
 user_query "${USER_B}" "${RESULT_CACHE} SELECT current_user() AS u, count(*) AS c FROM rc_owner_t;"
 
+# A plan cache hit skips binding: the user and role must still reach the result cache key.
+# Otherwise the second run of each user stores and reads its result under a shared key.
+comment "planner and result cache: user a runs the same statement twice"
+user_query "${USER_A}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_user_mask_t ORDER BY id;"
+user_query "${USER_A}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_user_mask_t ORDER BY id;"
+user_query "${USER_A}" "${BOTH_CACHES} SET ROLE ${ADMIN_ROLE}; SELECT secret AS both_s FROM rc_role_mask_t ORDER BY id;"
+user_query "${USER_A}" "${BOTH_CACHES} SET ROLE ${ADMIN_ROLE}; SELECT secret AS both_s FROM rc_role_mask_t ORDER BY id;"
+
+comment "planner and result cache: user b runs the same statement twice"
+user_query "${USER_B}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_user_mask_t ORDER BY id;"
+user_query "${USER_B}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_user_mask_t ORDER BY id;"
+user_query "${USER_B}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_role_mask_t ORDER BY id;"
+user_query "${USER_B}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_role_mask_t ORDER BY id;"
+
 comment "cleanup"
 cleanup
+root_sql "SET GLOBAL enable_experimental_row_access_policy = 0"
