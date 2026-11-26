@@ -802,14 +802,13 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> anyhow::Result<()> {
 
         let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
 
-        if meaningless_to_collect_max {
-            assert!(trimmed_max.is_none());
-        } else {
-            assert!(trimmed_max.is_some());
-            let trimmed = trimmed_max.unwrap().as_string().unwrap().clone();
+        // A max is always kept, or the statistics of the segment would leave the value out.
+        assert!(trimmed_max.is_some());
+        let trimmed = trimmed_max.unwrap().as_string().unwrap().clone();
+        if !meaningless_to_collect_max {
             assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
-            assert!(Scalar::String(trimmed) >= data_value_max)
         }
+        assert!(Scalar::String(trimmed) >= data_value_max);
 
         {
             assert!(trimmed_min.is_some());

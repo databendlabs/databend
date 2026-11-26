@@ -275,13 +275,27 @@ pub fn trim_string_max_with_len(s: String, len: usize) -> Option<String> {
     if s.len() <= len {
         return Some(s);
     }
-    let Some((end, _)) = s.char_indices().nth(len) else {
+    let Some((mut end, _)) = s.char_indices().nth(len) else {
         return Some(s);
     };
+    // If the entire prefix is U+10FFFF, no string with at most `len` scalars can be
+    // an upper bound: keep the scalars up to the first lesser one. The column must
+    // have a max, or the statistics of the segment would leave the value out.
+    if s[..end].chars().all(|c| c == END_OF_UNICODE_RANGE) {
+        match s[end..]
+            .char_indices()
+            .find(|(_, c)| *c < END_OF_UNICODE_RANGE)
+        {
+            Some((offset, c)) if end + offset + c.len_utf8() < s.len() => {
+                end += offset + c.len_utf8();
+            }
+            // Nothing is left to trim.
+            _ => return Some(s),
+        }
+    }
     let prefix = &s[..end];
 
-    // Carry past trailing U+10FFFF scalars. If the entire prefix is U+10FFFF,
-    // no string with at most `len` scalars can be an upper bound.
+    // Carry past trailing U+10FFFF scalars.
     let (trailing_max_chars, (idx, c)) = prefix
         .char_indices()
         .rev()
@@ -412,8 +426,14 @@ mod tests {
             ("\0-suffix", 1, Some("\u{1}")),
             ("a\0\0z-suffix", 4, Some("a\0\0{")),
             ("\u{10FFFF}", 1, Some("\u{10FFFF}")),
-            ("\u{10FFFF}-suffix", 1, None),
-            ("\u{10FFFF}\u{10FFFF}-suffix", 2, None),
+            ("\u{10FFFF}-suffix", 1, Some("\u{10FFFF}.")),
+            (
+                "\u{10FFFF}\u{10FFFF}-suffix",
+                2,
+                Some("\u{10FFFF}\u{10FFFF}."),
+            ),
+            ("\u{10FFFF}\u{10FFFF}a", 1, Some("\u{10FFFF}\u{10FFFF}a")),
+            ("\u{10FFFF}\u{10FFFF}", 1, Some("\u{10FFFF}\u{10FFFF}")),
         ] {
             assert_eq!(
                 trim_string_max_with_len(input.to_string(), len).as_deref(),
@@ -532,10 +552,12 @@ mod tests {
     #[test]
     fn test_trim_max() {
         {
-            let invalid = END_OF_UNICODE_RANGE
+            // No shorter string is an upper bound.
+            let untrimmable = END_OF_UNICODE_RANGE
                 .to_string()
                 .repeat(STATS_STRING_PREFIX_LEN + 1);
-            assert_eq!(Scalar::String(invalid).trim_max(), None);
+            let scalar = Scalar::String(untrimmable);
+            assert_eq!(scalar.clone().trim_max(), Some(scalar));
         }
 
         {
