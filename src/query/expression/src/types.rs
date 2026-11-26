@@ -282,6 +282,7 @@ pub enum DataType {
     Decimal(DecimalSize),
     Timestamp,
     TimestampTz,
+    TimestampNtz,
     Date,
     Nullable(Box<DataType>),
     Array(Box<DataType>),
@@ -300,8 +301,6 @@ pub enum DataType {
     Generic(usize),
 
     StageLocation,
-
-    TimestampNtz,
 }
 
 impl DataType {
