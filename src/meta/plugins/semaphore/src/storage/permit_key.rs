@@ -48,9 +48,16 @@ impl PermitKey {
         }
     }
 
-    /// Format the key to a string, keep order preserving.
+    /// The directory of the permit keys of the semaphore `prefix`, `{prefix}/queue/`: every key
+    /// that [`Self::format_key`] builds for the semaphore starts with it.
+    pub fn queue_dir(prefix: &str) -> String {
+        format!("{}/queue/", prefix)
+    }
+
+    /// Format the key as `{prefix}/queue/{seq}`, with `seq` zero-padded to 20 digits, so that the
+    /// keys of a semaphore sort in the order of their seqs.
     pub fn format_key(&self) -> String {
-        format!("{}/queue/{:020}", self.prefix, self.seq)
+        format!("{}{:020}", Self::queue_dir(&self.prefix), self.seq)
     }
 
     /// Parse the key from an encoded string.
@@ -110,6 +117,14 @@ mod tests {
         let key = PermitKey::parse_key("test/queue/00000000000000000001").unwrap();
         assert_eq!(key.prefix, "test");
         assert_eq!(key.seq, 1);
+    }
+
+    #[test]
+    fn test_queue_dir() {
+        assert_eq!(PermitKey::queue_dir("test"), "test/queue/");
+
+        let key = PermitKey::new("test", 1).format_key();
+        assert!(key.starts_with(&PermitKey::queue_dir("test")), "{key}");
     }
 
     #[test]
