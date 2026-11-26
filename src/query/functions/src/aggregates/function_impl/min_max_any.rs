@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_column::binview::ViewProbe;
 use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
@@ -40,8 +41,10 @@ use databend_common_expression::types::DecimalDataKind;
 use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
+use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
@@ -77,6 +80,62 @@ fn value_state_fields(data_type: DataType) -> Vec<StateSerdeItem> {
             StateSerdeItem::DataType(data_type),
         ]
     }
+}
+
+/// The value types of `min` and `max`, with a batch kernel for the ones that have one.
+pub(super) trait MinMaxValue: ValueType {
+    /// The first row holding the minimum, or the maximum if `max`, among the rows set in
+    /// `validity`. `None` leaves the batch to the generic loop.
+    fn extreme_row(
+        _values: &Self::Column,
+        _validity: Option<&Bitmap>,
+        _max: bool,
+    ) -> Option<usize> {
+        None
+    }
+}
+
+impl MinMaxValue for BooleanType {}
+impl MinMaxValue for DateType {}
+impl MinMaxValue for TimestampType {}
+impl MinMaxValue for EmptyArrayType {}
+impl MinMaxValue for EmptyMapType {}
+impl MinMaxValue for AnyType {}
+impl<N: Number> MinMaxValue for NumberType<N> {}
+impl<D: Decimal> MinMaxValue for DecimalType<D> {}
+
+impl MinMaxValue for StringType {
+    fn extreme_row(values: &StringColumn, validity: Option<&Bitmap>, max: bool) -> Option<usize> {
+        if max {
+            string_extreme_row::<true>(values, validity)
+        } else {
+            string_extreme_row::<false>(values, validity)
+        }
+    }
+}
+
+/// The first row holding the minimum, or the maximum if `MAX`, of a string column among the
+/// rows set in `validity`.
+///
+/// The running extreme is kept as a probe, so each row is compared by its view and reads its
+/// bytes only when the length and the first bytes do not decide. The probe is rebuilt only when a
+/// row replaces the extreme.
+pub(super) fn string_extreme_row<const MAX: bool>(
+    values: &StringColumn,
+    validity: Option<&Bitmap>,
+) -> Option<usize> {
+    let mut rows = TrueIdxIter::new(values.len(), validity);
+    let mut best = rows.next()?;
+    // SAFETY: `TrueIdxIter` yields rows below `values.len()`.
+    let mut probe = ViewProbe::new(unsafe { values.index_unchecked_bytes(best) });
+    for row in rows {
+        let order = values.compare_probe(row, &probe);
+        if if MAX { order.is_gt() } else { order.is_lt() } {
+            best = row;
+            probe = ViewProbe::new(unsafe { values.index_unchecked_bytes(row) });
+        }
+    }
+    Some(best)
 }
 
 pub const TYPE_ANY: u8 = 0;
@@ -172,7 +231,7 @@ where
 
 impl<T, const CMP_TYPE: u8> UnaryState<T, T> for MinMaxAnyState<T, CMP_TYPE>
 where
-    T: ValueType,
+    T: MinMaxValue,
     T::Scalar: BorshSerialize + BorshDeserialize,
     for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
@@ -202,6 +261,14 @@ where
         validity: Option<&Bitmap>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
+        if CMP_TYPE != TYPE_ANY
+            && let ColumnView::Column(column) = &values
+            && let Some(row) = T::extreme_row(column, validity, CMP_TYPE == TYPE_MAX)
+        {
+            // SAFETY: the kernel returns a row of `column`.
+            let value = unsafe { T::index_column_unchecked(column, row) };
+            return self.add(value, function_info);
+        }
         // Keep candidates borrowed until the batch winner is known.
         let choose = |current, value| {
             if should_change::<T, CMP_TYPE>(&current, &value) {
@@ -413,7 +480,7 @@ impl MinMaxAnyBuilder {
         need_manual_drop: bool,
     ) -> Result<AggregateCallRef>
     where
-        T: ValueType,
+        T: MinMaxValue,
         T::Scalar: BorshSerialize + BorshDeserialize,
         for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
     {
@@ -445,7 +512,7 @@ where T: ValueType
 
 impl<T, const CMP_TYPE: u8> UnaryEval<T, T> for MinMaxAnyEval<T, CMP_TYPE>
 where
-    T: ValueType,
+    T: MinMaxValue,
     T::Scalar: BorshSerialize + BorshDeserialize,
     for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
@@ -625,5 +692,62 @@ mod tests {
         check_batch::<TYPE_MIN>()?;
         check_batch::<TYPE_MAX>()?;
         check_batch::<TYPE_ANY>()
+    }
+
+    /// The first valid row holding the minimum, or the maximum if `max`, compared as `&str`.
+    fn model_extreme_row(values: &[String], validity: Option<&Bitmap>, max: bool) -> Option<usize> {
+        let mut best: Option<usize> = None;
+        for (row, value) in values.iter().enumerate() {
+            if validity.is_some_and(|v| !v.get_bit(row)) {
+                continue;
+            }
+            let replace = match best {
+                None => true,
+                Some(b) if max => value.as_str() > values[b].as_str(),
+                Some(b) => value.as_str() < values[b].as_str(),
+            };
+            if replace {
+                best = Some(row);
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn string_extreme_row_matches_model() {
+        use rand::Rng;
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        // Values around the 12-byte inline limit that share prefixes and hold `\0`, so rows tie
+        // on their views and on their whole value.
+        const PREFIXES: [&str; 4] = ["", "ab", "abcd", "https://www.example.com/"];
+        let mut rng = StdRng::seed_from_u64(0x5EED);
+        for _ in 0..2000 {
+            let len = rng.gen_range(0..40);
+            let values: Vec<String> = (0..len)
+                .map(|_| {
+                    let mut value = PREFIXES[rng.gen_range(0..PREFIXES.len())].to_string();
+                    let tail = rng.gen_range(0..=14);
+                    value.extend((0..tail).map(|_| ['\0', 'a', 'b', 'z'][rng.gen_range(0..4)]));
+                    value
+                })
+                .collect();
+            let offset = rng.gen_range(0..9);
+            let validity: Option<Bitmap> = rng.gen_bool(0.5).then(|| {
+                let bits: Bitmap = (0..offset + len).map(|_| rng.gen_bool(0.6)).collect();
+                bits.sliced(offset, len)
+            });
+            let column = StringType::column_from_iter(values.iter().cloned(), &[]);
+            for max in [false, true] {
+                let expected = model_extreme_row(&values, validity.as_ref(), max);
+                let actual = if max {
+                    string_extreme_row::<true>(&column, validity.as_ref())
+                } else {
+                    string_extreme_row::<false>(&column, validity.as_ref())
+                };
+                assert_eq!(actual, expected, "max = {max}, values = {values:?}");
+            }
+        }
     }
 }
