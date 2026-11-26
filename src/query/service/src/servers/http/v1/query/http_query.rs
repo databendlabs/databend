@@ -72,6 +72,8 @@ use super::execute_state::ExecuteStopped;
 use super::execute_state::ExecutionError;
 use super::execute_state::ExecutorSessionState;
 use super::execute_state::Progresses;
+use super::result_cache_owner::load_result_cache_key;
+use super::result_cache_owner::save_result_cache_key;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
@@ -215,6 +217,9 @@ pub struct HttpSessionStateInternal {
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub variables: Vec<(String, String)>,
+    /// The result cache key of the last query. When restoring a session, only whether it is
+    /// empty is used: the key itself is read from the server's record. It is still sent, for
+    /// nodes of older versions.
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
     pub last_query_result_cache_key: String,
@@ -519,10 +524,22 @@ impl HttpSessionConf {
                     }
                 }
                 if !id.is_empty() {
+                    // The client's copy of the key only says that the last query has one. The key
+                    // itself is read from the record that the server keeps for the authenticated
+                    // user, so the client cannot point `RESULT_SCAN` at another cache entry.
                     let key = if state.last_query_result_cache_key.is_empty() {
                         None
                     } else {
-                        Some(state.last_query_result_cache_key.clone())
+                        load_result_cache_key(
+                            &http_ctx.authenticated_tenant,
+                            &http_ctx.user_name,
+                            id,
+                        )
+                        .await
+                        .unwrap_or_else(|e| {
+                            warn!("Failed to load the result cache key of query {}: {}", id, e);
+                            None
+                        })
                     };
                     session.restore_query_ids_results(id.to_owned(), key);
                 }
@@ -691,6 +708,8 @@ pub struct HttpQuery {
     pub(crate) page_manager: Arc<TokioMutex<PageManager>>,
     last_session_conf: Arc<Mutex<Option<HttpSessionConf>>>,
     pub(crate) is_txn_mgr_saved: AtomicBool,
+    /// The result cache key last recorded in meta for this query, see `result_cache_owner`.
+    saved_result_cache_key: Mutex<String>,
 }
 
 fn try_set_txn(
@@ -797,6 +816,7 @@ impl HttpQuery {
             query_io_stats: ctx.get_local_io_stats(),
             is_txn_mgr_saved: Default::default(),
             last_session_conf: Default::default(),
+            saved_result_cache_key: Default::default(),
         })
     }
 
@@ -878,6 +898,8 @@ impl HttpQuery {
         let txn_state = session_state.txn_manager.lock().state();
         let has_temp_table = self.temp_tbl_mgr.lock().has_session_scoped_tables();
 
+        self.record_result_cache_key(&session_state).await?;
+
         let internal = HttpSessionStateInternal::new(
             &session_state.variables,
             session_state.last_query_result_cache_key,
@@ -917,6 +939,37 @@ impl HttpQuery {
 
             internal: Some(internal),
         })
+    }
+
+    /// Records the query's result cache key in meta, so that the next request of the session
+    /// reads it back from there instead of from the session state that the client sends.
+    ///
+    /// The key is recorded before the response that carries it, and again whenever it changes.
+    /// If recording fails, a later `RESULT_SCAN` of this query reports that no cache key is found.
+    async fn record_result_cache_key(&self, session_state: &ExecutorSessionState) -> Result<()> {
+        let cache_key = &session_state.last_query_result_cache_key;
+        if cache_key.is_empty() || *self.saved_result_cache_key.lock() == *cache_key {
+            return Ok(());
+        }
+
+        let ttl_secs = session_state.settings.get_query_result_cache_ttl_secs()?;
+        let saved = save_result_cache_key(
+            &self.owner_tenant,
+            &self.user_name,
+            &self.id,
+            cache_key,
+            Duration::from_secs(ttl_secs),
+        )
+        .await;
+
+        match saved {
+            Ok(()) => *self.saved_result_cache_key.lock() = cache_key.clone(),
+            Err(e) => warn!(
+                "Failed to save the result cache key of query {}: {}",
+                self.id, e
+            ),
+        }
+        Ok(())
     }
 
     #[async_backtrace::framed]
