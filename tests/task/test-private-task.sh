@@ -1470,8 +1470,9 @@ fi
 
 # Test that a scheduled task keeps running when the meta leader restarts: every watch of the task
 # messages ends with the leader, and the task service must watch again to run the task. The leader
-# stops right after a run has finished, seconds before the next one starts: a run in flight while
-# no leader is elected can fail to record its end, and then stays EXECUTING and blocks every later
+# stops right after a run has finished, seconds before the next one starts. A run in flight while
+# no leader is elected can fail to record its end: it then stays EXECUTING, and blocks the next
+# runs until its query node's hold on the execution lease of the task ends, at most 30 s after the
 # run.
 
 META_ADMIN_PORTS=([1]=28101 [2]=28201 [3]=28301)
