@@ -951,7 +951,8 @@ Some(Var(UInt64(1)))
 ---------- Input ----------
 LET x RESULTSET := SELECT * FROM numbers(3);
 FOR r IN x DO
-    LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+    LET v := r.number;
+    LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :v + 1);
     RETURN y;
 END FOR;
 ---------- IR -------------
@@ -959,20 +960,78 @@ QUERY SELECT * FROM numbers(3), x(0)
 ITER x(0), r(3)
 __LOOP1(1):
 JUMP_IF_ENDED r(3), __LOOP_END2(2)
-QUERY SELECT (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1), __expr_result5(5)
-ITER __expr_result5(5), __expr_result_iter6(6)
-READ __expr_result_iter6(6), $0, y(4)
-QUERY SELECT :4, __expr_result8(8)
-ITER __expr_result8(8), __expr_result_iter9(9)
-READ __expr_result_iter9(9), $0, __return_val7(7)
-RETURN __return_val7(7)
+READ r(3), "number", __r.number5(5)
+QUERY SELECT :5, __expr_result6(6)
+ITER __expr_result6(6), __expr_result_iter7(7)
+READ __expr_result_iter7(7), $0, v(4)
+QUERY SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = :4 + 1), __expr_result9(9)
+ITER __expr_result9(9), __expr_result_iter10(10)
+READ __expr_result_iter10(10), $0, y(8)
+QUERY SELECT :8, __expr_result12(12)
+ITER __expr_result12(12), __expr_result_iter13(13)
+READ __expr_result_iter13(13), $0, __return_val11(11)
+RETURN __return_val11(11)
 NEXT r(3)
 GOTO __LOOP1(1)
 __LOOP_END2(2):
 ---------- QUERY ---------
 QUERY: SELECT * FROM numbers(3)
 BLOCK: (number): (0), (1), (2)
-QUERY: SELECT (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = 0 + 1)
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
+
+
+---------- Input ----------
+LET id := 1;
+LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :id);
+RETURN y;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, id(0)
+QUERY SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = :0), __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, y(3)
+QUERY SELECT :3, __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __return_val6(6)
+RETURN __return_val6(6)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = 1)
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
+
+
+---------- Input ----------
+LET number := 1;
+LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :number);
+RETURN y;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, number(0)
+QUERY SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = :0), __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, y(3)
+QUERY SELECT :3, __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __return_val6(6)
+RETURN __return_val6(6)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = 1)
 BLOCK: ($0): (1)
 QUERY: SELECT 1
 BLOCK: ($0): (1)
