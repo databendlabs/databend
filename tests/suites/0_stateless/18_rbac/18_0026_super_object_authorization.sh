@@ -18,6 +18,7 @@ DROP STAGE IF EXISTS super_forbidden_stage;
 DROP STAGE IF EXISTS super_private_stage;
 DROP TABLE IF EXISTS super_seq_defaults;
 DROP FUNCTION IF EXISTS super_private_udf;
+DROP PROCEDURE IF EXISTS super_private_proc();
 DROP CONNECTION IF EXISTS super_legacy_conn;
 DROP CONNECTION IF EXISTS super_private_conn;
 DROP CONNECTION IF EXISTS super_created_conn;
@@ -85,6 +86,7 @@ bendsql_connect_root_null --query="
 CREATE CONNECTION super_private_conn STORAGE_TYPE = 's3' ENDPOINT_URL = 'http://127.0.0.1:9900';
 CREATE SEQUENCE super_private_seq;
 CREATE FUNCTION super_private_udf AS (x) -> (x + 1);
+CREATE OR REPLACE PROCEDURE super_private_proc() RETURNS INT LANGUAGE SQL AS \$\$ BEGIN RETURN 42; END; \$\$;
 CREATE STAGE super_private_stage;
 GRANT OWNERSHIP ON CONNECTION super_private_conn TO ROLE account_admin;
 GRANT OWNERSHIP ON SEQUENCE super_private_seq TO ROLE account_admin;
@@ -183,6 +185,24 @@ expect_denied super_public_creator "SET GLOBAL $rbac_check = 0" Super
 expect_allowed super_direct_user "SET GLOBAL $rbac_check = 0"
 expect_allowed super_public_creator 'SELECT super_private_udf(1)'
 expect_allowed super_public_creator 'LIST @super_private_stage'
+
+echo '=== Legacy procedure listings expose metadata but not unauthorized bodies ==='
+procedure_body_sql="SELECT body FROM system.procedures WHERE name = 'super_private_proc'"
+expect_visible super_public_creator 'SELECT name FROM system.procedures' super_private_proc 1
+expect_denied super_public_creator 'DESC PROCEDURE super_private_proc()' AccessProcedure
+request super_public_creator "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == [[null]]
+' >/dev/null
+request super_direct_user "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
+' >/dev/null
+echo 'procedure body hidden without access, visible to SUPER'
+request super_direct_user "SHOW PROCEDURES WHERE name = 'super_private_proc'" | jq -e '
+	.state == "Succeeded" and .error == null and
+	(.schema | map(.name)) == ["name", "procedure_id", "arguments", "comment", "description", "created_on"] and
+	.data[0][0] == "super_private_proc"
+' >/dev/null
+echo 'SHOW PROCEDURES omits the body column'
 
 echo '=== Only direct SUPER or SUPER on the current role can change the global switches ==='
 bendsql_connect_root_null --query="

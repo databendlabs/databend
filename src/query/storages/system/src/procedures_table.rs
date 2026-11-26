@@ -30,8 +30,10 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::ListProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -93,45 +95,50 @@ impl AsyncSystemTable for ProceduresTable {
             .await
             .map_err(meta_service_error)?;
 
-        let enable_experimental_rbac_check =
-            ctx.get_settings().get_enable_experimental_rbac_check()?;
-        let procedures = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
-            all_procedures
-                .into_iter()
-                .filter(|p| visibility_checker.check_procedure_visibility(&p.ident.procedure_id()))
-                .collect::<Vec<_>>()
-        } else {
-            all_procedures
-        };
+        let filter_procedures = ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
+        // Legacy listings expose metadata for all procedures, but definitions still
+        // require the same access as DESC PROCEDURE, including its SUPER bypass.
+        let can_read_all_bodies = !filter_procedures
+            && ctx
+                .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+                .await
+                .is_ok();
 
-        let mut names = Vec::with_capacity(procedures.len());
-        let mut procedure_ids = Vec::with_capacity(procedures.len());
-        let mut languages = Vec::with_capacity(procedures.len());
-        let mut descriptions = Vec::with_capacity(procedures.len());
+        let mut names = Vec::new();
+        let mut procedure_ids = Vec::new();
+        let mut descriptions = Vec::new();
         // TODO: argument = name + arg_type + return_type
         // +------------------------------------+
         // | arguments                          |
         // +------------------------------------+
         // | AREA_OF_CIRCLE(FLOAT) RETURN FLOAT |
         // +------------------------------------+
-        let mut arguments = Vec::with_capacity(procedures.len());
-        let mut comments = Vec::with_capacity(procedures.len());
-        let mut created_on_s = Vec::with_capacity(procedures.len());
+        let mut arguments = Vec::new();
+        let mut comments = Vec::new();
+        let mut created_on_s = Vec::new();
+        let mut bodies = Vec::new();
 
-        for procedure in &procedures {
+        for procedure in &all_procedures {
+            let procedure_id = *procedure.ident.procedure_id();
+            let can_access = visibility_checker.check_procedure_visibility(&procedure_id);
+            if filter_procedures && !can_access {
+                continue;
+            }
+
             names.push(procedure.name_ident.procedure_name().name.to_string());
-            procedure_ids.push(*procedure.ident.procedure_id());
+            procedure_ids.push(procedure_id);
             arguments.push(format!(
                 "{} RETURN ({})",
                 procedure.name_ident.procedure_name(),
                 procedure.meta.return_types.iter().join(",")
             ));
-            languages.push(procedure.meta.procedure_language.as_str());
             descriptions.push("user-defined procedure");
             comments.push(procedure.meta.comment.as_str());
-
             created_on_s.push(procedure.meta.created_on.timestamp_micros());
+            bodies.push(
+                (can_access || can_read_all_bodies).then_some(procedure.meta.script.as_str()),
+            );
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -141,6 +148,7 @@ impl AsyncSystemTable for ProceduresTable {
             StringType::from_data(comments),
             StringType::from_data(descriptions),
             TimestampType::from_data(created_on_s),
+            StringType::from_opt_data(bodies),
         ]))
     }
 }
@@ -157,6 +165,10 @@ impl ProceduresTable {
             TableField::new("comment", TableDataType::String),
             TableField::new("description", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new(
+                "body",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
         ]);
 
         let table_info = TableInfo {

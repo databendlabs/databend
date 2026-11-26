@@ -16,6 +16,11 @@ returns (Int32)
 language SQL
 body BEGIN RETURN x; END;
 
+query T
+select body from system.procedures where name = 'p1' and arguments = 'p1(Int32) RETURN (Int32)';
+----
+BEGIN RETURN x; END;
+
 statement ok
 drop procedure if exists p1();
 
