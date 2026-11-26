@@ -1,0 +1,233 @@
+====================================================================================================
+Casts of nested types and vectors
+
+Each case runs as CAST. TRY_CAST follows a case only when CAST fails at runtime, to show which rows
+become NULL. Where CAST succeeds, TRY_CAST is checked to return the same values and is not listed;
+where CAST fails type checking, TRY_CAST is checked to fail it too.
+====================================================================================================
+
+
+----------------------------------------------------------------------------------------------------
+Tuples and arrays
+
+A tuple or an array converts field by field or element by element; a tuple converts only to a tuple
+with the same number of fields. TRY_CAST makes each field and element nullable, so only the field or
+element that fails is NULL.
+----------------------------------------------------------------------------------------------------
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST((1, TRUE) AS Tuple(STRING))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String,)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(('a',) AS Tuple(INT))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(tuple('a') AS Tuple(Int32,))`
+
+
+
+ast            : TRY_CAST(('a',) AS Tuple(INT))
+raw expr       : TRY_CAST(tuple('a') AS Tuple(Int32,))
+checked expr   : TRY_CAST<Tuple(String,)>(tuple<String>("a") AS Tuple(Int32 NULL,) NULL)
+optimized expr : (NULL,)
+output type    : Tuple(Int32 NULL,) NULL
+output domain  : ({NULL})
+output         : (NULL,)
+
+
+ast            : CAST(((1, TRUE), 1) AS Tuple(Tuple(INT, INT), INT))
+raw expr       : CAST(tuple(tuple(1, true), 1) AS Tuple(Tuple(Int32, Int32), Int32))
+checked expr   : CAST<Tuple(Tuple(UInt8, Boolean), UInt8)>(tuple<Tuple(UInt8, Boolean), UInt8>(tuple<UInt8, Boolean>(1_u8, true), 1_u8) AS Tuple(Tuple(Int32, Int32), Int32))
+optimized expr : ((1_i32, 1_i32), 1_i32)
+output type    : Tuple(Tuple(Int32, Int32), Int32)
+output domain  : (({1..=1}, {1..=1}), {1..=1})
+output         : ((1, 1), 1)
+
+
+ast            : CAST(TRY_CAST(1 AS INT32) AS INT32)
+raw expr       : CAST(TRY_CAST(1 AS Int32) AS Int32)
+checked expr   : CAST<Int32 NULL>(TRY_CAST<UInt8>(1_u8 AS Int32 NULL) AS Int32)
+optimized expr : 1_i32
+output type    : Int32
+output domain  : {1..=1}
+output         : 1
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32 NULL), Int32))`
+
+
+
+ast            : TRY_CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))
+raw expr       : TRY_CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32 NULL), Int32))
+checked expr   : TRY_CAST<Tuple(Tuple(UInt8, String), UInt8)>(tuple<Tuple(UInt8, String), UInt8>(tuple<UInt8, String>(1_u8, "a"), 1_u8) AS Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
+optimized expr : ((1_i32, NULL), 1_i32)
+output type    : Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
+output domain  : (({1..=1}, {NULL}), {1..=1})
+output         : ((1, NULL), 1)
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32), Int32) NULL)`
+
+
+
+ast            : TRY_CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)
+raw expr       : TRY_CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32), Int32) NULL)
+checked expr   : TRY_CAST<Tuple(Tuple(UInt8, String), UInt8)>(tuple<Tuple(UInt8, String), UInt8>(tuple<UInt8, String>(1_u8, "a"), 1_u8) AS Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
+optimized expr : ((1_i32, NULL), 1_i32)
+output type    : Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
+output domain  : (({1..=1}, {NULL}), {1..=1})
+output         : ((1, NULL), 1)
+
+
+ast            : CAST([(1,TRUE),(2,FALSE)] AS Array(Tuple(INT, INT)))
+raw expr       : CAST(array(tuple(1, true), tuple(2, false)) AS Array(Tuple(Int32, Int32)))
+checked expr   : CAST<Array(Tuple(UInt8, Boolean))>(array<T0=Tuple(UInt8, Boolean)><T0, T0>(tuple<UInt8, Boolean>(1_u8, true), tuple<UInt8, Boolean>(2_u8, false)) AS Array(Tuple(Int32, Int32)))
+optimized expr : [(1, 1), (2, 0)]
+output type    : Array(Tuple(Int32, Int32))
+output domain  : [({1..=2}, {0..=1})]
+output         : [(1, 1), (2, 0)]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32)) NULL)`
+
+
+
+ast            : TRY_CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)
+raw expr       : TRY_CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32)) NULL)
+checked expr   : TRY_CAST<Array(Tuple(UInt8, String))>(array<T0=Tuple(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
+optimized expr : [(1, NULL), (2, NULL)]
+output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
+output domain  : [({1..=2}, {-2147483648..=2147483647} ∪ {NULL})]
+output         : [(1, NULL), (2, NULL)]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32 NULL)))`
+
+
+
+ast            : TRY_CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))
+raw expr       : TRY_CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32 NULL)))
+checked expr   : TRY_CAST<Array(Tuple(UInt8, String))>(array<T0=Tuple(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
+optimized expr : [(1, NULL), (2, NULL)]
+output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
+output domain  : [({1..=2}, {-2147483648..=2147483647} ∪ {NULL})]
+output         : [(1, NULL), (2, NULL)]
+
+
+ast            : CAST([[TRUE], [FALSE, TRUE]] AS Array(Array(INT)))
+raw expr       : CAST(array(array(true), array(false, true)) AS Array(Array(Int32)))
+checked expr   : CAST<Array(Array(Boolean))>(array<T0=Array(Boolean)><T0, T0>(array<T0=Boolean><T0>(true), array<T0=Boolean><T0, T0>(false, true)) AS Array(Array(Int32)))
+optimized expr : [[1], [0, 1]]
+output type    : Array(Array(Int32))
+output domain  : [[{0..=1}]]
+output         : [[1], [0, 1]]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(array(array('a'), array('b', 'c')) AS Array(Array(Int32) NULL))`
+
+
+
+ast            : TRY_CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))
+raw expr       : TRY_CAST(array(array('a'), array('b', 'c')) AS Array(Array(Int32) NULL))
+checked expr   : TRY_CAST<Array(Array(String))>(array<T0=Array(String)><T0, T0>(array<T0=String><T0>("a"), array<T0=String><T0, T0>("b", "c")) AS Array(Array(Int32 NULL) NULL) NULL)
+optimized expr : [[NULL], [NULL, NULL]]
+output type    : Array(Array(Int32 NULL) NULL) NULL
+output domain  : [[{-2147483648..=2147483647} ∪ {NULL}]]
+output         : [[NULL], [NULL, NULL]]
+
+
+----------------------------------------------------------------------------------------------------
+Vectors
+
+A string or a JSON array of numbers converts to a vector of the declared dimension.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST('[1,2,3,4]' AS VECTOR(4))
+raw expr       : CAST('[1,2,3,4]' AS Vector(4))
+checked expr   : CAST<String>("[1,2,3,4]" AS Vector(4))
+optimized expr : [1, 2, 3, 4]
+output type    : Vector(4)
+output domain  : Undefined
+output         : [1, 2, 3, 4]
+
+
+ast            : CAST(parse_json('[1,2,3,4]') AS VECTOR(4))
+raw expr       : CAST(parse_json('[1,2,3,4]') AS Vector(4))
+checked expr   : CAST<Variant>(CAST<String>("[1,2,3,4]" AS Variant) AS Vector(4))
+optimized expr : [1, 2, 3, 4]
+output type    : Vector(4)
+output domain  : Undefined
+output         : [1, 2, 3, 4]
+
+
+ast            : CAST(a AS VECTOR(4))
+raw expr       : CAST(a::String AS Vector(4))
+checked expr   : CAST<String>(a AS Vector(4))
+evaluation:
++--------+---------------------------------------+----------------------+
+|        | a                                     | Output               |
++--------+---------------------------------------+----------------------+
+| Type   | String                                | Vector(4)            |
+| Domain | {" [1,2,3,4] "..="[8.1,8.2,8.3,8.4]"} | Unknown              |
+| Row 0  | ' [1,2,3,4] '                         | [1, 2, 3, 4]         |
+| Row 1  | '[4.5, 5.5, 6.5, 7.5]'                | [4.5, 5.5, 6.5, 7.5] |
+| Row 2  | '[8.1,8.2,8.3,8.4]'                   | [8.1, 8.2, 8.3, 8.4] |
++--------+---------------------------------------+----------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | Column(StringColumn[ [1,2,3,4] , [4.5, 5.5, 6.5, 7.5], [8.1,8.2,8.3,8.4]]) |
+| Output | Float32(([1.0, 2.0, 3.0, 4.0, 4.5, 5.5, 6.5, 7.5, 8.1, 8.2, 8.3, 8.4], 4)) |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : CAST(parse_json(a) AS VECTOR(4))
+raw expr       : CAST(parse_json(a::String) AS Vector(4))
+checked expr   : CAST<Variant>(CAST<String>(a AS Variant) AS Vector(4))
+evaluation:
++--------+---------------------------------------+----------------------+
+|        | a                                     | Output               |
++--------+---------------------------------------+----------------------+
+| Type   | String                                | Vector(4)            |
+| Domain | {" [1,2,3,4] "..="[8.1,8.2,8.3,8.4]"} | Unknown              |
+| Row 0  | ' [1,2,3,4] '                         | [1, 2, 3, 4]         |
+| Row 1  | '[4.5, 5.5, 6.5, 7.5]'                | [4.5, 5.5, 6.5, 7.5] |
+| Row 2  | '[8.1,8.2,8.3,8.4]'                   | [8.1, 8.2, 8.3, 8.4] |
++--------+---------------------------------------+----------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | Column(StringColumn[ [1,2,3,4] , [4.5, 5.5, 6.5, 7.5], [8.1,8.2,8.3,8.4]]) |
+| Output | Float32(([1.0, 2.0, 3.0, 4.0, 4.5, 5.5, 6.5, 7.5, 8.1, 8.2, 8.3, 8.4], 4)) |
++--------+----------------------------------------------------------------------------+
+
+

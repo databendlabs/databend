@@ -312,7 +312,7 @@ fn unwrap_integer_to_string_cast<'a>(
     let common_type = common_super_type(
         integer_type.clone(),
         source_type.clone(),
-        &BUILTIN_FUNCTIONS.default_cast_rules,
+        BUILTIN_FUNCTIONS.default_cast_rules(),
     );
     let Some(common_type @ DataType::Number(_)) = common_type else {
         return None;

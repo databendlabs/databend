@@ -446,7 +446,7 @@ fn safe_expression_domain(expr: &Expr<String>, func_ctx: &FunctionContext) -> Op
                 return None;
             };
             match calc_domain.domain_eval(func_ctx, &domains) {
-                FunctionDomain::MayThrow => None,
+                FunctionDomain::MayThrow | FunctionDomain::MayThrowDomain(_) => None,
                 FunctionDomain::Full => Some(Domain::full(&call.return_type)),
                 FunctionDomain::Domain(domain) => Some(domain),
             }

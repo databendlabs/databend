@@ -42,6 +42,8 @@ use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
+use crate::cast_plan::RegisteredCast;
+use crate::cast_plan::resolve_registered_cast;
 use crate::function_stat::DeriveStat;
 use crate::function_stat::ScalarFunctionStat;
 use crate::property::Domain;
@@ -259,6 +261,14 @@ pub enum FunctionID {
     },
 }
 
+/// `data_type` without the size of a decimal, as the key of a registered cast.
+pub(crate) fn cast_key(data_type: &DataType) -> DataType {
+    match data_type {
+        DataType::Decimal(_) => DataType::Decimal(DecimalSize::default()),
+        data_type => data_type.clone(),
+    }
+}
+
 #[derive(Default)]
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
@@ -269,11 +279,15 @@ pub struct FunctionRegistry {
     pub aliases: HashMap<String, String>,
 
     /// Default cast rules for all functions.
-    pub default_cast_rules: Vec<(DataType, DataType)>,
+    default_cast_rules: Vec<(DataType, DataType)>,
     /// Cast rules for specific functions, which will override the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
-    /// The auto rules that should use TRY_CAST instead of CAST.
-    pub auto_try_cast_rules: Vec<(DataType, DataType)>,
+    /// The registered casts, keyed by the source type, or `None` for any source, and the
+    /// destination type, both non-nullable, with decimal sizes erased. A cast runs a function,
+    /// or converts through an intermediate type.
+    casts: HashMap<(Option<DataType>, DataType), RegisteredCast>,
+    /// The function that converts values to a type, keyed by the type with decimal sizes erased.
+    conversion_functions: HashMap<DataType, String>,
     pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
     pub derive_stat: HashMap<String, DeriveStat>,
@@ -283,6 +297,41 @@ pub struct FunctionRegistry {
     /// per overload avoids disabling context-free folding for unrelated overloads that share a
     /// name, such as numeric and timestamp arithmetic.
     context_dependent_functions: HashMap<String, HashSet<usize>>,
+    /// How overloads take nullable arguments where their signatures do not,
+    /// see [`NullableInput`]. The key is the canonical function name and the
+    /// registry-local function ID, as for `context_dependent_functions`.
+    nullable_inputs: HashMap<String, HashMap<usize, NullableInput>>,
+}
+
+/// How an overload takes arguments that are nullable where its signature is
+/// not, as its registration implements it. A builtin overload whose signature
+/// takes them, being nullable or a generic there, needs none, and a factory is
+/// asked for a function for them first, as candidate search asks it; an
+/// overload without one takes no such arguments otherwise.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NullableInput {
+    /// The builtin overload `variant`, registered with it, takes every argument
+    /// nullable and returns the result nullable, NULL where an argument is
+    /// NULL: `register_passthrough_nullable_*` and builders with
+    /// `passthrough_nullable`.
+    PassthroughVariant { variant: usize },
+    /// The builtin overload `variant`, registered with it, takes every argument
+    /// nullable and returns the same nullable result, NULL where an argument
+    /// is NULL: `register_combine_nullable_*`.
+    CombineVariant { variant: usize },
+    /// The builtin overload `variant`, registered with it, takes every argument
+    /// nullable and handles NULL itself, e.g. `and` by three-valued logic.
+    NullAwareVariant { variant: usize },
+    /// The factory `factory` of the same name creates the function for
+    /// nullable arguments that the factory declines or its function does not
+    /// take, as the passthrough nullable function of this factory's:
+    /// `register_passthrough_nullable_factory`.
+    PassthroughFactory { factory: usize },
+    /// The factories `factories` of the same name create the function for
+    /// nullable arguments that the factory declines or its function does not
+    /// take, tried in order, and may handle NULL themselves:
+    /// `register_nullable_variants`.
+    NullAwareFactories { factories: Vec<usize> },
 }
 
 impl FunctionRegistry {
@@ -331,6 +380,58 @@ impl FunctionRegistry {
         }
     }
 
+    /// The function that the factory `id` of `name` creates for `params` and
+    /// `args_type`, as candidate search creates it.
+    pub fn create_factory_function(
+        &self,
+        name: &str,
+        id: usize,
+        params: &[Scalar],
+        args_type: &[DataType],
+    ) -> Option<(FunctionID, Arc<Function>)> {
+        let (factory, _) = self
+            .factories
+            .get(name)?
+            .iter()
+            .find(|(_, factory_id)| *factory_id == id)?;
+        Self::create_by_factory(factory, name, id, params, args_type)
+    }
+
+    /// A factory declines types that it accepts as their physical types, e.g.
+    /// a Date as a number, so it is asked again for those.
+    fn create_by_factory(
+        factory: &FunctionFactory,
+        name: &str,
+        id: usize,
+        params: &[Scalar],
+        args_type: &[DataType],
+    ) -> Option<(FunctionID, Arc<Function>)> {
+        let mut factory_args_type = Cow::Borrowed(args_type);
+        let mut func = factory.create(params, &factory_args_type);
+        if func.is_none() {
+            let physical_args_type = args_type
+                .iter()
+                .map(|data_type| data_type.physical_type().into_owned())
+                .collect::<Vec<_>>();
+            if physical_args_type != args_type {
+                factory_args_type = Cow::Owned(physical_args_type);
+                func = factory.create(params, &factory_args_type);
+            }
+        }
+
+        func.map(|func| {
+            (
+                FunctionID::Factory {
+                    name: name.to_string(),
+                    id,
+                    params: params.to_vec(),
+                    args_type: factory_args_type.into_owned(),
+                },
+                func,
+            )
+        })
+    }
+
     pub fn search_candidates<Index: ColumnIndex>(
         &self,
         name: &str,
@@ -364,31 +465,7 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                let mut factory_args_type = Cow::Borrowed(args_type.as_slice());
-                let mut func = factory.create(params, &factory_args_type);
-                if func.is_none() {
-                    let physical_args_type = args_type
-                        .iter()
-                        .map(|data_type| data_type.physical_type().into_owned())
-                        .collect::<Vec<_>>();
-                    if physical_args_type != args_type {
-                        factory_args_type = Cow::Owned(physical_args_type);
-                        func = factory.create(params, &factory_args_type);
-                    }
-                }
-
-                func.map(|func| {
-                    let factory_args_type = factory_args_type.into_owned();
-                    (
-                        FunctionID::Factory {
-                            name: name.to_string(),
-                            id: *id,
-                            params: params.to_vec(),
-                            args_type: factory_args_type,
-                        },
-                        func,
-                    )
-                })
+                Self::create_by_factory(factory, &name, *id, params, &args_type)
             }));
         }
 
@@ -397,17 +474,23 @@ impl FunctionRegistry {
         candidates
     }
 
+    /// The cast rules of functions without rules of their own. They also find the common type of
+    /// values that are not arguments of one function, e.g. the rows of `VALUES` or the sides of
+    /// `UNION`.
+    pub fn default_cast_rules(&self) -> &[(DataType, DataType)] {
+        &self.default_cast_rules
+    }
+
+    /// The cast rules of the comparison functions. They also find the common type of join keys.
+    pub fn comparison_cast_rules(&self) -> &[(DataType, DataType)] {
+        self.get_auto_cast_rules("eq")
+    }
+
     // note that if additional_cast_rules is not empty, default cast rules will not be used.
     pub fn get_auto_cast_rules(&self, func_name: &str) -> &[(DataType, DataType)] {
         self.additional_cast_rules
             .get(func_name)
             .unwrap_or(&self.default_cast_rules)
-    }
-
-    pub fn is_auto_try_cast_rule(&self, arg_type: &DataType, sig_type: &DataType) -> bool {
-        self.auto_try_cast_rules
-            .iter()
-            .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
     }
 
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
@@ -479,6 +562,159 @@ impl FunctionRegistry {
             .push((factory, id));
     }
 
+    /// Register overloads by `register`, and by `register_nullable` the
+    /// overloads of the same names that take their arguments nullable and may
+    /// handle NULL themselves. A builtin that `register_nullable` adds is the
+    /// variant of the builtin that `register` adds with the same arguments
+    /// nullable, see `NullableInput::NullAwareVariant`; the factories it adds
+    /// create the functions for nullable arguments of those that `register`
+    /// adds, see `NullableInput::NullAwareFactories`. A factory whose nullable
+    /// function passes the NULLs through is registered by
+    /// `register_passthrough_nullable_factory` instead.
+    pub fn register_nullable_variants(
+        &mut self,
+        register: impl FnOnce(&mut FunctionRegistry),
+        register_nullable: impl FnOnce(&mut FunctionRegistry),
+    ) {
+        let existing = (self.registered_builtin_ids(), self.registered_factory_ids());
+        register(self);
+        let registered = (self.registered_builtin_ids(), self.registered_factory_ids());
+        register_nullable(self);
+        let added = |before: &HashSet<(String, usize)>, after: &HashSet<(String, usize)>| {
+            let mut added = after.difference(before).cloned().collect::<Vec<_>>();
+            added.sort();
+            added
+        };
+        let builtins = added(&existing.0, &registered.0);
+        let nullable_builtins = added(&registered.0, &self.registered_builtin_ids());
+        let factories = added(&existing.1, &registered.1);
+        let nullable_factories = added(&registered.1, &self.registered_factory_ids());
+
+        let ids_of = |overloads: &[(String, usize)], name: &str| {
+            overloads
+                .iter()
+                .filter(|(overload_name, _)| overload_name == name)
+                .map(|(_, id)| *id)
+                .collect::<Vec<_>>()
+        };
+        let names = |overloads: &[(String, usize)]| {
+            overloads
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect::<std::collections::BTreeSet<_>>()
+        };
+        assert!(
+            names(&nullable_builtins).is_subset(&names(&builtins)),
+            "a nullable variant has no overload of its name"
+        );
+        assert!(
+            names(&nullable_factories).is_subset(&names(&factories)),
+            "a nullable factory has no factory of its name"
+        );
+
+        let mut pairs = vec![];
+        for name in &names(&builtins) {
+            let args_type = |id: usize| {
+                let id = FunctionID::Builtin {
+                    name: name.clone(),
+                    id,
+                };
+                self.get(&id).unwrap().signature.args_type.clone()
+            };
+            let mut variants = ids_of(&nullable_builtins, name);
+            for base in ids_of(&builtins, name) {
+                let nullable_args_type = args_type(base)
+                    .iter()
+                    .map(DataType::wrap_nullable)
+                    .collect::<Vec<_>>();
+                let position = variants
+                    .iter()
+                    .position(|variant| args_type(*variant) == nullable_args_type)
+                    .unwrap_or_else(|| {
+                        panic!("overload {base} of `{name}` has no nullable variant")
+                    });
+                pairs.push((name.clone(), base, variants.remove(position)));
+            }
+            assert!(
+                variants.is_empty(),
+                "nullable variants {variants:?} of `{name}` match no overload"
+            );
+        }
+        for (name, base, variant) in pairs {
+            self.record_nullable_input(&name, base, NullableInput::NullAwareVariant { variant });
+        }
+        for (name, id) in &factories {
+            let variants = ids_of(&nullable_factories, name);
+            assert!(
+                !variants.is_empty(),
+                "factory {id} of `{name}` has no nullable variant"
+            );
+            self.record_nullable_input(name, *id, NullableInput::NullAwareFactories {
+                factories: variants,
+            });
+        }
+    }
+
+    /// Register `factory` as a factory of `name`, and a factory of `name` that
+    /// creates the passthrough nullable function of its function for nullable
+    /// arguments, see `NullableInput::PassthroughFactory`.
+    pub fn register_passthrough_nullable_factory(
+        &mut self,
+        name: &str,
+        factory: impl Fn(&[Scalar], &[DataType]) -> Option<Function> + Send + Sync + 'static,
+    ) {
+        let factory = Arc::new(factory);
+        let base = self.next_function_id(name);
+        let base_factory = factory.clone();
+        self.register_function_factory(
+            name,
+            FunctionFactory::Closure(Box::new(move |params, args_type| {
+                base_factory(params, args_type).map(Arc::new)
+            })),
+        );
+        self.register_function_factory(
+            name,
+            FunctionFactory::Closure(Box::new(move |params, args_type| {
+                Some(Arc::new(factory(params, args_type)?.passthrough_nullable()))
+            })),
+        );
+        self.record_nullable_input(name, base, NullableInput::PassthroughFactory {
+            factory: base + 1,
+        });
+    }
+
+    /// How the overload `id` takes arguments that are nullable where its
+    /// signature is not; `None` if its signature takes them or it takes none.
+    pub fn nullable_input(&self, id: &FunctionID) -> Option<&NullableInput> {
+        self.nullable_inputs.get(id.name().as_ref())?.get(&id.id())
+    }
+
+    pub(crate) fn record_nullable_input(&mut self, name: &str, id: usize, input: NullableInput) {
+        let previous = self
+            .nullable_inputs
+            .entry(name.to_string())
+            .or_default()
+            .insert(id, input.clone());
+        assert!(
+            previous.is_none_or(|previous| previous == input),
+            "overload {id} of `{name}` takes nullable arguments in two ways"
+        );
+    }
+
+    fn registered_builtin_ids(&self) -> HashSet<(String, usize)> {
+        self.funcs
+            .iter()
+            .flat_map(|(name, funcs)| funcs.iter().map(|(_, id)| (name.clone(), *id)))
+            .collect()
+    }
+
+    fn registered_factory_ids(&self) -> HashSet<(String, usize)> {
+        self.factories
+            .iter()
+            .flat_map(|(name, factories)| factories.iter().map(|(_, id)| (name.clone(), *id)))
+            .collect()
+    }
+
     pub fn register_aliases(&mut self, fn_name: &str, aliases: &[&str]) {
         for alias in aliases {
             self.aliases.insert(alias.to_string(), fn_name.to_string());
@@ -504,7 +740,8 @@ impl FunctionRegistry {
             .extend(additional_cast_rules);
     }
 
-    // Note that, if additional_cast_rules is not empty, the default cast rules will not be used
+    /// Registers a rule that decides an automatic cast of an argument of `fn_name` by its types.
+    /// It applies together with the static rules of the function.
     pub fn register_dynamic_cast_rules(
         &mut self,
         fn_name: &str,
@@ -523,11 +760,71 @@ impl FunctionRegistry {
             .unwrap_or_default()
     }
 
-    pub fn register_auto_try_cast_rules(
+    /// Registers that a cast step from `src` to `dest` runs the conversion function of `dest`;
+    /// `None` stands for any source.
+    pub fn register_cast(&mut self, src: Option<DataType>, dest: DataType) {
+        let function_name = self
+            .get_conversion_function(&dest)
+            .unwrap_or_else(|| panic!("no conversion function to {dest}"))
+            .to_string();
+        self.register_cast_with(src, dest, &function_name);
+    }
+
+    /// Registers that a cast step from `src` to `dest` runs the function `function_name`;
+    /// `None` stands for any source. The function must already be registered with an overload
+    /// that takes `src` as it is, and its domain is the domain of the step.
+    pub fn register_cast_with(
         &mut self,
-        auto_try_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
+        src: Option<DataType>,
+        dest: DataType,
+        function_name: &str,
     ) {
-        self.auto_try_cast_rules.extend(auto_try_cast_rules);
+        let function = resolve_registered_cast(self, src.as_ref(), &dest, function_name);
+        self.insert_cast(src, dest, RegisteredCast::Function(function));
+    }
+
+    /// Registers that a cast from `src` to `dest` converts to `via` first.
+    pub fn register_cast_chain(&mut self, src: DataType, via: DataType, dest: DataType) {
+        debug_assert!(!src.is_nullable_or_null() && !via.is_nullable_or_null());
+        debug_assert!(!dest.is_nullable_or_null());
+        self.insert_cast(Some(src), dest, RegisteredCast::Chain { via });
+    }
+
+    fn insert_cast(&mut self, src: Option<DataType>, dest: DataType, cast: RegisteredCast) {
+        let key = (src.as_ref().map(cast_key), cast_key(&dest));
+        let previous = self.casts.insert(key, cast);
+        assert!(
+            previous.is_none(),
+            "cast from {src:?} to {dest} registered twice"
+        );
+    }
+
+    /// The cast registered from `src` to `dest`, or from any source to `dest`.
+    pub fn get_cast(&self, src: &DataType, dest: &DataType) -> Option<&RegisteredCast> {
+        let dest = cast_key(&dest.remove_nullable());
+        let src = cast_key(&src.remove_nullable());
+        self.casts
+            .get(&(Some(src), dest.clone()))
+            .or_else(|| self.casts.get(&(None, dest)))
+    }
+
+    /// Registers `function_name` as the function that converts values to `dest`: `to_x(a)` of a
+    /// value of type X is the cast of `a` to its own type.
+    pub fn register_conversion_function(&mut self, dest: DataType, function_name: &str) {
+        let previous = self
+            .conversion_functions
+            .insert(cast_key(&dest), function_name.to_string());
+        assert!(
+            previous.is_none(),
+            "conversion function to {dest} registered twice"
+        );
+    }
+
+    /// The function that converts values to `dest`.
+    pub fn get_conversion_function(&self, dest: &DataType) -> Option<&str> {
+        self.conversion_functions
+            .get(&cast_key(&dest.remove_nullable()))
+            .map(String::as_str)
     }
 
     pub fn get_derive_stat(&self, func_name: &str) -> Option<&DeriveStat> {
