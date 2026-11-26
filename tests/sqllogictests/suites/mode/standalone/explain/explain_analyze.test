@@ -183,8 +183,8 @@ HashJoin
 │   ├── cpu time: <slt:ignore>
 │   ├── wait time: <slt:ignore>
 │   ├── output rows: 1
-│   ├── output bytes: 31.00 B
-│   ├── bytes scanned: 31.00 B
+│   ├── output bytes: 32.00 B
+│   ├── bytes scanned: 32.00 B
 │   ├── read from remote: 61.00 B
 │   ├── runtime filter bloom time: <slt:ignore>
 │   ├── runtime filter inlist/min-max time: <slt:ignore>
