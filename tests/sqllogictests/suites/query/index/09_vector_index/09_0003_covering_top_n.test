@@ -1,0 +1,32 @@
+statement ok
+create or replace table covering_top_n (id int, v vector(4), vector index vi(v) distance='l2');
+
+statement ok
+insert into covering_top_n values (40, [4,0,0,0]), (10, [1,0,0,0]);
+
+statement ok
+insert into covering_top_n values (30, [3,0,0,0]), (20, [2,0,0,0]);
+
+# The winning rows come from different blocks. RowFetch must preserve their rank.
+query I
+select id from covering_top_n order by l2_distance(v,[0,0,0,0]::vector(4)) limit 2 offset 1;
+----
+20
+30
+
+# An OFFSET past every scored row returns nothing.
+query I
+select id from covering_top_n order by l2_distance(v,[0,0,0,0]::vector(4)) limit 2 offset 10;
+----
+
+# Fewer candidates than the limit: the unscored rows are still returned.
+query I
+select id from covering_top_n order by l2_distance(v,[0,0,0,0]::vector(4)) limit 10;
+----
+10
+20
+30
+40
+
+statement ok
+drop table covering_top_n;

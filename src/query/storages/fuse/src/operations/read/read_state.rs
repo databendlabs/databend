@@ -55,6 +55,7 @@ use super::length_only;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
+use crate::io::FieldLevelsCache;
 use crate::io::ParquetBatches;
 use crate::io::RowSelection;
 use crate::pruning::ExprBloomFilter;
@@ -135,6 +136,7 @@ fn conjunction(mut conjuncts: Vec<Expr<String>>) -> Result<Expr<String>> {
 /// columns that the later stages or the output read are kept for those rows, not decoded again.
 struct EarlyStage {
     reader: Arc<BlockReader>,
+    field_levels: FieldLevelsCache,
     column_ids: HashSet<ColumnId>,
     /// Offsets in the early reader's block, in its column order.
     retained_indices: BTreeSet<FieldIndex>,
@@ -298,6 +300,10 @@ pub struct ReadState {
     early: Option<EarlyStage>,
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
+    /// Field levels of the blocks read by `pre_reader` and `remain_reader`. Each processor
+    /// owns its `ReadState`, so they are reused across its blocks without synchronization.
+    pre_field_levels: FieldLevelsCache,
+    remain_field_levels: FieldLevelsCache,
     pub filters: Option<Expr>,
     prewhere_selector: Option<FilterExecutor>,
     /// Whether `filters` is set and deterministic. Evaluating a non-deterministic filter (e.g.
@@ -500,6 +506,7 @@ impl ReadState {
                     .collect(),
             );
             let early = EarlyStage {
+                field_levels: reader.field_levels_cache(),
                 column_ids: reader.schema().to_leaf_column_id_set(),
                 retained_indices: plan.retained_indices,
                 selector: prewhere_selector(&filter, &func_ctx, max_block_size),
@@ -588,6 +595,8 @@ impl ReadState {
 
         Ok(Self {
             early,
+            pre_field_levels: prewhere_reader.field_levels_cache(),
+            remain_field_levels: remain_reader.field_levels_cache(),
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
@@ -717,9 +726,13 @@ impl ReadState {
             && part.nums_rows > MIN_BATCH_ROWS
             && self.pre_reader.can_parquet_batches(&pre_columns_chunks)
         {
-            let mut batches =
-                self.pre_reader
-                    .parquet_batches(part, &pre_columns_chunks, None, MIN_BATCH_ROWS)?;
+            let mut batches = self.pre_reader.parquet_batches(
+                part,
+                &pre_columns_chunks,
+                None,
+                MIN_BATCH_ROWS,
+                &mut self.pre_field_levels,
+            )?;
             let mut bytes = 0;
             let mut bits = MutableBitmap::with_capacity(part.nums_rows);
             let mut leading_bits = MutableBitmap::with_capacity(part.nums_rows);
@@ -818,6 +831,7 @@ impl ReadState {
             candidates.as_ref(),
             self.prewhere_selectivity_threshold,
             &mut scan_stats.bytes,
+            &mut self.pre_field_levels,
         )?;
 
         if let Some(retained) = retained_early {
@@ -902,6 +916,7 @@ impl ReadState {
             bitmap_selection.as_ref(),
             self.prewhere_selectivity_threshold,
             &mut scan_stats.bytes,
+            &mut self.remain_field_levels,
         )?;
         let data_block = match &self.plan {
             ReadPlan::Empty => DataBlock::empty_with_rows(remain_block.num_rows()),
@@ -993,6 +1008,7 @@ impl ReadState {
                     early_chunks.as_ref(),
                     &pre_chunks,
                     index_selection,
+                    &mut self.pre_field_levels,
                 )? {
                     PreStageStart::Empty { bytes } => (BatchStage::Done, bytes),
                     PreStageStart::Ready { stage, early_bytes } => {
@@ -1046,6 +1062,7 @@ impl ReadState {
                     early_chunks.as_ref(),
                     &pre_chunks,
                     index_selection,
+                    &mut self.pre_field_levels,
                 )? {
                     PreStageStart::Empty { bytes } => (
                         BatchStage::Done,
@@ -1142,7 +1159,7 @@ impl ReadState {
     /// The stage reading `remain_reader` in batches, pushing down `RowSelection` when
     /// selective or else filtering each batch in memory, with the scan bytes already known.
     fn remain_stage(
-        &self,
+        &mut self,
         part: &FuseBlockPartInfo,
         remain_chunks: &HashMap<ColumnId, DataItem>,
         selection: Option<Bitmap>,
@@ -1166,6 +1183,7 @@ impl ReadState {
             remain_chunks,
             row_selection.as_ref(),
             self.batch_rows,
+            &mut self.remain_field_levels,
         )?;
         let offset_cursor = need_row_offsets.then(|| RowOffsetCursor::new(selection.clone()));
         let stage = RemainStage {
@@ -1223,9 +1241,13 @@ fn run_early_stage_batches(
     decode_batch_rows: usize,
     coalesce_rows: Option<usize>,
 ) -> Result<EarlyBatchesOutput> {
-    let mut batches = early
-        .reader
-        .parquet_batches(part, chunks, None, decode_batch_rows)?;
+    let mut batches = early.reader.parquet_batches(
+        part,
+        chunks,
+        None,
+        decode_batch_rows,
+        &mut early.field_levels,
+    )?;
     let mut bytes = 0;
     let mut bits = MutableBitmap::with_capacity(part.nums_rows);
     let mut retained =
@@ -1277,10 +1299,12 @@ fn filter_early_stage(
     let chunks = ReadState::filter_column_chunks(columns_chunks, &early.column_ids)?;
     if let Some(candidates) = candidates {
         let raw_bytes = raw_bytes_of_chunks(&chunks);
-        let block =
-            early
-                .reader
-                .deserialize_part(part, chunks, Some(&RowSelection::from(candidates)))?;
+        let block = early.reader.deserialize_part(
+            part,
+            chunks,
+            Some(&RowSelection::from(candidates)),
+            Some(&mut early.field_levels),
+        )?;
         let bytes = estimate_block_bytes(
             block.memory_size(),
             block.num_rows(),
@@ -1342,7 +1366,9 @@ fn filter_early_stage(
             bytes,
         });
     }
-    let block = early.reader.deserialize_part(part, chunks, None)?;
+    let block = early
+        .reader
+        .deserialize_part(part, chunks, None, Some(&mut early.field_levels))?;
     let bytes = block.memory_size();
     let bitmap: Bitmap = eval_filter(
         &early.filter,
@@ -1438,12 +1464,18 @@ fn deserialize_selected(
     selection: Option<&Bitmap>,
     threshold: u64,
     bytes: &mut usize,
+    field_levels: &mut FieldLevelsCache,
 ) -> Result<DataBlock> {
     if let Some(selection) =
         selection.filter(|selection| should_push_down_row_selection(selection, threshold))
     {
         let raw_bytes = raw_bytes_of_chunks(&chunks);
-        let block = reader.deserialize_part(part, chunks, Some(&RowSelection::from(selection)))?;
+        let block = reader.deserialize_part(
+            part,
+            chunks,
+            Some(&RowSelection::from(selection)),
+            Some(field_levels),
+        )?;
         *bytes += estimate_block_bytes(
             block.memory_size(),
             block.num_rows(),
@@ -1452,7 +1484,7 @@ fn deserialize_selected(
         );
         return Ok(block);
     }
-    let block = reader.deserialize_part(part, chunks, None)?;
+    let block = reader.deserialize_part(part, chunks, None, Some(field_levels))?;
     *bytes += block.memory_size();
     match selection {
         Some(selection) => block.filter_with_bitmap(selection),
@@ -1556,6 +1588,7 @@ fn start_pre_stage(
     early_chunks: Option<&HashMap<ColumnId, DataItem>>,
     pre_chunks: &HashMap<ColumnId, DataItem>,
     index_selection: Option<Bitmap>,
+    field_levels: &mut FieldLevelsCache,
 ) -> Result<PreStageStart> {
     let raw_bytes = raw_bytes_of_chunks(pre_chunks);
     if let Some(early) = early {
@@ -1587,8 +1620,13 @@ fn start_pre_stage(
         }
         let row_selection = should_push_down_row_selection(&selection, selectivity_threshold)
             .then(|| RowSelection::from(&selection));
-        let batches =
-            pre_reader.parquet_batches(part, pre_chunks, row_selection.as_ref(), batch_rows)?;
+        let batches = pre_reader.parquet_batches(
+            part,
+            pre_chunks,
+            row_selection.as_ref(),
+            batch_rows,
+            field_levels,
+        )?;
         return Ok(PreStageStart::Ready {
             stage: PreStage {
                 batches,
@@ -1604,7 +1642,7 @@ fn start_pre_stage(
             early_bytes,
         });
     }
-    let batches = pre_reader.parquet_batches(part, pre_chunks, None, batch_rows)?;
+    let batches = pre_reader.parquet_batches(part, pre_chunks, None, batch_rows, field_levels)?;
     Ok(PreStageStart::Ready {
         stage: PreStage {
             batches,

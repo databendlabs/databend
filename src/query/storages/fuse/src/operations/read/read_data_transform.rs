@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
@@ -40,6 +41,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use super::condition_cache;
 use super::condition_cache::CachedCondition;
 use super::condition_cache::ConditionKeys;
+use super::parquet_data_source::BlockSource;
 use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
 use crate::FuseBlockPartInfo;
@@ -55,6 +57,7 @@ pub struct ReadDataTransform {
     read_block_context: Arc<ReadBlockContext>,
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
+    index_score: Option<InternalColumnType>,
     context: Arc<dyn TableContext>,
     runtime_scan_filters: RuntimeScanFilters,
     expr_runtime_pruner: Option<ExprRuntimePruner>,
@@ -73,6 +76,7 @@ impl ReadDataTransform {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         scan_id: IndexType,
+        index_score: Option<InternalColumnType>,
         ctx: Arc<dyn TableContext>,
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
@@ -114,6 +118,7 @@ impl ReadDataTransform {
                 read_block_context,
                 table_schema,
                 scan_id,
+                index_score,
                 context: ctx,
                 runtime_scan_filters,
                 expr_runtime_pruner: None,
@@ -192,6 +197,19 @@ impl AsyncBlockingTransform for ReadDataTransform {
             {
                 continue;
             }
+            // The index matches are every row this zero-column scan outputs, with
+            // their scores: no Parquet read. `index_score` excludes prewhere, so this
+            // never competes with the condition cache below.
+            if let Some(key) = &self.index_score
+                && let Some(matches) = part_info.covering_matches(key)
+                && !self.context.has_bloom_runtime_filters(self.scan_id)
+            {
+                let offsets = matches.rows.iter().map(|&row| u64::from(row)).collect();
+                return Ok(Some(DataBlock::empty_with_meta(
+                    DataSourceWithMeta::create(vec![part], vec![BlockSource::IndexRows(offsets)]),
+                )));
+            }
+
             // A block where the prewhere filter selected no row before is not read, nor one
             // where it knows the rows when the scan outputs no column. The statistics of the
             // block show where it selects every row.
@@ -208,8 +226,8 @@ impl AsyncBlockingTransform for ReadDataTransform {
                 }
                 if !self.outputs_columns && condition.is_exact() {
                     return Ok(Some(DataBlock::empty_with_meta(
-                        DataSourceWithMeta::create(vec![part], vec![ParquetDataSource::skipped(
-                            condition.clone(),
+                        DataSourceWithMeta::create(vec![part], vec![BlockSource::Parquet(
+                            ParquetDataSource::skipped(condition.clone()),
                         )]),
                     )));
                 }
@@ -237,7 +255,7 @@ impl AsyncBlockingTransform for ReadDataTransform {
 
             source.condition = condition;
             return Ok(Some(DataBlock::empty_with_meta(
-                DataSourceWithMeta::create(vec![part], vec![source]),
+                DataSourceWithMeta::create(vec![part], vec![BlockSource::Parquet(source)]),
             )));
         }
 

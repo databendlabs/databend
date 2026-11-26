@@ -22,7 +22,6 @@ mod notification;
 mod query_log;
 mod stream;
 mod table;
-mod util;
 mod worker;
 
 mod log;
@@ -50,7 +49,6 @@ pub use stream::build_update_stream_reqs;
 pub(crate) use table::check_expected_table_id;
 pub use table::check_referenced_computed_columns;
 pub use table::stored_computed_column_references;
-pub use util::check_deduplicate_label;
 pub use worker::get_worker_client_config;
 
 pub use self::metrics::*;

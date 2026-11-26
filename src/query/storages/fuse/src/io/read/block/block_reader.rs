@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use arrow_schema::Field;
-use arrow_schema::Fields;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -40,6 +39,8 @@ use opendal::Operator;
 use crate::BlockReadResult;
 use crate::io::FuseCaches;
 use crate::io::read::block::parquet::ColumnEncoding;
+use crate::io::read::block::parquet::ParquetReadSchema;
+use crate::io::read::block::parquet::column_name_paths;
 use crate::io::read::block::parquet::dictionary_hint_fields;
 
 // TODO: make BlockReader as a trait.
@@ -64,9 +65,12 @@ pub struct BlockReader {
     /// regular columns), see [`ColumnEncoding::encode`]. Only with the column array cache on:
     /// without it an encoded column is used once, and building it costs more than it saves.
     pub(crate) build_encodings: bool,
-    /// Arrow fields the Parquet columns are read as, if they differ from the original schema,
-    /// see [`dictionary_hint_fields`]. Fixed per reader, so computed once here.
-    pub(crate) parquet_hint_fields: Option<Fields>,
+    /// Schema forms the Parquet column chunks are read with, including the Arrow fields the
+    /// columns are read as (see [`dictionary_hint_fields`]). Fixed per reader, so built once
+    /// here instead of per block.
+    pub(crate) parquet_read_schema: Arc<ParquetReadSchema>,
+    /// Name path of each projected column in the record batches read, by projection order.
+    pub(crate) parquet_name_paths: Arc<Vec<Vec<String>>>,
     /// The projected `String` columns of which only the byte lengths of the values are read:
     /// their columns hold strings of NUL bytes of those lengths. See
     /// [`BlockReader::with_length_only_columns`].
@@ -209,6 +213,12 @@ impl BlockReader {
                 .map(|field| field.column_id),
         );
 
+        let parquet_read_schema = Arc::new(ParquetReadSchema::try_new(
+            &original_schema,
+            parquet_hint_fields,
+        )?);
+        let parquet_name_paths = Arc::new(column_name_paths(&projection, &original_schema));
+
         Ok(Arc::new(BlockReader {
             ctx,
             operator,
@@ -222,7 +232,8 @@ impl BlockReader {
             column_encodings: Arc::new(column_encodings),
             dictionary_ndv_ratio,
             build_encodings,
-            parquet_hint_fields,
+            parquet_read_schema,
+            parquet_name_paths,
             length_only_columns: Default::default(),
             original_schema,
         }))
@@ -251,7 +262,8 @@ impl BlockReader {
             column_encodings: self.column_encodings.clone(),
             dictionary_ndv_ratio: self.dictionary_ndv_ratio,
             build_encodings: self.build_encodings,
-            parquet_hint_fields: self.parquet_hint_fields.clone(),
+            parquet_read_schema: self.parquet_read_schema.clone(),
+            parquet_name_paths: self.parquet_name_paths.clone(),
             length_only_columns: Arc::new(columns),
             original_schema: self.original_schema.clone(),
         })

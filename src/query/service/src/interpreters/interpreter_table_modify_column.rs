@@ -1345,7 +1345,6 @@ pub(crate) async fn build_select_insert_plan(
         vec![],
         true,
         prev_snapshot_id,
-        None,
         table_meta_timestamps,
     )?;
 

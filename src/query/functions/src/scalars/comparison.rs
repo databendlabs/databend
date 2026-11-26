@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use databend_common_column::binview::ViewProbe;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_expression::Column;
@@ -1069,14 +1070,14 @@ fn register_string_cmp(registry: &mut FunctionRegistry) {
         "eq",
         |stat, _| derive_equality_stat::<StringType>(false, stat),
         |_, d1, d2| d1.domain_eq(d2),
-        vectorize_string_cmp(|cmp| cmp == Ordering::Equal),
+        vectorize_string_eq(false),
     );
     register_stat_string_comparison_2_arg(
         registry,
         "noteq",
         |stat, _| derive_equality_stat::<StringType>(true, stat),
         |_, d1, d2| d1.domain_noteq(d2),
-        vectorize_string_cmp(|cmp| cmp != Ordering::Equal),
+        vectorize_string_eq(true),
     );
     register_stat_string_comparison_2_arg(
         registry,
@@ -1150,20 +1151,42 @@ fn vectorize_string_cmp(
             Value::Column(compare_lengths_to_empty(&arg2, func, true))
         }
         (Value::Column(arg1), Value::Scalar(arg2)) => {
-            let col = Bitmap::collect_bool(ctx.num_rows, |i| {
-                func(StringColumn::compare_str(&arg1, i, &arg2))
-            });
+            let probe = ViewProbe::new(arg2.as_bytes());
+            let col = Bitmap::collect_bool(ctx.num_rows, |i| func(arg1.compare_probe(i, &probe)));
             Value::Column(col)
         }
         (Value::Scalar(arg1), Value::Column(arg2)) => {
+            let probe = ViewProbe::new(arg1.as_bytes());
             let col = Bitmap::collect_bool(ctx.num_rows, |i| {
-                func(StringColumn::compare_str(&arg2, i, &arg1).reverse())
+                func(arg2.compare_probe(i, &probe).reverse())
             });
             Value::Column(col)
         }
         (Value::Column(arg1), Value::Column(arg2)) => {
             let col = Bitmap::collect_bool(ctx.num_rows, |i| {
                 func(StringColumn::compare(&arg1, i, &arg2, i))
+            });
+            Value::Column(col)
+        }
+    }
+}
+
+/// `=` and `<>` on strings. Unlike the ordering comparisons, equality can reject a row by its
+/// length as well as its prefix, and settle an inlined value without reading the data buffers.
+fn vectorize_string_eq(
+    negated: bool,
+) -> impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
+    move |arg1, arg2, ctx| match (arg1, arg2) {
+        (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar((arg1 == arg2) != negated),
+        (Value::Column(col), Value::Scalar(scalar))
+        | (Value::Scalar(scalar), Value::Column(col)) => {
+            let probe = ViewProbe::new(scalar.as_bytes());
+            let col = Bitmap::collect_bool(ctx.num_rows, |i| col.equal_probe(i, &probe) != negated);
+            Value::Column(col)
+        }
+        (Value::Column(arg1), Value::Column(arg2)) => {
+            let col = Bitmap::collect_bool(ctx.num_rows, |i| {
+                StringColumn::equal(&arg1, i, &arg2, i) != negated
             });
             Value::Column(col)
         }

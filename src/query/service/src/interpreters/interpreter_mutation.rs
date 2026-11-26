@@ -43,7 +43,6 @@ use log::info;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -112,14 +111,7 @@ impl Interpreter for MutationInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
-
             let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
-
-            // Build physical plan.
             let physical_plan = self.build_physical_plan(&mutation, false).await?;
 
             let query_plan = {

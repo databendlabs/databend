@@ -47,6 +47,8 @@ mod page_header;
 mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
+pub use deserialize::FieldLevelsCache;
+pub use deserialize::ParquetReadSchema;
 pub use deserialize::column_chunks_to_record_batch;
 pub use deserialize::column_chunks_to_record_batch_with_codecs;
 pub use deserialize::dictionary_hint_fields;
@@ -65,6 +67,12 @@ use crate::io::FuseCaches;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
+    /// A [`FieldLevelsCache`] for the blocks this reader reads, to pass along with each of them
+    /// by a caller that reads many blocks.
+    pub fn field_levels_cache(&self) -> FieldLevelsCache {
+        FieldLevelsCache::new(self.parquet_read_schema.clone())
+    }
+
     /// The projected non-nullable string columns kept as dictionaries whose chunk is
     /// dictionary encoded throughout, with a dictionary within the NDV ratio (as in
     /// [`ColumnEncoding::encode`]).
@@ -143,8 +151,15 @@ impl BlockReader {
         part: &FuseBlockPartInfo,
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
+        field_levels: Option<&mut FieldLevelsCache>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_files(part.nums_rows, &part.data_files(), column_chunks, selection)
+        self.deserialize_parquet_files(
+            part.nums_rows,
+            &part.data_files(),
+            column_chunks,
+            selection,
+            field_levels,
+        )
     }
 
     pub fn deserialize_parquet_chunks(
@@ -161,17 +176,19 @@ impl BlockReader {
             col_metas: column_metas,
             compression: *compression,
         };
-        self.deserialize_parquet_files(num_rows, &[file], column_chunks, selection)
+        self.deserialize_parquet_files(num_rows, &[file], column_chunks, selection, None)
     }
 
     /// Deserializes the column chunks a block read from `files`. Each chunk is decompressed
-    /// with the codec of the file that stores its column.
+    /// with the codec of the file that stores its column. `field_levels` is a cache from
+    /// [`Self::field_levels_cache`], if the caller keeps one.
     pub fn deserialize_parquet_files(
         &self,
         num_rows: usize,
         files: &[BlockDataFile<'_>],
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
+        field_levels: Option<&mut FieldLevelsCache>,
     ) -> databend_common_exception::Result<DataBlock> {
         let files = DataFileLookup::new(files);
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
@@ -209,14 +226,14 @@ impl BlockReader {
         };
         let record_batch = column_chunks_to_record_batch_with_codecs(
             &self.original_schema,
+            &self.parquet_read_schema,
+            field_levels,
             num_rows,
             arrow_chunks,
             files.default_compression(),
             |column_id| files.compression_of(column_id),
             selection.map(|s| s.selection.clone()),
-            self.parquet_hint_fields.as_ref(),
         )?;
-        let name_paths = column_name_paths(&self.projection, &self.original_schema);
         self.record_batch_to_block(
             &record_batch,
             result_rows,
@@ -226,7 +243,6 @@ impl BlockReader {
             &length_columns,
             num_rows,
             selection,
-            &name_paths,
             true,
         )
     }
@@ -258,6 +274,7 @@ impl BlockReader {
         column_chunks: &HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
         batch_rows: usize,
+        field_levels: &mut FieldLevelsCache,
     ) -> databend_common_exception::Result<ParquetBatches> {
         debug_assert!(self.column_encodings.is_empty());
         let data_files = part.data_files();
@@ -288,12 +305,13 @@ impl BlockReader {
             true => None,
             false => Some(column_chunks_record_reader(
                 &self.original_schema,
+                &self.parquet_read_schema,
+                Some(field_levels),
                 part.nums_rows,
                 &arrow_chunks,
                 files.default_compression(),
                 |column_id| files.compression_of(column_id),
                 selection.map(|s| s.selection.clone()),
-                self.parquet_hint_fields.as_ref(),
                 reader_batch_rows,
             )?),
         };
@@ -307,7 +325,6 @@ impl BlockReader {
         Ok(ParquetBatches {
             block_reader: self.clone(),
             column_chunks,
-            name_paths: column_name_paths(&self.projection, &self.original_schema),
             reader,
             lengths,
             rows,
@@ -329,7 +346,6 @@ impl BlockReader {
         length_columns: &HashMap<ColumnId, Column>,
         num_rows: usize,
         selection: Option<&RowSelection>,
-        name_paths: &[Vec<String>],
         whole_block: bool,
     ) -> databend_common_exception::Result<DataBlock> {
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
@@ -407,7 +423,7 @@ impl BlockReader {
                 }
                 Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
-                    let arrow_array = column_by_name(record_batch, &name_paths[i]);
+                    let arrow_array = column_by_name(record_batch, &self.parquet_name_paths[i]);
                     // Nested columns are neither cached nor encoded.
                     let cache = array_cache.filter(|_| !column_node.is_nested);
                     let cache_key = || {
@@ -484,7 +500,6 @@ pub(crate) struct ParquetBatches {
     block_reader: Arc<BlockReader>,
     /// The chunks the reader decodes: they tell present columns from defaulted ones.
     column_chunks: HashMap<ColumnId, DataItem<'static>>,
-    name_paths: Vec<Vec<String>>,
     /// Absent when every chunk is read for its lengths.
     reader: Option<ParquetRecordBatchReader>,
     /// The lengths of the selected rows of the columns read for their lengths.
@@ -537,7 +552,6 @@ impl ParquetBatches {
             &lengths,
             rows,
             None,
-            &self.name_paths,
             false,
         ))
     }
@@ -597,7 +611,7 @@ fn column_by_name(record_batch: &RecordBatch, names: &[String]) -> ArrayRef {
 }
 
 // This function assumes that projection is valid, isn't responsible for checking it.
-fn column_name_paths(projection: &Projection, schema: &TableSchema) -> Vec<Vec<String>> {
+pub(crate) fn column_name_paths(projection: &Projection, schema: &TableSchema) -> Vec<Vec<String>> {
     match projection {
         Projection::Columns(field_indices) => field_indices
             .iter()

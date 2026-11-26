@@ -922,13 +922,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("deduplicate_label", DefaultSettingValue {
-                    value: UserSettingValue::String("".to_owned()),
-                    desc: "Retry token for SQL writes that support deduplication.",
-                    mode: SettingMode::Write,
-                    scope: SettingScope::Session,
-                    range: None,
-                }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for the 'COPY INTO'.",

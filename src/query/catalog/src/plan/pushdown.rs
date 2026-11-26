@@ -29,6 +29,7 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
@@ -38,6 +39,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
 
 use crate::plan::InternalColumn;
+use crate::plan::InternalColumnType;
 use crate::plan::Projection;
 
 /// Information of Virtual Columns.
@@ -352,6 +354,67 @@ impl PushDownInfo {
                 if id == SEARCH_SCORE_COL_NAME
                     && *data_type == DataType::Number(NumberDataType::Float32) =>
             {
+                Some(limit)
+            }
+            _ => None,
+        }
+    }
+
+    /// Score column whose index matches may stand in for the scan's output: the
+    /// one index of the scan restricts it to the rows it found, and nothing else
+    /// filters or rewrites them. Each block must still have `rows_only` matches
+    /// with a score per row. Unlike `index_top_k_score`, this does not need the
+    /// index to cut its matches to a Top-K: an FTS search without one (as for
+    /// `ORDER BY score() ASC`) returns every match of the block.
+    pub fn covering_index_score(&self) -> Option<InternalColumnType> {
+        if self.prewhere.is_some()
+            || self.secure_filters.is_some()
+            || self.sample.is_some()
+            || self.change_type.is_some()
+        {
+            return None;
+        }
+        match (&self.inverted_index, &self.vector_index) {
+            (Some(_), None) if self.filter_only_use_index() => {
+                Some(InternalColumnType::SearchScore)
+            }
+            (None, Some(_)) if self.filters.is_none() => Some(InternalColumnType::VectorScore),
+            _ => None,
+        }
+    }
+
+    /// Score column a zero-column scan may read from a pruned block: a covering
+    /// index whose pruning also kept only its Top-K rows. The reader must still
+    /// check that this particular block contains *all* output rows.
+    pub fn index_top_k_score(&self) -> Option<InternalColumnType> {
+        let key = self.covering_index_score()?;
+        let top_k = match key {
+            InternalColumnType::SearchScore => self.inverted_index_top_k(),
+            InternalColumnType::VectorScore => self.vector_index_top_k(),
+            _ => None,
+        };
+        top_k.map(|_| key)
+    }
+
+    /// The vector counterpart of `inverted_index_top_k`: a nearest-neighbour TopN
+    /// ordered by the vector score alone, with nothing else restricting the scan.
+    /// Farthest rows (`DESC`) are not covered: every row is scored, so the pruned
+    /// candidates are not all the rows a block would output.
+    pub fn vector_index_top_k(&self) -> Option<usize> {
+        self.vector_index.as_ref()?;
+        let limit = self.limit.filter(|limit| *limit > 0)?;
+        if self.inverted_index.is_some()
+            || self.filters.is_some()
+            || self.prewhere.is_some()
+            || self.secure_filters.is_some()
+            || self.sample.is_some()
+            || self.change_type.is_some()
+        {
+            return None;
+        }
+
+        match self.order_by.as_slice() {
+            [(RemoteExpr::ColumnRef { id, .. }, true, _)] if id == VECTOR_SCORE_COL_NAME => {
                 Some(limit)
             }
             _ => None,

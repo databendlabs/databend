@@ -38,6 +38,7 @@ pub use read::BlockReadResult;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
 pub use read::DataItem;
+pub use read::FieldLevelsCache;
 pub use read::FuseLowLevelBlockReadOptions;
 pub use read::FuseLowLevelBlockReader;
 pub use read::FuseLowLevelColumnBatchReader;

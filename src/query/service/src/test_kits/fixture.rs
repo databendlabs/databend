@@ -971,7 +971,6 @@ impl TestFixture {
                 vec![],
                 overwrite,
                 None,
-                None,
                 Self::default_table_meta_timestamps(),
             )?;
         } else {

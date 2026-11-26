@@ -940,3 +940,197 @@ mod take_selection {
         array_int64
     ]);
 }
+
+/// `WHERE` string comparisons, which go through `FilterExecutor` rather than the function
+/// registry.
+#[divan::bench_group(max_time = 1)]
+mod filter_string_compare {
+    use std::borrow::Cow;
+
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::Column;
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::filter::FilterExecutor;
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression_test_support::parse_raw_expr;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use divan::counter::ItemsCount;
+
+    const ROWS: usize = 65_536;
+
+    /// `short`: inlined strings (<= 12 bytes) sharing a 4-byte prefix.
+    /// `url`: long strings of varying length sharing a long prefix, like a URL column.
+    /// `distinct`: long strings whose first 4 bytes mostly differ.
+    fn value(shape: &str, row: usize) -> String {
+        match shape {
+            "short" => format!("id_{}", row % 1000),
+            "url" => format!("https://www.example.com/{}{row}", "p/".repeat(row % 16)),
+            "distinct" => format!(
+                "{:08x}_with_a_long_suffix",
+                (row as u32).wrapping_mul(2_654_435_761)
+            ),
+            _ => unreachable!(),
+        }
+    }
+
+    /// `s` and `t` of `shape` with at most `ndv` distinct values. Every other row of `t`
+    /// equals `s`; the others hold a different string of the shape.
+    fn columns(shape: &str, ndv: usize) -> (Column, Column) {
+        let s = (0..ROWS)
+            .map(|row| value(shape, row % ndv))
+            .collect::<Vec<_>>();
+        let t = (0..ROWS)
+            .map(|row| value(shape, (row + row % 2) % ndv))
+            .collect::<Vec<_>>();
+        (StringType::from_data(s), StringType::from_data(t))
+    }
+
+    fn bench_filter(bencher: divan::Bencher, shape: &str, sql: &str) {
+        let (s, t) = columns(shape, ROWS);
+        run_filter(bencher, s, t, sql);
+    }
+
+    /// `s` dictionary encoded with 1,000 distinct values, and with about 10% NULLs if
+    /// `nullable`.
+    fn bench_dict_filter(bencher: divan::Bencher, shape: &str, nullable: bool, sql: &str) {
+        let (s, t) = columns(shape, 1000);
+        let dict = DictColumn::try_encode(&s, 1 << 16).unwrap();
+        let s = Column::Encoded(Box::new(EncodedColumn::Dict(dict)));
+        let s = if nullable {
+            s.wrap_nullable(Some(Bitmap::from_iter((0..ROWS).map(|row| row % 10 != 0))))
+        } else {
+            s
+        };
+        run_filter(bencher, s, t, sql);
+    }
+
+    fn run_filter(bencher: divan::Bencher, s: Column, t: Column, sql: &str) {
+        let columns = [("s", s.data_type()), ("t", t.data_type())];
+        let expr = type_check::check(
+            &parse_raw_expr(sql, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let func_ctx = FunctionContext::default();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let block = DataBlock::new_from_columns(vec![s, t]);
+        let mut executor =
+            FilterExecutor::new(expr, func_ctx, ROWS, None, &BUILTIN_FUNCTIONS, false);
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench_local(|| executor.filter(block.clone()).unwrap());
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn eq_scalar(bencher: divan::Bencher, shape: &str) {
+        bench_filter(bencher, shape, &format!("s = '{}'", value(shape, 777)));
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn lt_scalar(bencher: divan::Bencher, shape: &str) {
+        bench_filter(bencher, shape, &format!("s < '{}'", value(shape, 777)));
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn eq_column(bencher: divan::Bencher, shape: &str) {
+        bench_filter(bencher, shape, "s = t");
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn lt_column(bencher: divan::Bencher, shape: &str) {
+        bench_filter(bencher, shape, "s < t");
+    }
+
+    #[divan::bench(args = ["short", "url"])]
+    fn nullable_dict_eq_scalar(bencher: divan::Bencher, shape: &str) {
+        bench_dict_filter(
+            bencher,
+            shape,
+            true,
+            &format!("s = '{}'", value(shape, 777)),
+        );
+    }
+
+    #[divan::bench(args = ["short", "url"])]
+    fn nullable_dict_lt_scalar(bencher: divan::Bencher, shape: &str) {
+        bench_dict_filter(
+            bencher,
+            shape,
+            true,
+            &format!("s < '{}'", value(shape, 777)),
+        );
+    }
+
+    #[divan::bench(args = ["short", "url"])]
+    fn dict_eq_column(bencher: divan::Bencher, shape: &str) {
+        bench_dict_filter(bencher, shape, false, "s = t");
+    }
+
+    #[divan::bench(args = ["short", "url"])]
+    fn dict_lt_column(bencher: divan::Bencher, shape: &str) {
+        bench_dict_filter(bencher, shape, false, "s < t");
+    }
+}
+
+#[divan::bench_group(max_time = 1)]
+mod topk_string {
+    use databend_common_column::bitmap::MutableBitmap;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::TopKSorter;
+    use databend_common_expression::types::StringType;
+    use divan::counter::ItemsCount;
+
+    const ROWS: usize = 65_536;
+    const LIMIT: usize = 100;
+
+    /// `short`: inlined strings (<= 12 bytes) sharing a 4-byte prefix.
+    /// `url`: long strings of varying length sharing a long prefix, like a URL column.
+    /// `distinct`: long strings whose first 4 bytes mostly differ.
+    /// `tied`: long strings all equal to the heap boundary.
+    fn value(shape: &str, row: usize) -> String {
+        // Scatter the rows so the column is not already in order.
+        let key = (row as u32).wrapping_mul(2_654_435_761) as usize % ROWS;
+        match shape {
+            "short" => format!("id_{key}"),
+            "url" => format!("https://www.example.com/{}{key}", "p/".repeat(key % 16)),
+            "distinct" => format!("{:08x}_with_a_long_suffix", key * 65_521),
+            "tied" => "https://www.example.com/duplicate".to_string(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn column(shape: &str, offset: usize) -> Column {
+        StringType::from_data(
+            (0..ROWS)
+                .map(|row| value(shape, row + offset))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Pushes a column into a sorter whose heap is already full, as for every block after the
+    /// first of an `ORDER BY s LIMIT 100` scan.
+    #[divan::bench(args = ["short", "url", "distinct", "tied"])]
+    fn push_column(bencher: divan::Bencher, shape: &str) {
+        let mut sorter = TopKSorter::new(LIMIT, true);
+        let mut bitmap = MutableBitmap::from_len_set(ROWS);
+        sorter.push_column(&column(shape, 0), &mut bitmap);
+        let column = column(shape, ROWS);
+
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .with_inputs(|| (sorter.clone(), MutableBitmap::from_len_set(ROWS)))
+            .bench_local_values(|(mut sorter, mut bitmap)| {
+                sorter.push_column(&column, &mut bitmap);
+                bitmap
+            });
+    }
+}
