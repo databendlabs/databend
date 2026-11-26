@@ -120,3 +120,34 @@ GROUP BY ROLLUP(depname, salary)
 1
 1
 3
+
+# Reading only the keys of a CUBE prunes its sum during physical planning. Its
+# grand-total level then has no keys and no aggregates, becomes a constant scan,
+# and no longer reads the level above. That level must not keep a channel for the
+# dropped reader: nobody reads it, and once it filled up the query hung. Small
+# blocks make the level send more blocks than the channel holds.
+statement ok
+SET max_block_size = 4
+
+query III
+SELECT count(*), count(p), count(a)
+FROM (
+    SELECT number % 40 AS p, number % 3 AS a, sum(number) AS s
+    FROM numbers(1000)
+    GROUP BY CUBE(p, a)
+) t
+----
+164 160 123
+
+query I
+SELECT count(*)
+FROM (
+    SELECT number % 40 AS p, number % 3 AS a, sum(number) AS s
+    FROM numbers(1000)
+    GROUP BY ROLLUP(p, a)
+) t
+----
+161
+
+statement ok
+UNSET max_block_size

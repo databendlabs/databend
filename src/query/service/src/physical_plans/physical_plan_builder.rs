@@ -39,6 +39,8 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::optimize_distributed_fuse_pruning;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::recount_materialized_cte_refs;
+use crate::physical_plans::rename_duplicate_materialized_ctes;
 use crate::sessions::TableContext;
 
 pub struct PhysicalPlanBuilder {
@@ -113,6 +115,10 @@ impl PhysicalPlanBuilder {
 
         let mut plan = build_result?;
         if is_root_build {
+            if !self.cte_required_columns.is_empty() {
+                rename_duplicate_materialized_ctes(&mut plan);
+                recount_materialized_cte_refs(&mut plan);
+            }
             plan = optimize_distributed_fuse_pruning(&plan, &self.distributed_fuse_pruning_scans);
             plan.adjust_plan_id(&mut 0);
             self.publish_synchronous_pruning_stats(&plan);
