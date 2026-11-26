@@ -1,0 +1,250 @@
+## TIMESTAMP_NTZ is a wall clock: text in and out never reads the session timezone.
+
+statement error 1002
+select '2024-01-01 00:00:00'::TIMESTAMP_NTZ
+
+statement error 1002
+create or replace table t_ntz_gate(ts TIMESTAMP_NTZ)
+
+statement error 1002
+create or replace table t_ntz_gate as select to_timestamp_ntz('2024-01-01 00:00:00') as ts
+
+statement ok
+set enable_timestamp_ntz = 1
+
+statement ok
+set timezone = 'UTC'
+
+query ?
+select '2024-03-10 02:30:00.123456'::TIMESTAMP_NTZ
+----
+2024-03-10 02:30:00.123456
+
+query ?T
+select TIMESTAMP_NTZ '2024-03-10 02:30:00', typeof(TIMESTAMP_NTZ '2024-03-10 02:30:00')
+----
+2024-03-10 02:30:00.000000 TIMESTAMP_NTZ
+
+## 02:30 does not exist in New York on 2024-03-10, but the wall clock does.
+statement ok
+set timezone = 'America/New_York'
+
+query ?T
+select '2024-03-10 02:30:00'::TIMESTAMP_NTZ, '2024-03-10 02:30:00'::TIMESTAMP_NTZ::STRING
+----
+2024-03-10 02:30:00.000000 2024-03-10 02:30:00.000000
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query ??
+select '2024-03-10 02:30:00'::TIMESTAMP_NTZ, '2024-03-10'::TIMESTAMP_NTZ
+----
+2024-03-10 02:30:00.000000 2024-03-10 00:00:00.000000
+
+## A zero offset is the same wall clock; any other offset is rejected, not dropped.
+query ??
+select '2024-01-01T12:00:00Z'::TIMESTAMP_NTZ, '2024-01-01 12:00:00 +00:00'::TIMESTAMP_NTZ
+----
+2024-01-01 12:00:00.000000 2024-01-01 12:00:00.000000
+
+statement error 1006
+select '2024-01-01 12:00:00 +08:00'::TIMESTAMP_NTZ
+
+query ??
+select try_cast('2024-01-01 12:00:00 +08:00' as TIMESTAMP_NTZ), try_cast('not a time' as TIMESTAMP_NTZ)
+----
+NULL NULL
+
+## The civil range starts at 0001-01-01, unlike TIMESTAMP.
+query ??
+select '0001-01-01 00:00:00'::TIMESTAMP_NTZ, '9999-12-31 23:59:59.999999'::TIMESTAMP_NTZ
+----
+0001-01-01 00:00:00.000000 9999-12-31 23:59:59.999999
+
+statement error 1006
+select '0000-12-31 23:59:59'::TIMESTAMP_NTZ
+
+## Values are stored as microseconds: a precision of 0 to 6 is accepted and
+## ignored, a larger one is rejected instead of truncating.
+query ??
+select '2024-01-01 00:00:00.123456'::TIMESTAMP_NTZ(0), cast('2024-01-01 00:00:00.5' as TIMESTAMP_NTZ(6))
+----
+2024-01-01 00:00:00.123456 2024-01-01 00:00:00.500000
+
+statement error 1005
+select cast('2024-01-01 00:00:00' as TIMESTAMP_NTZ(7))
+
+statement error 1005
+create or replace table t_ntz_precision(ts TIMESTAMP_NTZ(9))
+
+## No implicit conversion between a wall clock and an instant yet.
+statement error 1065
+select '2024-01-01'::TIMESTAMP_NTZ = '2024-01-01'::TIMESTAMP
+
+statement ok
+create or replace table t_ntz(id int, ts TIMESTAMP_NTZ, n TIMESTAMP_NTZ(3) NULL)
+
+query TTTTT
+desc t_ntz
+----
+id INT YES NULL (empty)
+ts TIMESTAMP_NTZ YES NULL (empty)
+n TIMESTAMP_NTZ YES NULL (empty)
+
+statement ok
+insert into t_ntz values (1, '2024-03-10 02:30:00', NULL), (2, '2024-01-01 00:00:00', '1999-12-31 23:59:59.999999')
+
+statement ok
+insert into t_ntz values (3, '2024-11-03 01:30:00', '2024-11-03 01:30:00')
+
+statement error 1006
+insert into t_ntz values (4, '2024-01-01 00:00:00 +08:00', NULL)
+
+## Changing the session timezone does not change stored or displayed values.
+statement ok
+set timezone = 'UTC'
+
+query I??
+select id, ts, n from t_ntz order by ts
+----
+2 2024-01-01 00:00:00.000000 1999-12-31 23:59:59.999999
+1 2024-03-10 02:30:00.000000 NULL
+3 2024-11-03 01:30:00.000000 2024-11-03 01:30:00.000000
+
+statement ok
+set timezone = 'America/New_York'
+
+query I??
+select id, ts, n from t_ntz order by ts desc
+----
+3 2024-11-03 01:30:00.000000 2024-11-03 01:30:00.000000
+1 2024-03-10 02:30:00.000000 NULL
+2 2024-01-01 00:00:00.000000 1999-12-31 23:59:59.999999
+
+## String literals compare as wall clocks.
+query I
+select id from t_ntz where ts >= '2024-03-10 02:30:00' order by id
+----
+1
+3
+
+query I
+select id from t_ntz where ts = '2024-03-10 02:30:00' and n is null
+----
+1
+
+query I?
+select count(*), ts from t_ntz group by ts order by ts
+----
+1 2024-01-01 00:00:00.000000
+1 2024-03-10 02:30:00.000000
+1 2024-11-03 01:30:00.000000
+
+query ??I
+select min(ts), max(ts), count(distinct ts) from t_ntz
+----
+2024-01-01 00:00:00.000000 2024-11-03 01:30:00.000000 3
+
+query II
+select a.id, b.id from t_ntz a join t_ntz b on a.ts = b.n order by a.id
+----
+3 3
+
+query I
+select id from t_ntz order by n desc nulls last, id
+----
+3
+2
+1
+
+## Each insert above wrote one block, so the min/max statistics prune two of them.
+query I
+select id from t_ntz where ts > '2024-06-01 00:00:00'
+----
+3
+
+query ?
+select ts::variant from t_ntz where id = 1
+----
+"2024-03-10 02:30:00.000000"
+
+statement ok
+create or replace table t_ntz_copy as select * from t_ntz
+
+statement ok
+update t_ntz_copy set ts = '2030-01-01 08:00:00' where id = 1
+
+statement ok
+delete from t_ntz_copy where ts < '2024-07-01'
+
+query I?
+select id, ts from t_ntz_copy order by id
+----
+1 2030-01-01 08:00:00.000000
+3 2024-11-03 01:30:00.000000
+
+## The type survives an unload and a load, in Parquet and in CSV.
+statement ok
+create or replace stage s_ntz
+
+statement ok
+copy into @s_ntz from t_ntz file_format = (type = parquet)
+
+query T
+select typeof(ts) from @s_ntz limit 1
+----
+TIMESTAMP_NTZ NULL
+
+statement ok
+create or replace table t_ntz_copy like t_ntz
+
+statement ok
+copy into t_ntz_copy from @s_ntz file_format = (type = parquet)
+
+statement ok
+remove @s_ntz
+
+statement ok
+copy into @s_ntz from t_ntz file_format = (type = csv)
+
+statement ok
+copy into t_ntz_copy from @s_ntz file_format = (type = csv)
+
+statement ok
+set timezone = 'UTC'
+
+query I??
+select id, ts, n from t_ntz_copy order by id, ts
+----
+1 2024-03-10 02:30:00.000000 NULL
+1 2024-03-10 02:30:00.000000 NULL
+2 2024-01-01 00:00:00.000000 1999-12-31 23:59:59.999999
+2 2024-01-01 00:00:00.000000 1999-12-31 23:59:59.999999
+3 2024-11-03 01:30:00.000000 2024-11-03 01:30:00.000000
+3 2024-11-03 01:30:00.000000 2024-11-03 01:30:00.000000
+
+statement ok
+drop stage s_ntz
+
+statement ok
+drop table t_ntz_copy
+
+## TTL decides when data expires, which needs an instant.
+statement error 1065
+create or replace table t_ntz_ttl(ts TIMESTAMP_NTZ) TTL ts
+
+## Existing data stays readable when the setting is turned off again.
+statement ok
+set enable_timestamp_ntz = 0
+
+query I?
+select id, ts from t_ntz where id = 2
+----
+2 2024-01-01 00:00:00.000000
+
+statement ok
+drop table t_ntz
+
+statement ok
+unset timezone

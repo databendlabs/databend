@@ -1882,78 +1882,80 @@ Functions overloads:
 7 eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 eq(TimestampTz, TimestampTz) :: Boolean
 9 eq(TimestampTz NULL, TimestampTz NULL) :: Boolean NULL
-10 eq(UInt8, UInt8) :: Boolean
-11 eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-12 eq(Int8, Int8) :: Boolean
-13 eq(Int8 NULL, Int8 NULL) :: Boolean NULL
-14 eq(UInt16, UInt16) :: Boolean
-15 eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-16 eq(Int16, Int16) :: Boolean
-17 eq(Int16 NULL, Int16 NULL) :: Boolean NULL
-18 eq(UInt32, UInt32) :: Boolean
-19 eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-20 eq(Int32, Int32) :: Boolean
-21 eq(Int32 NULL, Int32 NULL) :: Boolean NULL
-22 eq(UInt64, UInt64) :: Boolean
-23 eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-24 eq(Int64, Int64) :: Boolean
-25 eq(Int64 NULL, Int64 NULL) :: Boolean NULL
-26 eq FACTORY
-27 eq(Float32, Float32) :: Boolean
-28 eq(Float32 NULL, Float32 NULL) :: Boolean NULL
-29 eq(Float64, Float64) :: Boolean
-30 eq(Float64 NULL, Float64 NULL) :: Boolean NULL
-31 eq(String, UInt8) :: Boolean
-32 eq(String NULL, UInt8 NULL) :: Boolean NULL
-33 eq(UInt8, String) :: Boolean
-34 eq(UInt8 NULL, String NULL) :: Boolean NULL
-35 eq(String, UInt16) :: Boolean
-36 eq(String NULL, UInt16 NULL) :: Boolean NULL
-37 eq(UInt16, String) :: Boolean
-38 eq(UInt16 NULL, String NULL) :: Boolean NULL
-39 eq(String, UInt32) :: Boolean
-40 eq(String NULL, UInt32 NULL) :: Boolean NULL
-41 eq(UInt32, String) :: Boolean
-42 eq(UInt32 NULL, String NULL) :: Boolean NULL
-43 eq(String, UInt64) :: Boolean
-44 eq(String NULL, UInt64 NULL) :: Boolean NULL
-45 eq(UInt64, String) :: Boolean
-46 eq(UInt64 NULL, String NULL) :: Boolean NULL
-47 eq(String, Int8) :: Boolean
-48 eq(String NULL, Int8 NULL) :: Boolean NULL
-49 eq(Int8, String) :: Boolean
-50 eq(Int8 NULL, String NULL) :: Boolean NULL
-51 eq(String, Int16) :: Boolean
-52 eq(String NULL, Int16 NULL) :: Boolean NULL
-53 eq(Int16, String) :: Boolean
-54 eq(Int16 NULL, String NULL) :: Boolean NULL
-55 eq(String, Int32) :: Boolean
-56 eq(String NULL, Int32 NULL) :: Boolean NULL
-57 eq(Int32, String) :: Boolean
-58 eq(Int32 NULL, String NULL) :: Boolean NULL
-59 eq(String, Int64) :: Boolean
-60 eq(String NULL, Int64 NULL) :: Boolean NULL
-61 eq(Int64, String) :: Boolean
-62 eq(Int64 NULL, String NULL) :: Boolean NULL
-63 eq(String, Float32) :: Boolean
-64 eq(String NULL, Float32 NULL) :: Boolean NULL
-65 eq(Float32, String) :: Boolean
-66 eq(Float32 NULL, String NULL) :: Boolean NULL
-67 eq(String, Float64) :: Boolean
-68 eq(String NULL, Float64 NULL) :: Boolean NULL
-69 eq(Float64, String) :: Boolean
-70 eq(Float64 NULL, String NULL) :: Boolean NULL
-71 eq(Boolean, Boolean) :: Boolean
-72 eq(Boolean NULL, Boolean NULL) :: Boolean NULL
-73 eq(Array(Nothing), Array(Nothing)) :: Boolean
-74 eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-75 eq(Array(T0), Array(T0)) :: Boolean
-76 eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-77 eq FACTORY
-78 eq(Interval, Interval) :: Boolean
-79 eq(Interval NULL, Interval NULL) :: Boolean NULL
-80 eq(Bitmap, Bitmap) :: Boolean
-81 eq(Bitmap NULL, Bitmap NULL) :: Boolean NULL
+10 eq(Timestamp_Ntz, Timestamp_Ntz) :: Boolean
+11 eq(Timestamp_Ntz NULL, Timestamp_Ntz NULL) :: Boolean NULL
+12 eq(UInt8, UInt8) :: Boolean
+13 eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+14 eq(Int8, Int8) :: Boolean
+15 eq(Int8 NULL, Int8 NULL) :: Boolean NULL
+16 eq(UInt16, UInt16) :: Boolean
+17 eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+18 eq(Int16, Int16) :: Boolean
+19 eq(Int16 NULL, Int16 NULL) :: Boolean NULL
+20 eq(UInt32, UInt32) :: Boolean
+21 eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+22 eq(Int32, Int32) :: Boolean
+23 eq(Int32 NULL, Int32 NULL) :: Boolean NULL
+24 eq(UInt64, UInt64) :: Boolean
+25 eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+26 eq(Int64, Int64) :: Boolean
+27 eq(Int64 NULL, Int64 NULL) :: Boolean NULL
+28 eq FACTORY
+29 eq(Float32, Float32) :: Boolean
+30 eq(Float32 NULL, Float32 NULL) :: Boolean NULL
+31 eq(Float64, Float64) :: Boolean
+32 eq(Float64 NULL, Float64 NULL) :: Boolean NULL
+33 eq(String, UInt8) :: Boolean
+34 eq(String NULL, UInt8 NULL) :: Boolean NULL
+35 eq(UInt8, String) :: Boolean
+36 eq(UInt8 NULL, String NULL) :: Boolean NULL
+37 eq(String, UInt16) :: Boolean
+38 eq(String NULL, UInt16 NULL) :: Boolean NULL
+39 eq(UInt16, String) :: Boolean
+40 eq(UInt16 NULL, String NULL) :: Boolean NULL
+41 eq(String, UInt32) :: Boolean
+42 eq(String NULL, UInt32 NULL) :: Boolean NULL
+43 eq(UInt32, String) :: Boolean
+44 eq(UInt32 NULL, String NULL) :: Boolean NULL
+45 eq(String, UInt64) :: Boolean
+46 eq(String NULL, UInt64 NULL) :: Boolean NULL
+47 eq(UInt64, String) :: Boolean
+48 eq(UInt64 NULL, String NULL) :: Boolean NULL
+49 eq(String, Int8) :: Boolean
+50 eq(String NULL, Int8 NULL) :: Boolean NULL
+51 eq(Int8, String) :: Boolean
+52 eq(Int8 NULL, String NULL) :: Boolean NULL
+53 eq(String, Int16) :: Boolean
+54 eq(String NULL, Int16 NULL) :: Boolean NULL
+55 eq(Int16, String) :: Boolean
+56 eq(Int16 NULL, String NULL) :: Boolean NULL
+57 eq(String, Int32) :: Boolean
+58 eq(String NULL, Int32 NULL) :: Boolean NULL
+59 eq(Int32, String) :: Boolean
+60 eq(Int32 NULL, String NULL) :: Boolean NULL
+61 eq(String, Int64) :: Boolean
+62 eq(String NULL, Int64 NULL) :: Boolean NULL
+63 eq(Int64, String) :: Boolean
+64 eq(Int64 NULL, String NULL) :: Boolean NULL
+65 eq(String, Float32) :: Boolean
+66 eq(String NULL, Float32 NULL) :: Boolean NULL
+67 eq(Float32, String) :: Boolean
+68 eq(Float32 NULL, String NULL) :: Boolean NULL
+69 eq(String, Float64) :: Boolean
+70 eq(String NULL, Float64 NULL) :: Boolean NULL
+71 eq(Float64, String) :: Boolean
+72 eq(Float64 NULL, String NULL) :: Boolean NULL
+73 eq(Boolean, Boolean) :: Boolean
+74 eq(Boolean NULL, Boolean NULL) :: Boolean NULL
+75 eq(Array(Nothing), Array(Nothing)) :: Boolean
+76 eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+77 eq(Array(T0), Array(T0)) :: Boolean
+78 eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+79 eq FACTORY
+80 eq(Interval, Interval) :: Boolean
+81 eq(Interval NULL, Interval NULL) :: Boolean NULL
+82 eq(Bitmap, Bitmap) :: Boolean
+83 eq(Bitmap NULL, Bitmap NULL) :: Boolean NULL
 0 exp(UInt8) :: Float64
 1 exp(UInt8 NULL) :: Float64 NULL
 2 exp(UInt16) :: Float64
@@ -2067,76 +2069,78 @@ Functions overloads:
 7 gt(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 gt(TimestampTz, TimestampTz) :: Boolean
 9 gt(TimestampTz NULL, TimestampTz NULL) :: Boolean NULL
-10 gt(UInt8, UInt8) :: Boolean
-11 gt(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-12 gt(Int8, Int8) :: Boolean
-13 gt(Int8 NULL, Int8 NULL) :: Boolean NULL
-14 gt(UInt16, UInt16) :: Boolean
-15 gt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-16 gt(Int16, Int16) :: Boolean
-17 gt(Int16 NULL, Int16 NULL) :: Boolean NULL
-18 gt(UInt32, UInt32) :: Boolean
-19 gt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-20 gt(Int32, Int32) :: Boolean
-21 gt(Int32 NULL, Int32 NULL) :: Boolean NULL
-22 gt(UInt64, UInt64) :: Boolean
-23 gt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-24 gt(Int64, Int64) :: Boolean
-25 gt(Int64 NULL, Int64 NULL) :: Boolean NULL
-26 gt FACTORY
-27 gt(Float32, Float32) :: Boolean
-28 gt(Float32 NULL, Float32 NULL) :: Boolean NULL
-29 gt(Float64, Float64) :: Boolean
-30 gt(Float64 NULL, Float64 NULL) :: Boolean NULL
-31 gt(String, UInt8) :: Boolean
-32 gt(String NULL, UInt8 NULL) :: Boolean NULL
-33 gt(UInt8, String) :: Boolean
-34 gt(UInt8 NULL, String NULL) :: Boolean NULL
-35 gt(String, UInt16) :: Boolean
-36 gt(String NULL, UInt16 NULL) :: Boolean NULL
-37 gt(UInt16, String) :: Boolean
-38 gt(UInt16 NULL, String NULL) :: Boolean NULL
-39 gt(String, UInt32) :: Boolean
-40 gt(String NULL, UInt32 NULL) :: Boolean NULL
-41 gt(UInt32, String) :: Boolean
-42 gt(UInt32 NULL, String NULL) :: Boolean NULL
-43 gt(String, UInt64) :: Boolean
-44 gt(String NULL, UInt64 NULL) :: Boolean NULL
-45 gt(UInt64, String) :: Boolean
-46 gt(UInt64 NULL, String NULL) :: Boolean NULL
-47 gt(String, Int8) :: Boolean
-48 gt(String NULL, Int8 NULL) :: Boolean NULL
-49 gt(Int8, String) :: Boolean
-50 gt(Int8 NULL, String NULL) :: Boolean NULL
-51 gt(String, Int16) :: Boolean
-52 gt(String NULL, Int16 NULL) :: Boolean NULL
-53 gt(Int16, String) :: Boolean
-54 gt(Int16 NULL, String NULL) :: Boolean NULL
-55 gt(String, Int32) :: Boolean
-56 gt(String NULL, Int32 NULL) :: Boolean NULL
-57 gt(Int32, String) :: Boolean
-58 gt(Int32 NULL, String NULL) :: Boolean NULL
-59 gt(String, Int64) :: Boolean
-60 gt(String NULL, Int64 NULL) :: Boolean NULL
-61 gt(Int64, String) :: Boolean
-62 gt(Int64 NULL, String NULL) :: Boolean NULL
-63 gt(String, Float32) :: Boolean
-64 gt(String NULL, Float32 NULL) :: Boolean NULL
-65 gt(Float32, String) :: Boolean
-66 gt(Float32 NULL, String NULL) :: Boolean NULL
-67 gt(String, Float64) :: Boolean
-68 gt(String NULL, Float64 NULL) :: Boolean NULL
-69 gt(Float64, String) :: Boolean
-70 gt(Float64 NULL, String NULL) :: Boolean NULL
-71 gt(Boolean, Boolean) :: Boolean
-72 gt(Boolean NULL, Boolean NULL) :: Boolean NULL
-73 gt(Array(Nothing), Array(Nothing)) :: Boolean
-74 gt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-75 gt(Array(T0), Array(T0)) :: Boolean
-76 gt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-77 gt FACTORY
-78 gt(Interval, Interval) :: Boolean
-79 gt(Interval NULL, Interval NULL) :: Boolean NULL
+10 gt(Timestamp_Ntz, Timestamp_Ntz) :: Boolean
+11 gt(Timestamp_Ntz NULL, Timestamp_Ntz NULL) :: Boolean NULL
+12 gt(UInt8, UInt8) :: Boolean
+13 gt(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+14 gt(Int8, Int8) :: Boolean
+15 gt(Int8 NULL, Int8 NULL) :: Boolean NULL
+16 gt(UInt16, UInt16) :: Boolean
+17 gt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+18 gt(Int16, Int16) :: Boolean
+19 gt(Int16 NULL, Int16 NULL) :: Boolean NULL
+20 gt(UInt32, UInt32) :: Boolean
+21 gt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+22 gt(Int32, Int32) :: Boolean
+23 gt(Int32 NULL, Int32 NULL) :: Boolean NULL
+24 gt(UInt64, UInt64) :: Boolean
+25 gt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+26 gt(Int64, Int64) :: Boolean
+27 gt(Int64 NULL, Int64 NULL) :: Boolean NULL
+28 gt FACTORY
+29 gt(Float32, Float32) :: Boolean
+30 gt(Float32 NULL, Float32 NULL) :: Boolean NULL
+31 gt(Float64, Float64) :: Boolean
+32 gt(Float64 NULL, Float64 NULL) :: Boolean NULL
+33 gt(String, UInt8) :: Boolean
+34 gt(String NULL, UInt8 NULL) :: Boolean NULL
+35 gt(UInt8, String) :: Boolean
+36 gt(UInt8 NULL, String NULL) :: Boolean NULL
+37 gt(String, UInt16) :: Boolean
+38 gt(String NULL, UInt16 NULL) :: Boolean NULL
+39 gt(UInt16, String) :: Boolean
+40 gt(UInt16 NULL, String NULL) :: Boolean NULL
+41 gt(String, UInt32) :: Boolean
+42 gt(String NULL, UInt32 NULL) :: Boolean NULL
+43 gt(UInt32, String) :: Boolean
+44 gt(UInt32 NULL, String NULL) :: Boolean NULL
+45 gt(String, UInt64) :: Boolean
+46 gt(String NULL, UInt64 NULL) :: Boolean NULL
+47 gt(UInt64, String) :: Boolean
+48 gt(UInt64 NULL, String NULL) :: Boolean NULL
+49 gt(String, Int8) :: Boolean
+50 gt(String NULL, Int8 NULL) :: Boolean NULL
+51 gt(Int8, String) :: Boolean
+52 gt(Int8 NULL, String NULL) :: Boolean NULL
+53 gt(String, Int16) :: Boolean
+54 gt(String NULL, Int16 NULL) :: Boolean NULL
+55 gt(Int16, String) :: Boolean
+56 gt(Int16 NULL, String NULL) :: Boolean NULL
+57 gt(String, Int32) :: Boolean
+58 gt(String NULL, Int32 NULL) :: Boolean NULL
+59 gt(Int32, String) :: Boolean
+60 gt(Int32 NULL, String NULL) :: Boolean NULL
+61 gt(String, Int64) :: Boolean
+62 gt(String NULL, Int64 NULL) :: Boolean NULL
+63 gt(Int64, String) :: Boolean
+64 gt(Int64 NULL, String NULL) :: Boolean NULL
+65 gt(String, Float32) :: Boolean
+66 gt(String NULL, Float32 NULL) :: Boolean NULL
+67 gt(Float32, String) :: Boolean
+68 gt(Float32 NULL, String NULL) :: Boolean NULL
+69 gt(String, Float64) :: Boolean
+70 gt(String NULL, Float64 NULL) :: Boolean NULL
+71 gt(Float64, String) :: Boolean
+72 gt(Float64 NULL, String NULL) :: Boolean NULL
+73 gt(Boolean, Boolean) :: Boolean
+74 gt(Boolean NULL, Boolean NULL) :: Boolean NULL
+75 gt(Array(Nothing), Array(Nothing)) :: Boolean
+76 gt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+77 gt(Array(T0), Array(T0)) :: Boolean
+78 gt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+79 gt FACTORY
+80 gt(Interval, Interval) :: Boolean
+81 gt(Interval NULL, Interval NULL) :: Boolean NULL
 0 gte(Variant, Variant) :: Boolean
 1 gte(Variant NULL, Variant NULL) :: Boolean NULL
 2 gte(String, String) :: Boolean
@@ -2147,76 +2151,78 @@ Functions overloads:
 7 gte(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 gte(TimestampTz, TimestampTz) :: Boolean
 9 gte(TimestampTz NULL, TimestampTz NULL) :: Boolean NULL
-10 gte(UInt8, UInt8) :: Boolean
-11 gte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-12 gte(Int8, Int8) :: Boolean
-13 gte(Int8 NULL, Int8 NULL) :: Boolean NULL
-14 gte(UInt16, UInt16) :: Boolean
-15 gte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-16 gte(Int16, Int16) :: Boolean
-17 gte(Int16 NULL, Int16 NULL) :: Boolean NULL
-18 gte(UInt32, UInt32) :: Boolean
-19 gte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-20 gte(Int32, Int32) :: Boolean
-21 gte(Int32 NULL, Int32 NULL) :: Boolean NULL
-22 gte(UInt64, UInt64) :: Boolean
-23 gte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-24 gte(Int64, Int64) :: Boolean
-25 gte(Int64 NULL, Int64 NULL) :: Boolean NULL
-26 gte FACTORY
-27 gte(Float32, Float32) :: Boolean
-28 gte(Float32 NULL, Float32 NULL) :: Boolean NULL
-29 gte(Float64, Float64) :: Boolean
-30 gte(Float64 NULL, Float64 NULL) :: Boolean NULL
-31 gte(String, UInt8) :: Boolean
-32 gte(String NULL, UInt8 NULL) :: Boolean NULL
-33 gte(UInt8, String) :: Boolean
-34 gte(UInt8 NULL, String NULL) :: Boolean NULL
-35 gte(String, UInt16) :: Boolean
-36 gte(String NULL, UInt16 NULL) :: Boolean NULL
-37 gte(UInt16, String) :: Boolean
-38 gte(UInt16 NULL, String NULL) :: Boolean NULL
-39 gte(String, UInt32) :: Boolean
-40 gte(String NULL, UInt32 NULL) :: Boolean NULL
-41 gte(UInt32, String) :: Boolean
-42 gte(UInt32 NULL, String NULL) :: Boolean NULL
-43 gte(String, UInt64) :: Boolean
-44 gte(String NULL, UInt64 NULL) :: Boolean NULL
-45 gte(UInt64, String) :: Boolean
-46 gte(UInt64 NULL, String NULL) :: Boolean NULL
-47 gte(String, Int8) :: Boolean
-48 gte(String NULL, Int8 NULL) :: Boolean NULL
-49 gte(Int8, String) :: Boolean
-50 gte(Int8 NULL, String NULL) :: Boolean NULL
-51 gte(String, Int16) :: Boolean
-52 gte(String NULL, Int16 NULL) :: Boolean NULL
-53 gte(Int16, String) :: Boolean
-54 gte(Int16 NULL, String NULL) :: Boolean NULL
-55 gte(String, Int32) :: Boolean
-56 gte(String NULL, Int32 NULL) :: Boolean NULL
-57 gte(Int32, String) :: Boolean
-58 gte(Int32 NULL, String NULL) :: Boolean NULL
-59 gte(String, Int64) :: Boolean
-60 gte(String NULL, Int64 NULL) :: Boolean NULL
-61 gte(Int64, String) :: Boolean
-62 gte(Int64 NULL, String NULL) :: Boolean NULL
-63 gte(String, Float32) :: Boolean
-64 gte(String NULL, Float32 NULL) :: Boolean NULL
-65 gte(Float32, String) :: Boolean
-66 gte(Float32 NULL, String NULL) :: Boolean NULL
-67 gte(String, Float64) :: Boolean
-68 gte(String NULL, Float64 NULL) :: Boolean NULL
-69 gte(Float64, String) :: Boolean
-70 gte(Float64 NULL, String NULL) :: Boolean NULL
-71 gte(Boolean, Boolean) :: Boolean
-72 gte(Boolean NULL, Boolean NULL) :: Boolean NULL
-73 gte(Array(Nothing), Array(Nothing)) :: Boolean
-74 gte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-75 gte(Array(T0), Array(T0)) :: Boolean
-76 gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-77 gte FACTORY
-78 gte(Interval, Interval) :: Boolean
-79 gte(Interval NULL, Interval NULL) :: Boolean NULL
+10 gte(Timestamp_Ntz, Timestamp_Ntz) :: Boolean
+11 gte(Timestamp_Ntz NULL, Timestamp_Ntz NULL) :: Boolean NULL
+12 gte(UInt8, UInt8) :: Boolean
+13 gte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+14 gte(Int8, Int8) :: Boolean
+15 gte(Int8 NULL, Int8 NULL) :: Boolean NULL
+16 gte(UInt16, UInt16) :: Boolean
+17 gte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+18 gte(Int16, Int16) :: Boolean
+19 gte(Int16 NULL, Int16 NULL) :: Boolean NULL
+20 gte(UInt32, UInt32) :: Boolean
+21 gte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+22 gte(Int32, Int32) :: Boolean
+23 gte(Int32 NULL, Int32 NULL) :: Boolean NULL
+24 gte(UInt64, UInt64) :: Boolean
+25 gte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+26 gte(Int64, Int64) :: Boolean
+27 gte(Int64 NULL, Int64 NULL) :: Boolean NULL
+28 gte FACTORY
+29 gte(Float32, Float32) :: Boolean
+30 gte(Float32 NULL, Float32 NULL) :: Boolean NULL
+31 gte(Float64, Float64) :: Boolean
+32 gte(Float64 NULL, Float64 NULL) :: Boolean NULL
+33 gte(String, UInt8) :: Boolean
+34 gte(String NULL, UInt8 NULL) :: Boolean NULL
+35 gte(UInt8, String) :: Boolean
+36 gte(UInt8 NULL, String NULL) :: Boolean NULL
+37 gte(String, UInt16) :: Boolean
+38 gte(String NULL, UInt16 NULL) :: Boolean NULL
+39 gte(UInt16, String) :: Boolean
+40 gte(UInt16 NULL, String NULL) :: Boolean NULL
+41 gte(String, UInt32) :: Boolean
+42 gte(String NULL, UInt32 NULL) :: Boolean NULL
+43 gte(UInt32, String) :: Boolean
+44 gte(UInt32 NULL, String NULL) :: Boolean NULL
+45 gte(String, UInt64) :: Boolean
+46 gte(String NULL, UInt64 NULL) :: Boolean NULL
+47 gte(UInt64, String) :: Boolean
+48 gte(UInt64 NULL, String NULL) :: Boolean NULL
+49 gte(String, Int8) :: Boolean
+50 gte(String NULL, Int8 NULL) :: Boolean NULL
+51 gte(Int8, String) :: Boolean
+52 gte(Int8 NULL, String NULL) :: Boolean NULL
+53 gte(String, Int16) :: Boolean
+54 gte(String NULL, Int16 NULL) :: Boolean NULL
+55 gte(Int16, String) :: Boolean
+56 gte(Int16 NULL, String NULL) :: Boolean NULL
+57 gte(String, Int32) :: Boolean
+58 gte(String NULL, Int32 NULL) :: Boolean NULL
+59 gte(Int32, String) :: Boolean
+60 gte(Int32 NULL, String NULL) :: Boolean NULL
+61 gte(String, Int64) :: Boolean
+62 gte(String NULL, Int64 NULL) :: Boolean NULL
+63 gte(Int64, String) :: Boolean
+64 gte(Int64 NULL, String NULL) :: Boolean NULL
+65 gte(String, Float32) :: Boolean
+66 gte(String NULL, Float32 NULL) :: Boolean NULL
+67 gte(Float32, String) :: Boolean
+68 gte(Float32 NULL, String NULL) :: Boolean NULL
+69 gte(String, Float64) :: Boolean
+70 gte(String NULL, Float64 NULL) :: Boolean NULL
+71 gte(Float64, String) :: Boolean
+72 gte(Float64 NULL, String NULL) :: Boolean NULL
+73 gte(Boolean, Boolean) :: Boolean
+74 gte(Boolean NULL, Boolean NULL) :: Boolean NULL
+75 gte(Array(Nothing), Array(Nothing)) :: Boolean
+76 gte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+77 gte(Array(T0), Array(T0)) :: Boolean
+78 gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+79 gte FACTORY
+80 gte(Interval, Interval) :: Boolean
+81 gte(Interval NULL, Interval NULL) :: Boolean NULL
 0 h3_cell_area_m2(UInt64) :: Float64
 1 h3_cell_area_m2(UInt64 NULL) :: Float64 NULL
 0 h3_cell_area_rads2(UInt64) :: Float64
@@ -2553,76 +2559,78 @@ Functions overloads:
 7 lt(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 lt(TimestampTz, TimestampTz) :: Boolean
 9 lt(TimestampTz NULL, TimestampTz NULL) :: Boolean NULL
-10 lt(UInt8, UInt8) :: Boolean
-11 lt(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-12 lt(Int8, Int8) :: Boolean
-13 lt(Int8 NULL, Int8 NULL) :: Boolean NULL
-14 lt(UInt16, UInt16) :: Boolean
-15 lt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-16 lt(Int16, Int16) :: Boolean
-17 lt(Int16 NULL, Int16 NULL) :: Boolean NULL
-18 lt(UInt32, UInt32) :: Boolean
-19 lt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-20 lt(Int32, Int32) :: Boolean
-21 lt(Int32 NULL, Int32 NULL) :: Boolean NULL
-22 lt(UInt64, UInt64) :: Boolean
-23 lt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-24 lt(Int64, Int64) :: Boolean
-25 lt(Int64 NULL, Int64 NULL) :: Boolean NULL
-26 lt FACTORY
-27 lt(Float32, Float32) :: Boolean
-28 lt(Float32 NULL, Float32 NULL) :: Boolean NULL
-29 lt(Float64, Float64) :: Boolean
-30 lt(Float64 NULL, Float64 NULL) :: Boolean NULL
-31 lt(String, UInt8) :: Boolean
-32 lt(String NULL, UInt8 NULL) :: Boolean NULL
-33 lt(UInt8, String) :: Boolean
-34 lt(UInt8 NULL, String NULL) :: Boolean NULL
-35 lt(String, UInt16) :: Boolean
-36 lt(String NULL, UInt16 NULL) :: Boolean NULL
-37 lt(UInt16, String) :: Boolean
-38 lt(UInt16 NULL, String NULL) :: Boolean NULL
-39 lt(String, UInt32) :: Boolean
-40 lt(String NULL, UInt32 NULL) :: Boolean NULL
-41 lt(UInt32, String) :: Boolean
-42 lt(UInt32 NULL, String NULL) :: Boolean NULL
-43 lt(String, UInt64) :: Boolean
-44 lt(String NULL, UInt64 NULL) :: Boolean NULL
-45 lt(UInt64, String) :: Boolean
-46 lt(UInt64 NULL, String NULL) :: Boolean NULL
-47 lt(String, Int8) :: Boolean
-48 lt(String NULL, Int8 NULL) :: Boolean NULL
-49 lt(Int8, String) :: Boolean
-50 lt(Int8 NULL, String NULL) :: Boolean NULL
-51 lt(String, Int16) :: Boolean
-52 lt(String NULL, Int16 NULL) :: Boolean NULL
-53 lt(Int16, String) :: Boolean
-54 lt(Int16 NULL, String NULL) :: Boolean NULL
-55 lt(String, Int32) :: Boolean
-56 lt(String NULL, Int32 NULL) :: Boolean NULL
-57 lt(Int32, String) :: Boolean
-58 lt(Int32 NULL, String NULL) :: Boolean NULL
-59 lt(String, Int64) :: Boolean
-60 lt(String NULL, Int64 NULL) :: Boolean NULL
-61 lt(Int64, String) :: Boolean
-62 lt(Int64 NULL, String NULL) :: Boolean NULL
-63 lt(String, Float32) :: Boolean
-64 lt(String NULL, Float32 NULL) :: Boolean NULL
-65 lt(Float32, String) :: Boolean
-66 lt(Float32 NULL, String NULL) :: Boolean NULL
-67 lt(String, Float64) :: Boolean
-68 lt(String NULL, Float64 NULL) :: Boolean NULL
-69 lt(Float64, String) :: Boolean
-70 lt(Float64 NULL, String NULL) :: Boolean NULL
-71 lt(Boolean, Boolean) :: Boolean
-72 lt(Boolean NULL, Boolean NULL) :: Boolean NULL
-73 lt(Array(Nothing), Array(Nothing)) :: Boolean
-74 lt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-75 lt(Array(T0), Array(T0)) :: Boolean
-76 lt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-77 lt FACTORY
-78 lt(Interval, Interval) :: Boolean
-79 lt(Interval NULL, Interval NULL) :: Boolean NULL
+10 lt(Timestamp_Ntz, Timestamp_Ntz) :: Boolean
+11 lt(Timestamp_Ntz NULL, Timestamp_Ntz NULL) :: Boolean NULL
+12 lt(UInt8, UInt8) :: Boolean
+13 lt(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+14 lt(Int8, Int8) :: Boolean
+15 lt(Int8 NULL, Int8 NULL) :: Boolean NULL
+16 lt(UInt16, UInt16) :: Boolean
+17 lt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+18 lt(Int16, Int16) :: Boolean
+19 lt(Int16 NULL, Int16 NULL) :: Boolean NULL
+20 lt(UInt32, UInt32) :: Boolean
+21 lt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+22 lt(Int32, Int32) :: Boolean
+23 lt(Int32 NULL, Int32 NULL) :: Boolean NULL
+24 lt(UInt64, UInt64) :: Boolean
+25 lt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+26 lt(Int64, Int64) :: Boolean
+27 lt(Int64 NULL, Int64 NULL) :: Boolean NULL
+28 lt FACTORY
+29 lt(Float32, Float32) :: Boolean
+30 lt(Float32 NULL, Float32 NULL) :: Boolean NULL
+31 lt(Float64, Float64) :: Boolean
+32 lt(Float64 NULL, Float64 NULL) :: Boolean NULL
+33 lt(String, UInt8) :: Boolean
+34 lt(String NULL, UInt8 NULL) :: Boolean NULL
+35 lt(UInt8, String) :: Boolean
+36 lt(UInt8 NULL, String NULL) :: Boolean NULL
+37 lt(String, UInt16) :: Boolean
+38 lt(String NULL, UInt16 NULL) :: Boolean NULL
+39 lt(UInt16, String) :: Boolean
+40 lt(UInt16 NULL, String NULL) :: Boolean NULL
+41 lt(String, UInt32) :: Boolean
+42 lt(String NULL, UInt32 NULL) :: Boolean NULL
+43 lt(UInt32, String) :: Boolean
+44 lt(UInt32 NULL, String NULL) :: Boolean NULL
+45 lt(String, UInt64) :: Boolean
+46 lt(String NULL, UInt64 NULL) :: Boolean NULL
+47 lt(UInt64, String) :: Boolean
+48 lt(UInt64 NULL, String NULL) :: Boolean NULL
+49 lt(String, Int8) :: Boolean
+50 lt(String NULL, Int8 NULL) :: Boolean NULL
+51 lt(Int8, String) :: Boolean
+52 lt(Int8 NULL, String NULL) :: Boolean NULL
+53 lt(String, Int16) :: Boolean
+54 lt(String NULL, Int16 NULL) :: Boolean NULL
+55 lt(Int16, String) :: Boolean
+56 lt(Int16 NULL, String NULL) :: Boolean NULL
+57 lt(String, Int32) :: Boolean
+58 lt(String NULL, Int32 NULL) :: Boolean NULL
+59 lt(Int32, String) :: Boolean
+60 lt(Int32 NULL, String NULL) :: Boolean NULL
+61 lt(String, Int64) :: Boolean
+62 lt(String NULL, Int64 NULL) :: Boolean NULL
+63 lt(Int64, String) :: Boolean
+64 lt(Int64 NULL, String NULL) :: Boolean NULL
+65 lt(String, Float32) :: Boolean
+66 lt(String NULL, Float32 NULL) :: Boolean NULL
+67 lt(Float32, String) :: Boolean
+68 lt(Float32 NULL, String NULL) :: Boolean NULL
+69 lt(String, Float64) :: Boolean
+70 lt(String NULL, Float64 NULL) :: Boolean NULL
+71 lt(Float64, String) :: Boolean
+72 lt(Float64 NULL, String NULL) :: Boolean NULL
+73 lt(Boolean, Boolean) :: Boolean
+74 lt(Boolean NULL, Boolean NULL) :: Boolean NULL
+75 lt(Array(Nothing), Array(Nothing)) :: Boolean
+76 lt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+77 lt(Array(T0), Array(T0)) :: Boolean
+78 lt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+79 lt FACTORY
+80 lt(Interval, Interval) :: Boolean
+81 lt(Interval NULL, Interval NULL) :: Boolean NULL
 0 lte(Variant, Variant) :: Boolean
 1 lte(Variant NULL, Variant NULL) :: Boolean NULL
 2 lte(String, String) :: Boolean
@@ -2633,76 +2641,78 @@ Functions overloads:
 7 lte(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 lte(TimestampTz, TimestampTz) :: Boolean
 9 lte(TimestampTz NULL, TimestampTz NULL) :: Boolean NULL
-10 lte(UInt8, UInt8) :: Boolean
-11 lte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-12 lte(Int8, Int8) :: Boolean
-13 lte(Int8 NULL, Int8 NULL) :: Boolean NULL
-14 lte(UInt16, UInt16) :: Boolean
-15 lte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-16 lte(Int16, Int16) :: Boolean
-17 lte(Int16 NULL, Int16 NULL) :: Boolean NULL
-18 lte(UInt32, UInt32) :: Boolean
-19 lte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-20 lte(Int32, Int32) :: Boolean
-21 lte(Int32 NULL, Int32 NULL) :: Boolean NULL
-22 lte(UInt64, UInt64) :: Boolean
-23 lte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-24 lte(Int64, Int64) :: Boolean
-25 lte(Int64 NULL, Int64 NULL) :: Boolean NULL
-26 lte FACTORY
-27 lte(Float32, Float32) :: Boolean
-28 lte(Float32 NULL, Float32 NULL) :: Boolean NULL
-29 lte(Float64, Float64) :: Boolean
-30 lte(Float64 NULL, Float64 NULL) :: Boolean NULL
-31 lte(String, UInt8) :: Boolean
-32 lte(String NULL, UInt8 NULL) :: Boolean NULL
-33 lte(UInt8, String) :: Boolean
-34 lte(UInt8 NULL, String NULL) :: Boolean NULL
-35 lte(String, UInt16) :: Boolean
-36 lte(String NULL, UInt16 NULL) :: Boolean NULL
-37 lte(UInt16, String) :: Boolean
-38 lte(UInt16 NULL, String NULL) :: Boolean NULL
-39 lte(String, UInt32) :: Boolean
-40 lte(String NULL, UInt32 NULL) :: Boolean NULL
-41 lte(UInt32, String) :: Boolean
-42 lte(UInt32 NULL, String NULL) :: Boolean NULL
-43 lte(String, UInt64) :: Boolean
-44 lte(String NULL, UInt64 NULL) :: Boolean NULL
-45 lte(UInt64, String) :: Boolean
-46 lte(UInt64 NULL, String NULL) :: Boolean NULL
-47 lte(String, Int8) :: Boolean
-48 lte(String NULL, Int8 NULL) :: Boolean NULL
-49 lte(Int8, String) :: Boolean
-50 lte(Int8 NULL, String NULL) :: Boolean NULL
-51 lte(String, Int16) :: Boolean
-52 lte(String NULL, Int16 NULL) :: Boolean NULL
-53 lte(Int16, String) :: Boolean
-54 lte(Int16 NULL, String NULL) :: Boolean NULL
-55 lte(String, Int32) :: Boolean
-56 lte(String NULL, Int32 NULL) :: Boolean NULL
-57 lte(Int32, String) :: Boolean
-58 lte(Int32 NULL, String NULL) :: Boolean NULL
-59 lte(String, Int64) :: Boolean
-60 lte(String NULL, Int64 NULL) :: Boolean NULL
-61 lte(Int64, String) :: Boolean
-62 lte(Int64 NULL, String NULL) :: Boolean NULL
-63 lte(String, Float32) :: Boolean
-64 lte(String NULL, Float32 NULL) :: Boolean NULL
-65 lte(Float32, String) :: Boolean
-66 lte(Float32 NULL, String NULL) :: Boolean NULL
-67 lte(String, Float64) :: Boolean
-68 lte(String NULL, Float64 NULL) :: Boolean NULL
-69 lte(Float64, String) :: Boolean
-70 lte(Float64 NULL, String NULL) :: Boolean NULL
-71 lte(Boolean, Boolean) :: Boolean
-72 lte(Boolean NULL, Boolean NULL) :: Boolean NULL
-73 lte(Array(Nothing), Array(Nothing)) :: Boolean
-74 lte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-75 lte(Array(T0), Array(T0)) :: Boolean
-76 lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-77 lte FACTORY
-78 lte(Interval, Interval) :: Boolean
-79 lte(Interval NULL, Interval NULL) :: Boolean NULL
+10 lte(Timestamp_Ntz, Timestamp_Ntz) :: Boolean
+11 lte(Timestamp_Ntz NULL, Timestamp_Ntz NULL) :: Boolean NULL
+12 lte(UInt8, UInt8) :: Boolean
+13 lte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+14 lte(Int8, Int8) :: Boolean
+15 lte(Int8 NULL, Int8 NULL) :: Boolean NULL
+16 lte(UInt16, UInt16) :: Boolean
+17 lte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+18 lte(Int16, Int16) :: Boolean
+19 lte(Int16 NULL, Int16 NULL) :: Boolean NULL
+20 lte(UInt32, UInt32) :: Boolean
+21 lte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+22 lte(Int32, Int32) :: Boolean
+23 lte(Int32 NULL, Int32 NULL) :: Boolean NULL
+24 lte(UInt64, UInt64) :: Boolean
+25 lte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+26 lte(Int64, Int64) :: Boolean
+27 lte(Int64 NULL, Int64 NULL) :: Boolean NULL
+28 lte FACTORY
+29 lte(Float32, Float32) :: Boolean
+30 lte(Float32 NULL, Float32 NULL) :: Boolean NULL
+31 lte(Float64, Float64) :: Boolean
+32 lte(Float64 NULL, Float64 NULL) :: Boolean NULL
+33 lte(String, UInt8) :: Boolean
+34 lte(String NULL, UInt8 NULL) :: Boolean NULL
+35 lte(UInt8, String) :: Boolean
+36 lte(UInt8 NULL, String NULL) :: Boolean NULL
+37 lte(String, UInt16) :: Boolean
+38 lte(String NULL, UInt16 NULL) :: Boolean NULL
+39 lte(UInt16, String) :: Boolean
+40 lte(UInt16 NULL, String NULL) :: Boolean NULL
+41 lte(String, UInt32) :: Boolean
+42 lte(String NULL, UInt32 NULL) :: Boolean NULL
+43 lte(UInt32, String) :: Boolean
+44 lte(UInt32 NULL, String NULL) :: Boolean NULL
+45 lte(String, UInt64) :: Boolean
+46 lte(String NULL, UInt64 NULL) :: Boolean NULL
+47 lte(UInt64, String) :: Boolean
+48 lte(UInt64 NULL, String NULL) :: Boolean NULL
+49 lte(String, Int8) :: Boolean
+50 lte(String NULL, Int8 NULL) :: Boolean NULL
+51 lte(Int8, String) :: Boolean
+52 lte(Int8 NULL, String NULL) :: Boolean NULL
+53 lte(String, Int16) :: Boolean
+54 lte(String NULL, Int16 NULL) :: Boolean NULL
+55 lte(Int16, String) :: Boolean
+56 lte(Int16 NULL, String NULL) :: Boolean NULL
+57 lte(String, Int32) :: Boolean
+58 lte(String NULL, Int32 NULL) :: Boolean NULL
+59 lte(Int32, String) :: Boolean
+60 lte(Int32 NULL, String NULL) :: Boolean NULL
+61 lte(String, Int64) :: Boolean
+62 lte(String NULL, Int64 NULL) :: Boolean NULL
+63 lte(Int64, String) :: Boolean
+64 lte(Int64 NULL, String NULL) :: Boolean NULL
+65 lte(String, Float32) :: Boolean
+66 lte(String NULL, Float32 NULL) :: Boolean NULL
+67 lte(Float32, String) :: Boolean
+68 lte(Float32 NULL, String NULL) :: Boolean NULL
+69 lte(String, Float64) :: Boolean
+70 lte(String NULL, Float64 NULL) :: Boolean NULL
+71 lte(Float64, String) :: Boolean
+72 lte(Float64 NULL, String NULL) :: Boolean NULL
+73 lte(Boolean, Boolean) :: Boolean
+74 lte(Boolean NULL, Boolean NULL) :: Boolean NULL
+75 lte(Array(Nothing), Array(Nothing)) :: Boolean
+76 lte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+77 lte(Array(T0), Array(T0)) :: Boolean
+78 lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+79 lte FACTORY
+80 lte(Interval, Interval) :: Boolean
+81 lte(Interval NULL, Interval NULL) :: Boolean NULL
 0 ltrim(String) :: String
 1 ltrim(String NULL) :: String NULL
 2 ltrim(String, String) :: String
@@ -3409,78 +3419,80 @@ Functions overloads:
 7 noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 noteq(TimestampTz, TimestampTz) :: Boolean
 9 noteq(TimestampTz NULL, TimestampTz NULL) :: Boolean NULL
-10 noteq(UInt8, UInt8) :: Boolean
-11 noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-12 noteq(Int8, Int8) :: Boolean
-13 noteq(Int8 NULL, Int8 NULL) :: Boolean NULL
-14 noteq(UInt16, UInt16) :: Boolean
-15 noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-16 noteq(Int16, Int16) :: Boolean
-17 noteq(Int16 NULL, Int16 NULL) :: Boolean NULL
-18 noteq(UInt32, UInt32) :: Boolean
-19 noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-20 noteq(Int32, Int32) :: Boolean
-21 noteq(Int32 NULL, Int32 NULL) :: Boolean NULL
-22 noteq(UInt64, UInt64) :: Boolean
-23 noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-24 noteq(Int64, Int64) :: Boolean
-25 noteq(Int64 NULL, Int64 NULL) :: Boolean NULL
-26 noteq FACTORY
-27 noteq(Float32, Float32) :: Boolean
-28 noteq(Float32 NULL, Float32 NULL) :: Boolean NULL
-29 noteq(Float64, Float64) :: Boolean
-30 noteq(Float64 NULL, Float64 NULL) :: Boolean NULL
-31 noteq(String, UInt8) :: Boolean
-32 noteq(String NULL, UInt8 NULL) :: Boolean NULL
-33 noteq(UInt8, String) :: Boolean
-34 noteq(UInt8 NULL, String NULL) :: Boolean NULL
-35 noteq(String, UInt16) :: Boolean
-36 noteq(String NULL, UInt16 NULL) :: Boolean NULL
-37 noteq(UInt16, String) :: Boolean
-38 noteq(UInt16 NULL, String NULL) :: Boolean NULL
-39 noteq(String, UInt32) :: Boolean
-40 noteq(String NULL, UInt32 NULL) :: Boolean NULL
-41 noteq(UInt32, String) :: Boolean
-42 noteq(UInt32 NULL, String NULL) :: Boolean NULL
-43 noteq(String, UInt64) :: Boolean
-44 noteq(String NULL, UInt64 NULL) :: Boolean NULL
-45 noteq(UInt64, String) :: Boolean
-46 noteq(UInt64 NULL, String NULL) :: Boolean NULL
-47 noteq(String, Int8) :: Boolean
-48 noteq(String NULL, Int8 NULL) :: Boolean NULL
-49 noteq(Int8, String) :: Boolean
-50 noteq(Int8 NULL, String NULL) :: Boolean NULL
-51 noteq(String, Int16) :: Boolean
-52 noteq(String NULL, Int16 NULL) :: Boolean NULL
-53 noteq(Int16, String) :: Boolean
-54 noteq(Int16 NULL, String NULL) :: Boolean NULL
-55 noteq(String, Int32) :: Boolean
-56 noteq(String NULL, Int32 NULL) :: Boolean NULL
-57 noteq(Int32, String) :: Boolean
-58 noteq(Int32 NULL, String NULL) :: Boolean NULL
-59 noteq(String, Int64) :: Boolean
-60 noteq(String NULL, Int64 NULL) :: Boolean NULL
-61 noteq(Int64, String) :: Boolean
-62 noteq(Int64 NULL, String NULL) :: Boolean NULL
-63 noteq(String, Float32) :: Boolean
-64 noteq(String NULL, Float32 NULL) :: Boolean NULL
-65 noteq(Float32, String) :: Boolean
-66 noteq(Float32 NULL, String NULL) :: Boolean NULL
-67 noteq(String, Float64) :: Boolean
-68 noteq(String NULL, Float64 NULL) :: Boolean NULL
-69 noteq(Float64, String) :: Boolean
-70 noteq(Float64 NULL, String NULL) :: Boolean NULL
-71 noteq(Boolean, Boolean) :: Boolean
-72 noteq(Boolean NULL, Boolean NULL) :: Boolean NULL
-73 noteq(Array(Nothing), Array(Nothing)) :: Boolean
-74 noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-75 noteq(Array(T0), Array(T0)) :: Boolean
-76 noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-77 noteq FACTORY
-78 noteq(Interval, Interval) :: Boolean
-79 noteq(Interval NULL, Interval NULL) :: Boolean NULL
-80 noteq(Bitmap, Bitmap) :: Boolean
-81 noteq(Bitmap NULL, Bitmap NULL) :: Boolean NULL
+10 noteq(Timestamp_Ntz, Timestamp_Ntz) :: Boolean
+11 noteq(Timestamp_Ntz NULL, Timestamp_Ntz NULL) :: Boolean NULL
+12 noteq(UInt8, UInt8) :: Boolean
+13 noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+14 noteq(Int8, Int8) :: Boolean
+15 noteq(Int8 NULL, Int8 NULL) :: Boolean NULL
+16 noteq(UInt16, UInt16) :: Boolean
+17 noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+18 noteq(Int16, Int16) :: Boolean
+19 noteq(Int16 NULL, Int16 NULL) :: Boolean NULL
+20 noteq(UInt32, UInt32) :: Boolean
+21 noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+22 noteq(Int32, Int32) :: Boolean
+23 noteq(Int32 NULL, Int32 NULL) :: Boolean NULL
+24 noteq(UInt64, UInt64) :: Boolean
+25 noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+26 noteq(Int64, Int64) :: Boolean
+27 noteq(Int64 NULL, Int64 NULL) :: Boolean NULL
+28 noteq FACTORY
+29 noteq(Float32, Float32) :: Boolean
+30 noteq(Float32 NULL, Float32 NULL) :: Boolean NULL
+31 noteq(Float64, Float64) :: Boolean
+32 noteq(Float64 NULL, Float64 NULL) :: Boolean NULL
+33 noteq(String, UInt8) :: Boolean
+34 noteq(String NULL, UInt8 NULL) :: Boolean NULL
+35 noteq(UInt8, String) :: Boolean
+36 noteq(UInt8 NULL, String NULL) :: Boolean NULL
+37 noteq(String, UInt16) :: Boolean
+38 noteq(String NULL, UInt16 NULL) :: Boolean NULL
+39 noteq(UInt16, String) :: Boolean
+40 noteq(UInt16 NULL, String NULL) :: Boolean NULL
+41 noteq(String, UInt32) :: Boolean
+42 noteq(String NULL, UInt32 NULL) :: Boolean NULL
+43 noteq(UInt32, String) :: Boolean
+44 noteq(UInt32 NULL, String NULL) :: Boolean NULL
+45 noteq(String, UInt64) :: Boolean
+46 noteq(String NULL, UInt64 NULL) :: Boolean NULL
+47 noteq(UInt64, String) :: Boolean
+48 noteq(UInt64 NULL, String NULL) :: Boolean NULL
+49 noteq(String, Int8) :: Boolean
+50 noteq(String NULL, Int8 NULL) :: Boolean NULL
+51 noteq(Int8, String) :: Boolean
+52 noteq(Int8 NULL, String NULL) :: Boolean NULL
+53 noteq(String, Int16) :: Boolean
+54 noteq(String NULL, Int16 NULL) :: Boolean NULL
+55 noteq(Int16, String) :: Boolean
+56 noteq(Int16 NULL, String NULL) :: Boolean NULL
+57 noteq(String, Int32) :: Boolean
+58 noteq(String NULL, Int32 NULL) :: Boolean NULL
+59 noteq(Int32, String) :: Boolean
+60 noteq(Int32 NULL, String NULL) :: Boolean NULL
+61 noteq(String, Int64) :: Boolean
+62 noteq(String NULL, Int64 NULL) :: Boolean NULL
+63 noteq(Int64, String) :: Boolean
+64 noteq(Int64 NULL, String NULL) :: Boolean NULL
+65 noteq(String, Float32) :: Boolean
+66 noteq(String NULL, Float32 NULL) :: Boolean NULL
+67 noteq(Float32, String) :: Boolean
+68 noteq(Float32 NULL, String NULL) :: Boolean NULL
+69 noteq(String, Float64) :: Boolean
+70 noteq(String NULL, Float64 NULL) :: Boolean NULL
+71 noteq(Float64, String) :: Boolean
+72 noteq(Float64 NULL, String NULL) :: Boolean NULL
+73 noteq(Boolean, Boolean) :: Boolean
+74 noteq(Boolean NULL, Boolean NULL) :: Boolean NULL
+75 noteq(Array(Nothing), Array(Nothing)) :: Boolean
+76 noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+77 noteq(Array(T0), Array(T0)) :: Boolean
+78 noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+79 noteq FACTORY
+80 noteq(Interval, Interval) :: Boolean
+81 noteq(Interval NULL, Interval NULL) :: Boolean NULL
+82 noteq(Bitmap, Bitmap) :: Boolean
+83 noteq(Bitmap NULL, Bitmap NULL) :: Boolean NULL
 0 now() :: Timestamp
 0 object_construct FACTORY
 0 object_construct_keep_null FACTORY
@@ -4597,32 +4609,34 @@ Functions overloads:
 22 to_string(Float64 NULL) :: String NULL
 23 to_string(Boolean) :: String
 24 to_string(Boolean NULL) :: String NULL
-25 to_string(Timestamp, String) :: String NULL
-26 to_string(Timestamp NULL, String NULL) :: String NULL
-27 to_string(Date) :: String
-28 to_string(Date NULL) :: String NULL
-29 to_string(Timestamp) :: String
-30 to_string(Timestamp NULL) :: String NULL
-31 to_string(TimestampTz) :: String
-32 to_string(TimestampTz NULL) :: String NULL
-33 to_string(Binary) :: String
-34 to_string(Binary NULL) :: String NULL
-35 to_string(Binary, String) :: String
-36 to_string(Binary NULL, String NULL) :: String NULL
-37 to_string(Int64, String) :: String
-38 to_string(Int64 NULL, String NULL) :: String NULL
-39 to_string(Float32, String) :: String
-40 to_string(Float32 NULL, String NULL) :: String NULL
-41 to_string(Float64, String) :: String
-42 to_string(Float64 NULL, String NULL) :: String NULL
-43 to_string(Bitmap) :: String
-44 to_string(Bitmap NULL) :: String NULL
-45 to_string(Geometry) :: String
-46 to_string(Geometry NULL) :: String NULL
-47 to_string(Geography) :: String
-48 to_string(Geography NULL) :: String NULL
-49 to_string(Interval) :: String
-50 to_string(Interval NULL) :: String NULL
+25 to_string(Timestamp_Ntz) :: String
+26 to_string(Timestamp_Ntz NULL) :: String NULL
+27 to_string(Timestamp, String) :: String NULL
+28 to_string(Timestamp NULL, String NULL) :: String NULL
+29 to_string(Date) :: String
+30 to_string(Date NULL) :: String NULL
+31 to_string(Timestamp) :: String
+32 to_string(Timestamp NULL) :: String NULL
+33 to_string(TimestampTz) :: String
+34 to_string(TimestampTz NULL) :: String NULL
+35 to_string(Binary) :: String
+36 to_string(Binary NULL) :: String NULL
+37 to_string(Binary, String) :: String
+38 to_string(Binary NULL, String NULL) :: String NULL
+39 to_string(Int64, String) :: String
+40 to_string(Int64 NULL, String NULL) :: String NULL
+41 to_string(Float32, String) :: String
+42 to_string(Float32 NULL, String NULL) :: String NULL
+43 to_string(Float64, String) :: String
+44 to_string(Float64 NULL, String NULL) :: String NULL
+45 to_string(Bitmap) :: String
+46 to_string(Bitmap NULL) :: String NULL
+47 to_string(Geometry) :: String
+48 to_string(Geometry NULL) :: String NULL
+49 to_string(Geography) :: String
+50 to_string(Geography NULL) :: String NULL
+51 to_string(Interval) :: String
+52 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp NULL
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -4637,6 +4651,8 @@ Functions overloads:
 11 to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
 12 to_timestamp(TimestampTz) :: Timestamp
 13 to_timestamp(TimestampTz NULL) :: Timestamp NULL
+0 to_timestamp_ntz(String) :: Timestamp_Ntz
+1 to_timestamp_ntz(String NULL) :: Timestamp_Ntz NULL
 0 to_timestamp_tz(Variant) :: TimestampTz NULL
 1 to_timestamp_tz(Variant NULL) :: TimestampTz NULL
 2 to_timestamp_tz(String) :: TimestampTz
@@ -5108,14 +5124,16 @@ Functions overloads:
 21 try_to_string(Float64 NULL) :: String NULL
 22 try_to_string(Boolean) :: String NULL
 23 try_to_string(Boolean NULL) :: String NULL
-24 try_to_string(Date) :: String NULL
-25 try_to_string(Date NULL) :: String NULL
-26 try_to_string(Timestamp) :: String NULL
-27 try_to_string(Timestamp NULL) :: String NULL
-28 try_to_string(Binary) :: String NULL
-29 try_to_string(Binary NULL) :: String NULL
-30 try_to_string(Binary, String) :: String NULL
-31 try_to_string(Binary NULL, String NULL) :: String NULL
+24 try_to_string(Timestamp_Ntz) :: String NULL
+25 try_to_string(Timestamp_Ntz NULL) :: String NULL
+26 try_to_string(Date) :: String NULL
+27 try_to_string(Date NULL) :: String NULL
+28 try_to_string(Timestamp) :: String NULL
+29 try_to_string(Timestamp NULL) :: String NULL
+30 try_to_string(Binary) :: String NULL
+31 try_to_string(Binary NULL) :: String NULL
+32 try_to_string(Binary, String) :: String NULL
+33 try_to_string(Binary NULL, String NULL) :: String NULL
 0 try_to_timestamp(Variant) :: Timestamp NULL
 1 try_to_timestamp(Variant NULL) :: Timestamp NULL
 2 try_to_timestamp(String) :: Timestamp NULL
@@ -5128,6 +5146,8 @@ Functions overloads:
 9 try_to_timestamp(Int64 NULL) :: Timestamp NULL
 10 try_to_timestamp(Int64, UInt64) :: Timestamp
 11 try_to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
+0 try_to_timestamp_ntz(String) :: Timestamp_Ntz NULL
+1 try_to_timestamp_ntz(String NULL) :: Timestamp_Ntz NULL
 0 try_to_timestamp_tz(Variant) :: TimestampTz NULL
 1 try_to_timestamp_tz(Variant NULL) :: TimestampTz NULL
 2 try_to_timestamp_tz(String) :: TimestampTz NULL

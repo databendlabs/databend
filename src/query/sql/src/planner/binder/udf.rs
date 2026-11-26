@@ -77,6 +77,11 @@ fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
                 "WASM UDF type TimestampTz is not supported",
             ));
         }
+        TableDataType::TimestampNtz => {
+            return Err(ErrorCode::InvalidArgument(
+                "WASM UDF type TimestampNtz is not supported",
+            ));
+        }
         TableDataType::Map(_)
         | TableDataType::Vector(_)
         | TableDataType::Opaque(_)

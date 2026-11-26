@@ -1715,6 +1715,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
+    let timestamp_ntz_expr = map(
+        rule! {
+            TIMESTAMP_NTZ ~ #consumed(literal_string)
+        },
+        |(_, (span, date))| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
+            }),
+            target_type: TypeName::TimestampNtz,
+        },
+    );
+
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -1924,6 +1937,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         DATE => with_span!(date_expr).parse(i),
         TIMESTAMP => with_span!(timestamp_expr).parse(i),
         TIMESTAMP_TZ => with_span!(timestamp_tz_expr).parse(i),
+        TIMESTAMP_NTZ => with_span!(timestamp_ntz_expr).parse(i),
         INTERVAL => with_span!(interval).parse(i),
         DATE_PART | DATEPART => with_span!(date_part).parse(i),
         EXTRACT => with_span!(extract).parse(i),
@@ -2381,6 +2395,17 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { TIMESTAMP ~ WITH ~ TIME ~ ZONE },
     );
     let ty_timestamp_tz_simply = value(TypeName::TimestampTz, rule! { TIMESTAMP_TZ });
+    // Values are stored as microseconds. A smaller precision is accepted and
+    // ignored; a larger one would be silently truncated, so it is rejected.
+    let ty_timestamp_ntz = map_res(
+        rule! { TIMESTAMP_NTZ ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        |(_, opt_precision)| match opt_precision {
+            Some((_, precision, _)) if precision > 6 => Err(nom::Err::Failure(ErrorKind::other(
+                "TIMESTAMP_NTZ stores microseconds, so its precision must be between 0 and 6",
+            ))),
+            _ => Ok(TypeName::TimestampNtz),
+        },
+    );
     map_res(
         alt((
             rule! {
@@ -2407,6 +2432,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             ( #ty_date
             | #ty_timestamp_tz
             | #ty_timestamp_tz_simply
+            | #ty_timestamp_ntz
             | #ty_datetime
             | #ty_interval
             | #ty_numeric

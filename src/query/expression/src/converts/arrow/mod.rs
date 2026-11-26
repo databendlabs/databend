@@ -27,3 +27,4 @@ pub const ARROW_EXT_TYPE_INTERVAL: &str = "Interval";
 pub const ARROW_EXT_TYPE_VECTOR: &str = "Vector";
 pub const ARROW_EXT_TYPE_OPAQUE: &str = "Opaque";
 pub const ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE: &str = "TimestampTz";
+pub const ARROW_EXT_TYPE_TIMESTAMP_NTZ: &str = "TimestampNtz";

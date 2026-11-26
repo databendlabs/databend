@@ -157,6 +157,7 @@ use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use crate::planner::semantic::PersistedTypeCheckAdapter;
+use crate::planner::semantic::check_timestamp_ntz_enabled;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
@@ -2325,6 +2326,10 @@ impl Binder {
     ) -> Result<(TableField, String, bool, bool, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
+        check_timestamp_ntz_enabled(
+            &column.data_type,
+            self.ctx.get_settings().get_enable_timestamp_ntz()?,
+        )?;
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
         let mut is_nextval = false;
@@ -2423,8 +2428,10 @@ impl Binder {
         let mut fields_stats_truncate_len = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
+        let enable_timestamp_ntz = self.ctx.get_settings().get_enable_timestamp_ntz()?;
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
+            check_timestamp_ntz_enabled(&column.data_type, enable_timestamp_ntz)?;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
             if let Some(len) = column.stats_truncate_len {

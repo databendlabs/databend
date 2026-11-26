@@ -36,6 +36,7 @@ pub mod opaque;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
+pub mod timestamp_ntz;
 pub mod timestamp_tz;
 pub mod tuple;
 pub mod type_name;
@@ -101,6 +102,7 @@ use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
+pub use self::timestamp_ntz::TimestampNtzType;
 pub use self::timestamp_tz::TimestampTzType;
 pub use self::tuple::*;
 pub use self::variant::VariantType;
@@ -119,6 +121,8 @@ use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamp_ntz::TIMESTAMP_NTZ_MAX;
+use crate::types::timestamp_ntz::TIMESTAMP_NTZ_MIN;
 use crate::values::Column;
 use crate::values::Scalar;
 
@@ -296,6 +300,8 @@ pub enum DataType {
     Generic(usize),
 
     StageLocation,
+
+    TimestampNtz,
 }
 
 impl DataType {
@@ -436,6 +442,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::TimestampTz
+            | DataType::TimestampNtz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -469,6 +476,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::TimestampTz
+            | DataType::TimestampNtz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -512,6 +520,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::TimestampTz
+            | DataType::TimestampNtz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -534,6 +543,7 @@ impl DataType {
     pub fn infinity(&self) -> Result<Scalar, String> {
         match &self {
             DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MAX)),
+            DataType::TimestampNtz => Ok(Scalar::TimestampNtz(TIMESTAMP_NTZ_MAX)),
             DataType::Date => Ok(Scalar::Date(DATE_MAX)),
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
                 OrderedFloat(f32::INFINITY),
@@ -562,6 +572,7 @@ impl DataType {
     pub fn ninfinity(&self) -> Result<Scalar, String> {
         match &self {
             DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MIN)),
+            DataType::TimestampNtz => Ok(Scalar::TimestampNtz(TIMESTAMP_NTZ_MIN)),
             DataType::Date => Ok(Scalar::Date(DATE_MIN)),
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
                 OrderedFloat(f32::NEG_INFINITY),
@@ -647,6 +658,7 @@ impl DataType {
             | DataType::String
             | DataType::Date
             | DataType::Timestamp
+            | DataType::TimestampNtz
             | DataType::Decimal(_) => true,
             DataType::Number(ty) => ALL_INTEGER_TYPES.contains(ty),
             // `NULL` only equals `NULL`.
@@ -697,7 +709,7 @@ impl DataType {
                 Some(n)
             }
             DataType::Date => Some(4),
-            DataType::Timestamp => Some(8),
+            DataType::Timestamp | DataType::TimestampNtz => Some(8),
             DataType::Interval => None, // todo
             DataType::Decimal(size) => {
                 let n = if size.can_carried_by_64() {
@@ -718,6 +730,7 @@ impl DataType {
         match self {
             DataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.wrapped_display()),
             DataType::TimestampTz => "Timestamp_Tz".to_string(),
+            DataType::TimestampNtz => "Timestamp_Ntz".to_string(),
             _ => format!("{}", self),
         }
     }
@@ -740,6 +753,7 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             DataType::TimestampTz => "TIMESTAMP_TZ".to_string(),
+            DataType::TimestampNtz => "TIMESTAMP_NTZ".to_string(),
             _ => self.to_string().to_uppercase(),
         }
     }
@@ -762,6 +776,7 @@ impl DataType {
             DataType::Date => Ok(TypeName::Date),
             DataType::Timestamp => Ok(TypeName::Timestamp),
             DataType::TimestampTz => Ok(TypeName::TimestampTz),
+            DataType::TimestampNtz => Ok(TypeName::TimestampNtz),
             DataType::Interval => Ok(TypeName::Interval),
             DataType::Decimal(size) => {
                 let precision = size.precision();
@@ -871,6 +886,7 @@ pub fn convert_to_type_name(ty: &DataType) -> TypeName {
         },
         DataType::Date => TypeName::Date,
         DataType::Timestamp => TypeName::Timestamp,
+        DataType::TimestampNtz => TypeName::TimestampNtz,
         DataType::String => TypeName::String,
         DataType::Bitmap => TypeName::Bitmap,
         DataType::Variant => TypeName::Variant,

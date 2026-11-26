@@ -39,6 +39,7 @@ use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::EmptyArrayType;
 use crate::types::NumberType;
+use crate::types::TimestampNtzType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
 use crate::types::number::*;
@@ -97,6 +98,9 @@ impl Selector<'_> {
                 &op, left, right, validity, buffers, has_false,
             ),
             DataType::TimestampTz => self.select_type_values_cmp::<TimestampTzType>(
+                &op, left, right, validity, buffers, has_false,
+            ),
+            DataType::TimestampNtz => self.select_type_values_cmp::<TimestampNtzType>(
                 &op, left, right, validity, buffers, has_false,
             ),
             DataType::String => {

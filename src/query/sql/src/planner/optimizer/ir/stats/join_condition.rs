@@ -501,6 +501,7 @@ fn same_semantic_stat_type(left_type: &DataType, right_type: &DataType) -> bool 
             | (DataType::Date, DataType::Date)
             | (DataType::Timestamp, DataType::Timestamp)
             | (DataType::TimestampTz, DataType::TimestampTz)
+            | (DataType::TimestampNtz, DataType::TimestampNtz)
     )
 }
 

@@ -26,6 +26,30 @@ pub fn resolve_type_name_udf(type_name: &TypeName) -> Result<TableDataType> {
     resolve_type_name(type_name, true)
 }
 
+/// Rejects `TIMESTAMP_NTZ` while the `enable_timestamp_ntz` setting is off.
+pub fn check_timestamp_ntz_enabled(type_name: &TypeName, enabled: bool) -> Result<()> {
+    fn contains_timestamp_ntz(type_name: &TypeName) -> bool {
+        match type_name {
+            TypeName::TimestampNtz => true,
+            TypeName::Array(inner) | TypeName::Nullable(inner) | TypeName::NotNull(inner) => {
+                contains_timestamp_ntz(inner)
+            }
+            TypeName::Map { key_type, val_type } => {
+                contains_timestamp_ntz(key_type) || contains_timestamp_ntz(val_type)
+            }
+            TypeName::Tuple { fields_type, .. } => fields_type.iter().any(contains_timestamp_ntz),
+            _ => false,
+        }
+    }
+
+    if !enabled && contains_timestamp_ntz(type_name) {
+        return Err(ErrorCode::Unimplemented(
+            "TIMESTAMP_NTZ is experimental; enable it with `SET enable_timestamp_ntz = 1`",
+        ));
+    }
+    Ok(())
+}
+
 pub fn validate_function_arg(
     name: &str,
     args_len: usize,

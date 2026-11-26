@@ -58,6 +58,7 @@ pub(crate) use type_check::UdafNames;
 pub use type_check::UdfAdapter;
 pub(crate) use type_check::sql_udf_aggregates;
 pub(crate) use type_check::sql_udf_body;
+pub use types::check_timestamp_ntz_enabled;
 pub use types::resolve_type_name_udf;
 pub use types::validate_function_arg;
 pub use udf_rewriter::UDFArgVisitor;

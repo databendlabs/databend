@@ -433,6 +433,13 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn enable_decimal_sum_widening(&self) -> Result<bool>;
 
+    /// Gates `TIMESTAMP_NTZ` in SQL typed by a user. Expressions that are
+    /// already persisted keep the default, so they stay readable after the
+    /// setting is turned off.
+    fn enable_timestamp_ntz(&self) -> Result<bool> {
+        Ok(true)
+    }
+
     fn timezone(&self) -> Result<String> {
         Err(unsupported_context_function("timezone()", None))
     }

@@ -74,6 +74,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampNtzType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::VariantType;
@@ -102,6 +103,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_date_cmp(registry);
     register_timestamp_cmp(registry);
     register_timestamp_tz_cmp(registry);
+    register_timestamp_ntz_cmp(registry);
     register_number_cmp(registry);
     register_string_number_cmp(registry);
     register_boolean_cmp(registry);
@@ -437,6 +439,7 @@ impl_simple_domain_stat_type!(
     DateType => true,
     TimestampType => true,
     TimestampTzType => false,
+    TimestampNtzType => true,
     IntervalType => false,
 );
 
@@ -1225,6 +1228,10 @@ fn register_timestamp_cmp(registry: &mut FunctionRegistry) {
 
 fn register_timestamp_tz_cmp(registry: &mut FunctionRegistry) {
     register_simple_domain_type_cmp!(registry, TimestampTzType);
+}
+
+fn register_timestamp_ntz_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, TimestampNtzType);
 }
 
 fn register_interval_cmp(registry: &mut FunctionRegistry) {

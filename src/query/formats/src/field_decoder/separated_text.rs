@@ -55,6 +55,7 @@ use crate::binary::decode_binary;
 use crate::field_decoder::FieldDecoder;
 use crate::field_decoder::common::read_int_from_decimal_text;
 use crate::field_decoder::common::read_timestamp;
+use crate::field_decoder::common::read_timestamp_ntz;
 use crate::field_decoder::common::read_timestamp_tz;
 
 #[derive(Clone)]
@@ -133,6 +134,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Interval(c) => self.read_interval(c, data),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, data),
             ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, data),
+            ColumnBuilder::TimestampNtz(c) => read_timestamp_ntz(c, data),
             ColumnBuilder::Array(c) => self.read_array(c, data),
             ColumnBuilder::Map(c) => self.read_map(c, data),
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),

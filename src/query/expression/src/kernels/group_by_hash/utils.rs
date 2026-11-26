@@ -110,6 +110,7 @@ unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut G
                 // Only the equality key discards the offset; projection uses the original column.
                 row_space.store(&timestamp_tz::new(v[row].timestamp(), 0));
             }
+            Column::TimestampNtz(v) => row_space.store(&v[row]),
             Column::Date(v) => row_space.store(&v[row]),
             Column::Interval(v) => row_space.store(&v[row]),
             Column::Array(array) | Column::Map(array) => {

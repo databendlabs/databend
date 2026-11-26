@@ -88,6 +88,7 @@ impl FieldEncoderJSON {
             Column::Date(..)
             | Column::Timestamp(..)
             | Column::TimestampTz(..)
+            | Column::TimestampNtz(..)
             | Column::Bitmap(..)
             | Column::Interval(..) => {
                 let mut buf = Vec::new();

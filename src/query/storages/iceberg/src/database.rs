@@ -390,6 +390,7 @@ fn databend_type_to_arrow(
         TableDataType::TimestampTz => {
             ArrowDataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into()))
         }
+        TableDataType::TimestampNtz => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
         TableDataType::Number(number) => match number {
             NumberDataType::Int8 | NumberDataType::Int16 | NumberDataType::Int32 => {
                 ArrowDataType::Int32

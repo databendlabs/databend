@@ -31,6 +31,7 @@ use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::timestamp_ntz::timestamp_ntz_to_string;
 use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::UNKNOWN_SRID;
@@ -90,6 +91,9 @@ impl FieldEncoderToString {
             )),
             Column::TimestampTz(c) => Ok(Cow::Owned(
                 self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) }),
+            )),
+            Column::TimestampNtz(c) => Ok(Cow::Owned(
+                timestamp_ntz_to_string(unsafe { *c.get_unchecked(row_index) }).to_string(),
             )),
             Column::Date(c) => Ok(Cow::Owned(
                 self.date_text(unsafe { *c.get_unchecked(row_index) }),
@@ -168,6 +172,12 @@ impl FieldEncoderToString {
             ),
             Column::TimestampTz(c) => self.write_quoted_string(
                 self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) })
+                    .as_str(),
+                out,
+            ),
+            Column::TimestampNtz(c) => self.write_quoted_string(
+                timestamp_ntz_to_string(unsafe { *c.get_unchecked(row_index) })
+                    .to_string()
                     .as_str(),
                 out,
             ),

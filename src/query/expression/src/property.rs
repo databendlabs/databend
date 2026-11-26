@@ -44,6 +44,7 @@ use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
+use crate::types::timestamp_ntz::TimestampNtzType;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
@@ -160,6 +161,7 @@ pub enum Domain {
     String(StringDomain),
     Timestamp(SimpleDomain<i64>),
     TimestampTz(SimpleDomain<timestamp_tz>),
+    TimestampNtz(SimpleDomain<i64>),
     Date(SimpleDomain<i32>),
     Interval(SimpleDomain<months_days_micros>),
     Nullable(NullableDomain<AnyType>),
@@ -262,6 +264,7 @@ impl Domain {
             | (Domain::String(_), DataType::String)
             | (Domain::Timestamp(_), DataType::Timestamp)
             | (Domain::TimestampTz(_), DataType::TimestampTz)
+            | (Domain::TimestampNtz(_), DataType::TimestampNtz)
             | (Domain::Date(_), DataType::Date)
             | (Domain::Interval(_), DataType::Interval) => true,
             (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => true,
@@ -332,6 +335,7 @@ impl Domain {
             }
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
             DataType::TimestampTz => Domain::TimestampTz(TimestampTzType::full_domain()),
+            DataType::TimestampNtz => Domain::TimestampNtz(TimestampNtzType::full_domain()),
             DataType::Date => Domain::Date(DateType::full_domain()),
             DataType::Interval => Domain::Interval(IntervalType::full_domain()),
             DataType::Null => Domain::Nullable(NullableDomain {
@@ -400,6 +404,12 @@ impl Domain {
             }),
             (Domain::Timestamp(this), Domain::Timestamp(other)) => {
                 Domain::Timestamp(SimpleDomain {
+                    min: this.min.min(other.min),
+                    max: this.max.max(other.max),
+                })
+            }
+            (Domain::TimestampNtz(this), Domain::TimestampNtz(other)) => {
+                Domain::TimestampNtz(SimpleDomain {
                     min: this.min.min(other.min),
                     max: this.max.max(other.max),
                 })
@@ -551,6 +561,9 @@ impl Domain {
             Domain::TimestampTz(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::TimestampTz(*min))
             }
+            Domain::TimestampNtz(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::TimestampNtz(*min))
+            }
             Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
             Domain::Interval(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::Interval(*min))
@@ -646,6 +659,9 @@ impl Domain {
             }
             Domain::TimestampTz(SimpleDomain { min, max }) => {
                 (Scalar::TimestampTz(*min), Scalar::TimestampTz(*max))
+            }
+            Domain::TimestampNtz(SimpleDomain { min, max }) => {
+                (Scalar::TimestampNtz(*min), Scalar::TimestampNtz(*max))
             }
             Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
             Domain::Interval(SimpleDomain { min, max }) => {

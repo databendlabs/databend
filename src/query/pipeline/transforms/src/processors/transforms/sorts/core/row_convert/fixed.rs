@@ -38,6 +38,7 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::OpaqueType;
+use databend_common_expression::types::TimestampNtzType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::i256;
@@ -69,6 +70,7 @@ pub(super) fn choose_encode_method(fields: &[RowSortField]) -> Option<usize> {
                 });
             }
             DataType::Timestamp => total_len += i64::ENCODED_LEN,
+            DataType::TimestampNtz => total_len += i64::ENCODED_LEN,
             DataType::Date => total_len += i32::ENCODED_LEN,
             DataType::Interval => total_len += months_days_micros::ENCODED_LEN,
             _ => return None,
@@ -141,6 +143,7 @@ impl<const N: usize> RowConverter<FixedRows<N>> for FixedRowConverter<N> {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
+            | DataType::TimestampNtz
             | DataType::Interval
             | DataType::Date => true,
             DataType::Nullable(inner) => Self::support_data_type(inner.as_ref()),
@@ -305,6 +308,22 @@ impl<const N: usize> EncodeVisitor<'_, N> {
                     self.field.nulls_first,
                 );
             }
+            DataType::TimestampNtz => {
+                let scalar_value = if is_null {
+                    0i64
+                } else {
+                    *scalar.as_timestamp_ntz().unwrap()
+                };
+                let buffer_bytes = buffer_to_bytes(self.buffer);
+                fixed_encode_const::<TimestampNtzType>(
+                    buffer_bytes,
+                    self.offsets,
+                    is_null,
+                    scalar_value,
+                    self.field.asc,
+                    self.field.nulls_first,
+                );
+            }
             DataType::Date => {
                 let scalar_value = if is_null {
                     0i32
@@ -414,6 +433,19 @@ impl<const N: usize> ValueVisitor for EncodeVisitor<'_, N> {
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        let buffer_bytes = buffer_to_bytes(self.buffer);
+        fixed_encode(
+            buffer_bytes,
+            self.offsets,
+            buffer,
+            self.validity,
+            self.field.asc,
+            self.field.nulls_first,
+        );
+        Ok(())
+    }
+
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<()> {
         let buffer_bytes = buffer_to_bytes(self.buffer);
         fixed_encode(
             buffer_bytes,

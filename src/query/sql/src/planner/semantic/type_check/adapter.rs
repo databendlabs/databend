@@ -155,6 +155,10 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.ctx.get_settings().get_enable_decimal_sum_widening()
     }
 
+    fn enable_timestamp_ntz(&self) -> Result<bool> {
+        self.ctx.get_settings().get_enable_timestamp_ntz()
+    }
+
     fn timezone(&self) -> Result<String> {
         self.ctx.get_settings().get_timezone()
     }

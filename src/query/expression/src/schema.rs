@@ -369,6 +369,7 @@ pub enum TableDataType {
     },
     // Only used to persist DataType in meta
     StageLocation,
+    TimestampNtz,
 }
 
 impl DataSchema {
@@ -1441,6 +1442,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Vector(ty) => DataType::Vector(*ty),
             TableDataType::StageLocation => DataType::StageLocation,
             TableDataType::TimestampTz => DataType::TimestampTz,
+            TableDataType::TimestampNtz => DataType::TimestampNtz,
         }
     }
 }
@@ -1547,6 +1549,7 @@ impl TableDataType {
                 format!("Nullable({})", inner_ty.wrapped_display())
             }
             TableDataType::TimestampTz => "Timestamp_Tz".to_string(),
+            TableDataType::TimestampNtz => "Timestamp_Ntz".to_string(),
             TableDataType::Tuple { fields_type, .. } => {
                 format!(
                     "Tuple({})",
@@ -1637,6 +1640,7 @@ impl TableDataType {
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
                 | TableDataType::TimestampTz
+                | TableDataType::TimestampNtz
                 | TableDataType::Date
                 | TableDataType::Bitmap
                 | TableDataType::Variant
@@ -1846,6 +1850,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             "Cannot create table with type: {data_type}",
         ))),
         DataType::TimestampTz => Ok(TableDataType::TimestampTz),
+        DataType::TimestampNtz => Ok(TableDataType::TimestampNtz),
     }
 }
 

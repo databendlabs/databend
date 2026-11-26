@@ -93,7 +93,9 @@ impl Statistics {
         use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 
         match data_type.remove_nullable() {
-            DataType::Timestamp | DataType::TimestampTz => (86_400 * MICROS_PER_SEC) as f64,
+            DataType::Timestamp | DataType::TimestampTz | DataType::TimestampNtz => {
+                (86_400 * MICROS_PER_SEC) as f64
+            }
             _ => 1.0,
         }
     }

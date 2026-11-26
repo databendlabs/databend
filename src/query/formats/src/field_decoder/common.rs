@@ -22,6 +22,7 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp_ntz::string_to_timestamp_ntz;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::parse_date_with_auto;
@@ -130,6 +131,12 @@ pub(crate) fn read_timestamp_tz(
         settings.settings.enable_auto_detect_datetime_format,
     )?;
     column.push(ts_tz);
+    Ok(())
+}
+
+/// Wall-clock text never reads the session timezone.
+pub(crate) fn read_timestamp_ntz(column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
+    column.push(string_to_timestamp_ntz(data)?);
     Ok(())
 }
 

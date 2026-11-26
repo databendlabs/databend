@@ -20,6 +20,7 @@ use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::timestamp::timestamp_from_micros;
+use databend_common_expression::types::timestamp_ntz::CIVIL_TZ;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::OutputFormatSettings;
 use geozero::ToJson;
@@ -105,6 +106,10 @@ fn scalar_to_json(
             Ok(serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap())
         }
         ScalarRef::TimestampTz(v) => Ok(serde_json::to_value(v.to_string()).unwrap()),
+        ScalarRef::TimestampNtz(v) => {
+            let dt = timestamp_from_micros(v, &CIVIL_TZ);
+            Ok(serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap())
+        }
         ScalarRef::EmptyArray => Ok(JsonValue::Array(vec![])),
         ScalarRef::EmptyMap => Ok(JsonValue::Object(JsonMap::new())),
         ScalarRef::Binary(x) => Ok(JsonValue::String(format.format_binary(x)?.into_owned())),

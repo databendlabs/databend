@@ -60,6 +60,7 @@ use serde_json::value::RawValue;
 use crate::InputCommonSettings;
 use crate::binary::decode_binary;
 use crate::field_decoder::common::read_timestamp;
+use crate::field_decoder::common::read_timestamp_ntz;
 use crate::field_decoder::common::read_timestamp_tz;
 
 #[derive(Clone)]
@@ -136,6 +137,7 @@ impl NestedValues {
             ColumnBuilder::Interval(c) => self.read_interval(c, reader),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
             ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, reader),
+            ColumnBuilder::TimestampNtz(c) => self.read_timestamp_ntz(c, reader),
             ColumnBuilder::Binary(c) => self.read_binary(c, reader),
             ColumnBuilder::String(c) => self.read_string(c, reader),
             ColumnBuilder::Array(c) => self.read_array(c, reader),
@@ -303,6 +305,16 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         read_timestamp_tz(column, &buf, &self.common_settings)
+    }
+
+    fn read_timestamp_ntz<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<i64>,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        read_timestamp_ntz(column, &buf)
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(

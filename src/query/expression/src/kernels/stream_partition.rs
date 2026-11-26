@@ -708,6 +708,9 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(column)) => {
                 copy_primitive_type(builder, column, indices);
             }
+            (ColumnBuilder::TimestampNtz(builder), Column::TimestampNtz(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
             (ColumnBuilder::Bitmap(builder), Column::Bitmap(column)) => {
                 copy_binary(builder, column, indices);
             }

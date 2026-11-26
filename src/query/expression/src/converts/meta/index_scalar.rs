@@ -46,6 +46,7 @@ pub enum IndexScalar {
     Decimal(IndexDecimalScalar),
     Timestamp(i64),
     TimestampTz(timestamp_tz),
+    TimestampNtz(i64),
     Date(i32),
     Interval(months_days_micros),
     Boolean(bool),
@@ -81,6 +82,7 @@ impl TryFrom<IndexScalar> for Scalar {
             },
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::TimestampTz(ts_tz) => Scalar::TimestampTz(ts_tz),
+            IndexScalar::TimestampNtz(ts) => Scalar::TimestampNtz(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Interval(interval) => Scalar::Interval(interval),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
@@ -118,6 +120,7 @@ impl TryFrom<Scalar> for IndexScalar {
             }
             Scalar::Timestamp(ts) => IndexScalar::Timestamp(ts),
             Scalar::TimestampTz(ts_tz) => IndexScalar::TimestampTz(ts_tz),
+            Scalar::TimestampNtz(ts) => IndexScalar::TimestampNtz(ts),
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Interval(interval) => IndexScalar::Interval(interval),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),

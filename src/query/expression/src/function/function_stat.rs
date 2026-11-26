@@ -50,7 +50,9 @@ macro_rules! scalar_to_datum {
             $scalar::Number(NumberScalar::Int32(v)) | $scalar::Date(v) => {
                 Some(Datum::Int(v as i64))
             }
-            $scalar::Number(NumberScalar::Int64(v)) | $scalar::Timestamp(v) => Some(Datum::Int(v)),
+            $scalar::Number(NumberScalar::Int64(v))
+            | $scalar::Timestamp(v)
+            | $scalar::TimestampNtz(v) => Some(Datum::Int(v)),
             $scalar::TimestampTz(v) => Some(Datum::Int(v.timestamp())),
             $scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
             $scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
@@ -244,6 +246,12 @@ impl Domain {
                     max: max.timestamp(),
                 })
             }
+            Domain::TimestampNtz(SimpleDomain { min, max }) => {
+                DomainStatBounds::Bounds(StatBounds::Int {
+                    min: *min,
+                    max: *max,
+                })
+            }
             Domain::Date(SimpleDomain { min, max }) => DomainStatBounds::Bounds(StatBounds::Int {
                 min: *min as i64,
                 max: *max as i64,
@@ -357,6 +365,10 @@ impl Domain {
                 domain.min = min;
                 domain.max = max;
             }
+            (Domain::TimestampNtz(domain), StatBounds::Int { min, max }) => {
+                domain.min = min;
+                domain.max = max;
+            }
             (Domain::Date(domain), StatBounds::Int { min, max }) => {
                 domain.min = i32::try_from(min).map_err(|e| format!("Date out of range: {e}"))?;
                 domain.max = i32::try_from(max).map_err(|e| format!("Date out of range: {e}"))?;
@@ -452,6 +464,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::TimestampTz
+            | DataType::TimestampNtz
             | DataType::Date => Domain::full(self),
             data_type => {
                 return Err(ErrorCode::InvalidArgument(format!(

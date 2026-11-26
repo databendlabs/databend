@@ -186,6 +186,7 @@ impl FieldEncoderCSV {
             Column::Date(..)
             | Column::Timestamp(..)
             | Column::TimestampTz(..)
+            | Column::TimestampNtz(..)
             | Column::Bitmap(..)
             | Column::Variant(..)
             | Column::Interval(_) => {

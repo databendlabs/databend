@@ -1343,6 +1343,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_timestamp_ntz", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Experimental: allow the TIMESTAMP_NTZ (wall-clock timestamp without timezone) type in casts and column definitions. Default: 0 (off).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("disable_variant_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable variant check to allow insert invalid JSON values",

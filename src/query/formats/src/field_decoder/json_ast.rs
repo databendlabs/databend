@@ -36,6 +36,7 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp_ntz::string_to_timestamp_ntz;
 use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::parse_date_with_auto;
 use databend_common_expression::utils::auto_detect_datetime::parse_timestamp_tz_with_auto;
@@ -108,6 +109,7 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
             ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, value),
+            ColumnBuilder::TimestampNtz(c) => self.read_timestamp_ntz(c, value),
             ColumnBuilder::Binary(_c) => unimplemented!("binary literal is not supported"),
             ColumnBuilder::String(c) => self.read_string(c, value),
             ColumnBuilder::Array(c) => self.read_array(c, value, array_inner(data_type)),
@@ -334,6 +336,18 @@ impl FieldJsonAstDecoder {
             }
             _ => Err(ErrorCode::BadBytes(
                 "Incorrect TimestampTz value, must be string",
+            )),
+        }
+    }
+
+    fn read_timestamp_ntz(&self, column: &mut Vec<i64>, value: &Value) -> Result<()> {
+        match value {
+            Value::String(s) => {
+                column.push(string_to_timestamp_ntz(s.as_bytes())?);
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes(
+                "Incorrect TimestampNtz value, must be string",
             )),
         }
     }

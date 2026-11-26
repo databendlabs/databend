@@ -178,6 +178,9 @@ impl From<Scalar> for LegacyScalar {
             Scalar::TimestampTz(_) => {
                 unimplemented!("TimestampTz scalar bincode conversion not implemented")
             }
+            Scalar::TimestampNtz(_) => {
+                unimplemented!("TimestampNtz scalar bincode conversion not implemented")
+            }
             Scalar::Date(date) => LegacyScalar::Date(date),
             Scalar::Interval(interval) => LegacyScalar::Interval(interval),
             Scalar::Boolean(b) => LegacyScalar::Boolean(b),
@@ -209,7 +212,8 @@ impl From<Column> for LegacyColumn {
             | Column::Geometry(_)
             | Column::Geography(_)
             | Column::Vector(_)
-            | Column::TimestampTz(_) => {
+            | Column::TimestampTz(_)
+            | Column::TimestampNtz(_) => {
                 unreachable!()
             }
             Column::String(str_col) => {

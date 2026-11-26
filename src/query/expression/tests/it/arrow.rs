@@ -117,3 +117,35 @@ fn test_from_record_batch_keep_null_const_empty() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_timestamp_ntz_arrow_field_keeps_type() -> Result<()> {
+    use arrow_schema::DataType as ArrowDataType;
+    use arrow_schema::Field;
+    use arrow_schema::TimeUnit;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+
+    // Same Arrow type as TIMESTAMP, told apart only by the extension key.
+    let ntz = Field::from(&TableField::new("ts", TableDataType::TimestampNtz));
+    assert_eq!(
+        ntz.data_type(),
+        &ArrowDataType::Timestamp(TimeUnit::Microsecond, None)
+    );
+    assert_eq!(
+        TableField::try_from(&ntz)?.data_type,
+        TableDataType::TimestampNtz
+    );
+
+    // A plain Arrow timestamp without the key stays TIMESTAMP, as in existing files.
+    let plain = Field::new(
+        "ts",
+        ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+        false,
+    );
+    assert_eq!(
+        TableField::try_from(&plain)?.data_type,
+        TableDataType::Timestamp
+    );
+    Ok(())
+}

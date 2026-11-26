@@ -939,7 +939,8 @@ fn shuffle_key_has_exact_equality(data_type: &DataType) -> bool {
         | DataType::String
         | DataType::Decimal(_)
         | DataType::Date
-        | DataType::Timestamp => true,
+        | DataType::Timestamp
+        | DataType::TimestampNtz => true,
         DataType::Number(number) => number.is_integer(),
         _ => false,
     }

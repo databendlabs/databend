@@ -129,6 +129,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         }
         TypeName::StageLocation => TableDataType::StageLocation,
         TypeName::TimestampTz => TableDataType::TimestampTz,
+        TypeName::TimestampNtz => TableDataType::TimestampNtz,
     };
     if !matches!(type_name, TypeName::Nullable(_) | TypeName::NotNull(_)) && !not_null {
         return Ok(data_type.wrap_nullable());

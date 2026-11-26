@@ -36,6 +36,7 @@ use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::timestamp_ntz::timestamp_ntz_to_string;
 use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::UNKNOWN_SRID;
@@ -166,6 +167,7 @@ impl FieldEncoderBytes {
             Column::Interval(c) => self.write_interval(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::TimestampTz(c) => self.write_timestamp_tz(c, row_index, out_buf, in_nested),
+            Column::TimestampNtz(c) => self.write_timestamp_ntz(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
@@ -336,6 +338,18 @@ setting binary_output_format to 'UTF-8-LOSSY'."
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
         let s = timestamp_to_string(*v, &self.common_settings.settings.timezone).to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+    }
+
+    fn write_timestamp_ntz(
+        &self,
+        column: &Buffer<i64>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = timestamp_ntz_to_string(*v).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

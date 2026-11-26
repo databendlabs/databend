@@ -25,6 +25,8 @@ use crate::types::interval::CoreInterval;
 use crate::types::opaque::OpaqueColumn;
 use crate::types::simple_type::SimpleType;
 use crate::types::timestamp::CoreTimestamp;
+use crate::types::timestamp_ntz::CoreTimestampNtz;
+use crate::types::timestamp_ntz::TimestampNtzType;
 use crate::types::timestamp_tz::CoreTimestampTz;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
@@ -93,6 +95,10 @@ pub trait ValueVisitor: Sized {
 
     fn visit_timestamp_tz(&mut self, buffer: Buffer<timestamp_tz>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<TimestampTzType>(buffer, &DataType::TimestampTz)
+    }
+
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<Self::U, Self::Error> {
+        self.visit_typed_column::<TimestampNtzType>(buffer, &DataType::TimestampNtz)
     }
 
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<Self::U, Self::Error> {
@@ -195,6 +201,7 @@ pub trait ValueVisitor: Sized {
             Column::String(column) => visitor.visit_string(column),
             Column::Timestamp(buffer) => visitor.visit_timestamp(buffer),
             Column::TimestampTz(buffer) => visitor.visit_timestamp_tz(buffer),
+            Column::TimestampNtz(buffer) => visitor.visit_timestamp_ntz(buffer),
             Column::Date(buffer) => visitor.visit_date(buffer),
             Column::Interval(buffer) => visitor.visit_interval(buffer),
             Column::Array(column) => visitor.visit_array(column),
@@ -222,6 +229,9 @@ pub trait ValueVisitor: Sized {
             }
             Column::TimestampTz(buffer) => {
                 visitor.visit_simple_type::<CoreTimestampTz>(buffer, &DataType::TimestampTz)
+            }
+            Column::TimestampNtz(buffer) => {
+                visitor.visit_simple_type::<CoreTimestampNtz>(buffer, &DataType::TimestampNtz)
             }
             Column::Interval(buffer) => {
                 visitor.visit_simple_type::<CoreInterval>(buffer, &DataType::Interval)
