@@ -24,7 +24,6 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
@@ -512,93 +511,6 @@ pub struct ReclusterTask {
     /// Index metadata in original input-block order; absent when reuse is disabled.
     #[serde(default)]
     pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,
-    /// Merge groups as consecutive runs of `parts` and `inverted_index_sources`, merged one
-    /// group after another. Empty means one group; a node that predates the field merges the
-    /// task as one group, which is still correct.
-    #[serde(default)]
-    pub merge_groups: Vec<ReclusterMergeGroup>,
-}
-
-/// One merge group of a recluster task. The totals size the group's output blocks, which
-/// the parts alone cannot provide: they do not carry the uncompressed block size.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct ReclusterMergeGroup {
-    pub blocks: usize,
-    pub total_rows: usize,
-    pub total_bytes: usize,
-    pub total_compressed: usize,
-}
-
-impl ReclusterTask {
-    /// Splits the task into one task per merge group, each with its own slice of `parts`
-    /// and `inverted_index_sources`.
-    pub fn split_merge_groups(&self) -> Result<Vec<ReclusterTask>> {
-        if self.merge_groups.is_empty() {
-            return Ok(vec![self.clone()]);
-        }
-        let groups = &self.merge_groups;
-        let blocks = groups.iter().map(|group| group.blocks).sum::<usize>();
-        if blocks != self.parts.len() || groups.iter().any(|group| group.blocks == 0) {
-            return Err(ErrorCode::Internal(format!(
-                "recluster merge groups cover {blocks} blocks, the task has {}",
-                self.parts.len()
-            )));
-        }
-        let totals = groups.iter().fold((0, 0, 0), |acc, group| {
-            (
-                acc.0 + group.total_rows,
-                acc.1 + group.total_bytes,
-                acc.2 + group.total_compressed,
-            )
-        });
-        if totals != (self.total_rows, self.total_bytes, self.total_compressed) {
-            return Err(ErrorCode::Internal(
-                "recluster merge group totals do not add up to the task totals",
-            ));
-        }
-        let index_sources = !self.inverted_index_sources.is_empty();
-        if index_sources && self.inverted_index_sources.len() != self.parts.len() {
-            return Err(ErrorCode::Internal(
-                "recluster inverted index sources are not aligned with the parts",
-            ));
-        }
-        let mut start = 0;
-        Ok(groups
-            .iter()
-            .map(|group| {
-                let range = start..start + group.blocks;
-                start = range.end;
-                ReclusterTask {
-                    parts: Partitions::create(
-                        self.parts.kind.clone(),
-                        self.parts.partitions[range.clone()].to_vec(),
-                    ),
-                    stats: PartStatistics {
-                        read_rows: group.total_rows,
-                        read_bytes: group.total_bytes,
-                        partitions_scanned: group.blocks,
-                        partitions_total: group.blocks,
-                        ..self.stats.clone()
-                    },
-                    total_rows: group.total_rows,
-                    total_bytes: group.total_bytes,
-                    total_compressed: group.total_compressed,
-                    level: self.level,
-                    // The input levels describe the whole task, which logs them once.
-                    input_level_stats: vec![],
-                    kind: self.kind,
-                    vertical_kind: self.vertical_kind,
-                    memory_budget: self.memory_budget,
-                    virtual_column_layout: self.virtual_column_layout.clone(),
-                    inverted_index_sources: match index_sources {
-                        true => self.inverted_index_sources[range].to_vec(),
-                        false => vec![],
-                    },
-                    merge_groups: vec![],
-                }
-            })
-            .collect())
-    }
 }
 
 /// A surviving block keeps its segment-local virtual-column interpretation
@@ -662,7 +574,6 @@ mod tests {
                 size: 123,
                 index_version: "definition-v1".into(),
             }]],
-            merge_groups: vec![],
         };
 
         let encoded = serde_json::to_vec(&task).unwrap();
@@ -692,122 +603,5 @@ mod tests {
         assert!(decoded.input_level_stats.is_empty());
         assert!(decoded.virtual_column_layout.is_none());
         assert!(decoded.inverted_index_sources.is_empty());
-        assert!(decoded.merge_groups.is_empty());
-    }
-
-    fn group(blocks: usize, rows: usize) -> ReclusterMergeGroup {
-        ReclusterMergeGroup {
-            blocks,
-            total_rows: rows,
-            total_bytes: rows * 10,
-            total_compressed: rows * 2,
-        }
-    }
-
-    fn grouped_task(blocks: usize, groups: Vec<ReclusterMergeGroup>) -> ReclusterTask {
-        use databend_common_expression::Scalar;
-
-        use crate::plan::StreamTablePart;
-        let partitions = (0..blocks)
-            .map(|block| {
-                StreamTablePart::create(
-                    Partitions::default(),
-                    Scalar::Number((block as u64).into()),
-                )
-            })
-            .collect();
-        let rows = groups.iter().map(|group| group.total_rows).sum::<usize>();
-        ReclusterTask {
-            parts: Partitions::create(PartitionsShuffleKind::Seq, partitions),
-            stats: PartStatistics::new_exact(rows, rows * 10, blocks, blocks),
-            total_rows: rows,
-            total_bytes: rows * 10,
-            total_compressed: rows * 2,
-            level: 1,
-            input_level_stats: vec![],
-            kind: ReclusterTaskKind::MergeBlocks,
-            vertical_kind: None,
-            memory_budget: 0,
-            virtual_column_layout: None,
-            inverted_index_sources: (0..blocks)
-                .map(|block| {
-                    vec![BlockIndexMeta {
-                        index_name: format!("source-{block}"),
-                        location: (format!("source-{block}.index"), 2),
-                        size: 1,
-                        index_version: "v1".into(),
-                    }]
-                })
-                .collect(),
-            merge_groups: groups,
-        }
-    }
-
-    #[test]
-    fn test_split_merge_groups_keeps_parts_and_index_sources_aligned() {
-        let task = grouped_task(5, vec![group(2, 30), group(3, 70)]);
-        let decoded: ReclusterTask =
-            serde_json::from_slice(&serde_json::to_vec(&task).unwrap()).unwrap();
-        assert_eq!(decoded.merge_groups, task.merge_groups);
-
-        let groups = task.split_merge_groups().unwrap();
-        assert_eq!(groups.len(), 2);
-        for (group, range, rows) in [(&groups[0], 0..2, 30), (&groups[1], 2..5, 70)] {
-            assert_eq!(group.parts.partitions, task.parts.partitions[range.clone()]);
-            assert_eq!(
-                group.inverted_index_sources,
-                task.inverted_index_sources[range.clone()]
-            );
-            assert_eq!(group.parts.kind, PartitionsShuffleKind::Seq);
-            assert_eq!(
-                (group.total_rows, group.total_bytes, group.total_compressed),
-                (rows, rows * 10, rows * 2)
-            );
-            assert_eq!(
-                (group.stats.read_rows, group.stats.partitions_total),
-                (rows, range.len())
-            );
-            assert_eq!(group.level, task.level);
-            assert!(group.merge_groups.is_empty());
-        }
-
-        // Without index reuse the groups carry no index sources either.
-        let mut task = task;
-        task.inverted_index_sources.clear();
-        assert!(
-            task.split_merge_groups()
-                .unwrap()
-                .iter()
-                .all(|group| group.inverted_index_sources.is_empty())
-        );
-
-        // A task without groups is one group.
-        task.merge_groups.clear();
-        let groups = task.split_merge_groups().unwrap();
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].parts, task.parts);
-    }
-
-    #[test]
-    fn test_split_merge_groups_rejects_inconsistent_groups() {
-        // The groups must cover every part, with no empty group.
-        assert!(
-            grouped_task(5, vec![group(2, 30), group(2, 70)])
-                .split_merge_groups()
-                .is_err()
-        );
-        assert!(
-            grouped_task(5, vec![group(5, 30), group(0, 70)])
-                .split_merge_groups()
-                .is_err()
-        );
-        // The group totals must add up to the task totals.
-        let mut task = grouped_task(5, vec![group(2, 30), group(3, 70)]);
-        task.total_bytes += 1;
-        assert!(task.split_merge_groups().is_err());
-        // Index sources, when present, must be aligned with the parts.
-        let mut task = grouped_task(5, vec![group(2, 30), group(3, 70)]);
-        task.inverted_index_sources.pop();
-        assert!(task.split_merge_groups().is_err());
     }
 }

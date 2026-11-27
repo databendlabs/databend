@@ -863,18 +863,6 @@ impl Settings {
         self.try_get_u64("recluster_block_size")
     }
 
-    pub fn set_recluster_max_group_blocks(&self, val: u64) -> Result<()> {
-        self.try_set_u64("recluster_max_group_blocks", val)
-    }
-
-    pub fn get_recluster_max_group_blocks(&self) -> Result<u64> {
-        self.try_get_u64("recluster_max_group_blocks")
-    }
-
-    pub fn get_recluster_group_max_size_ratio(&self) -> Result<u64> {
-        self.try_get_u64("recluster_group_max_size_ratio")
-    }
-
     pub fn set_compact_max_block_selection(&self, val: u64) -> Result<()> {
         self.try_set_u64("compact_max_block_selection", val)
     }
