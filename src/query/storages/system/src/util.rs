@@ -39,8 +39,15 @@ use log::trace;
 use log::warn;
 
 pub(crate) async fn has_global_grant(ctx: &dyn TableContext) -> Result<bool> {
+    has_global_privilege(ctx, UserPrivilegeType::Grant).await
+}
+
+pub(crate) async fn has_global_privilege(
+    ctx: &dyn TableContext,
+    privilege: UserPrivilegeType,
+) -> Result<bool> {
     match ctx
-        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
+        .validate_privilege(&GrantObject::Global, privilege, false)
         .await
     {
         Ok(()) => Ok(true),

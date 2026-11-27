@@ -1,0 +1,6 @@
+no SUPER, MySQL system.processes: own True, admin False, other tenant False
+no SUPER, MySQL SHOW PROCESSLIST: own True, admin False, other tenant False
+no SUPER, HTTP system.processes: own True, admin False, other tenant False
+SUPER, MySQL system.processes: own True, admin True, other tenant False
+SUPER, MySQL SHOW PROCESSLIST: own True, admin True, other tenant False
+SUPER, HTTP system.processes: own True, admin True, other tenant False
