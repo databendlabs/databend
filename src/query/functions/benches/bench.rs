@@ -232,6 +232,67 @@ mod string_compare {
     }
 }
 
+/// `min`, `max` and `arg_max` over one block of a string column, as a final aggregation without
+/// group by accumulates it.
+#[divan::bench_group(sample_count = 30)]
+mod string_min_max {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::StringType;
+    use databend_common_functions::aggregates::eval_aggr;
+    use divan::counter::ItemsCount;
+
+    const ROWS: usize = 65_536;
+    const SHAPES: [&str; 4] = ["short", "url", "distinct", "ascending"];
+
+    /// `short`: inlined strings (<= 12 bytes) sharing a 4-byte prefix.
+    /// `url`: long strings sharing a long prefix, decided by the bytes after it.
+    /// `distinct`: long strings whose first 4 bytes mostly differ.
+    /// `ascending`: sorted long strings, so the maximum changes on every row.
+    fn value(shape: &str, row: usize) -> String {
+        // Scatter the rows so the column is not already in order.
+        let key = (row as u32).wrapping_mul(2_654_435_761) as usize % ROWS;
+        match shape {
+            "short" => format!("id_{key:08}"),
+            "url" => format!("https://www.example.com/{key:012}"),
+            "distinct" => format!("{:08x}_with_a_long_suffix", key * 65_521),
+            "ascending" => format!("row_{row:012}_with_a_long_suffix"),
+            _ => unreachable!(),
+        }
+    }
+
+    fn bench_aggr(bencher: divan::Bencher, name: &str, shape: &str, with_arg: bool) {
+        let values = StringType::from_data((0..ROWS).map(|row| value(shape, row)).collect());
+        let mut entries = Vec::new();
+        if with_arg {
+            entries.push(BlockEntry::from(Int64Type::from_data(
+                (0..ROWS as i64).collect::<Vec<_>>(),
+            )));
+        }
+        entries.push(BlockEntry::from(values));
+
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench(|| eval_aggr(name, vec![], &entries, ROWS, vec![]).unwrap());
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn min(bencher: divan::Bencher, shape: &str) {
+        bench_aggr(bencher, "min", shape, false);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn max(bencher: divan::Bencher, shape: &str) {
+        bench_aggr(bencher, "max", shape, false);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn arg_max(bencher: divan::Bencher, shape: &str) {
+        bench_aggr(bencher, "arg_max", shape, true);
+    }
+}
+
 // bench            fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                       │               │               │               │         │
 //    ├─ check                    │               │               │               │         │

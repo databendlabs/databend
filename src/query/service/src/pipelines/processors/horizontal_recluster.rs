@@ -256,7 +256,7 @@ impl<R: Rows> ReclusterMergeStream<R> {
             ));
         }
         for row in 1..rows.len() {
-            if rows.row(row - 1) > rows.row(row) {
+            if rows.cmp_rows(row - 1, &rows, row).is_gt() {
                 return Err(ErrorCode::ParquetFileInvalid(
                     "recluster input batch is not ordered",
                 ));

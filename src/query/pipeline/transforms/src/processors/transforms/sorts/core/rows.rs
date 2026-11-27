@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Range;
 
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
@@ -35,6 +38,47 @@ where Self: Sized + Clone + Debug + Send
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
+
+    /// Compares row `i` of `self` with row `j` of `other`, the same as comparing their items.
+    ///
+    /// Merging compares rows far more often than it reads them, so a type can compare in place
+    /// instead of building both items.
+    #[inline(always)]
+    fn cmp_rows(&self, i: usize, other: &Self, j: usize) -> Ordering {
+        self.row(i).cmp(&other.row(j))
+    }
+
+    /// Whether row `i` of `self` equals row `j` of `other`, the same as comparing their items.
+    #[inline(always)]
+    fn eq_rows(&self, i: usize, other: &Self, j: usize) -> bool {
+        self.row(i) == other.row(j)
+    }
+
+    /// The number of rows at the start of `rows` that are less than or equal to row `j` of
+    /// `other`.
+    #[inline]
+    fn leading_rows_le(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
+        let item = other.row(j);
+        rows.take_while(|&i| self.row(i) <= item).count()
+    }
+
+    /// The number of rows at the start of `rows` that equal row `j` of `other`.
+    #[inline]
+    fn leading_rows_eq(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
+        let item = other.row(j);
+        rows.take_while(|&i| self.row(i) == item).count()
+    }
+
+    /// Which rows are less than or equal to `bound`, the boundary of a TopN.
+    fn rows_le_bound(&self, bound: &Scalar) -> Bitmap {
+        let bound = Self::scalar_as_item(bound);
+        let mut bitmap = MutableBitmap::with_capacity(self.len());
+        for i in 0..self.len() {
+            bitmap.push(self.row(i) <= bound);
+        }
+        bitmap.into()
+    }
+
     fn to_column(&self) -> Column;
 
     fn from_column(col: &Column) -> Result<Self>;

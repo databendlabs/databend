@@ -159,7 +159,7 @@ impl Bounds {
             let cur_rows = R::from_column(&self.0[b_idx]).unwrap();
             if last
                 .as_ref()
-                .map(|(last_rows, last_idx)| cur_rows.row(r_idx) == last_rows.row(*last_idx))
+                .map(|(last_rows, last_idx)| cur_rows.eq_rows(r_idx, last_rows, *last_idx))
                 .unwrap_or_default()
             {
                 continue;

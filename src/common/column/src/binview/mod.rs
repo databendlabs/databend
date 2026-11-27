@@ -556,6 +556,19 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         }
     }
 
+    /// The `i`-th value prepared for comparison with many values, as [`ViewProbe::new`] would
+    /// prepare it but without rebuilding the view.
+    ///
+    /// # Panics
+    /// iff `i >= self.len()`
+    #[inline]
+    pub fn probe(&self, i: usize) -> ViewProbe<'_> {
+        let view = &self.views[i];
+        // SAFETY: the view is one of this column's, so it is valid for `self.buffers`, and `view`
+        // points into `self.views`, so the bytes of an inlined value live as long as `self`.
+        ViewProbe::from_view(*view, unsafe { view.get_slice_unchecked(&self.buffers) })
+    }
+
     /// Compares the `i`-th value with `probe`.
     #[inline]
     pub fn compare_probe(&self, i: usize, probe: &ViewProbe) -> std::cmp::Ordering {

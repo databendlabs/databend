@@ -213,11 +213,13 @@ impl<R: Rows> Drop for LoserTreePeekMut<'_, R> {
 pub struct ItemCursorOrder;
 
 impl<R: Rows> CursorOrder<R> for ItemCursorOrder {
+    #[inline]
     fn eq(a: &RawCursor<R, Self>, b: &RawCursor<R, Self>) -> bool {
-        a.current() == b.current()
+        a.eq_current(b)
     }
 
+    #[inline]
     fn cmp(a: &RawCursor<R, Self>, b: &RawCursor<R, Self>) -> Ordering {
-        a.current().cmp(&b.current())
+        a.cmp_current(b)
     }
 }

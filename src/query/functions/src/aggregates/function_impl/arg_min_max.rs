@@ -53,6 +53,7 @@ use super::AggregateRegistration;
 use super::adaptors::*;
 use super::min_max_any::TYPE_MAX;
 use super::min_max_any::TYPE_MIN;
+use super::min_max_any::string_extreme_row;
 use super::serialized_scalar_at;
 
 struct ArgMinMaxBuilder;
@@ -242,7 +243,7 @@ where
 }
 
 /// Batch extreme-row selection for the value types chosen by the builder.
-/// Types without a SIMD implementation leave the batch to the generic loop.
+/// Types without a batch kernel leave the batch to the generic loop.
 pub(super) trait ArgMinMaxValue: ValueType {
     fn simd_extreme_row(
         _values: &Self::Column,
@@ -253,7 +254,19 @@ pub(super) trait ArgMinMaxValue: ValueType {
     }
 }
 
-impl ArgMinMaxValue for StringType {}
+impl ArgMinMaxValue for StringType {
+    fn simd_extreme_row(
+        values: &Self::Column,
+        validity: Option<&Bitmap>,
+        max: bool,
+    ) -> Option<usize> {
+        if max {
+            string_extreme_row::<true>(values, validity)
+        } else {
+            string_extreme_row::<false>(values, validity)
+        }
+    }
+}
 impl ArgMinMaxValue for BooleanType {}
 impl ArgMinMaxValue for NullType {}
 impl ArgMinMaxValue for EmptyArrayType {}

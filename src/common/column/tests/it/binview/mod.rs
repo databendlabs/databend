@@ -208,8 +208,9 @@ fn test_empty_bitmap() {
     assert_eq!(empty, [false, true, false]);
 }
 
-/// Checks `compare`, `equal` and their probe forms against the order of `str` for every pair of
-/// `values`, with each side held in a column of its own so the views point into different buffers.
+/// Checks `compare`, `equal` and their probe forms, with probes built from bytes and from a
+/// column, against the order of `str` for every pair of `values`, with each side held in a column
+/// of its own so the views point into different buffers.
 fn assert_compare_matches_str(values: &[String]) {
     let lhs: Utf8ViewColumn = values.iter().collect();
     // Reversed, so the same value sits at a different buffer offset than in `lhs`.
@@ -241,6 +242,17 @@ fn assert_compare_matches_str(values: &[String]) {
                 "equal_probe({a:?}, {b:?})"
             );
             assert_eq!(lhs.compare_str(i, b), expected, "compare_str({a:?}, {b:?})");
+            let probe = rhs.probe(rhs_row(j));
+            assert_eq!(
+                lhs.compare_probe(i, &probe),
+                expected,
+                "compare_probe({a:?}, column probe {b:?})"
+            );
+            assert_eq!(
+                lhs.equal_probe(i, &probe),
+                a == b,
+                "equal_probe({a:?}, column probe {b:?})"
+            );
         }
     }
 }

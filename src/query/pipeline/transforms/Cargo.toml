@@ -41,8 +41,13 @@ arrow-array = { workspace = true }
 arrow-ord = { workspace = true }
 arrow-schema = { workspace = true }
 databend-base = { workspace = true }
+divan = { workspace = true }
 itertools = { workspace = true }
 proptest = { workspace = true }
+
+[[bench]]
+name = "bench"
+harness = false
 
 [lints]
 workspace = true

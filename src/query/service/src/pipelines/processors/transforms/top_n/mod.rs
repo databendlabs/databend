@@ -15,7 +15,6 @@
 mod transform_final_top_n;
 mod transform_partial_top_n;
 
-use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::ChunkIndex;
 use databend_common_expression::DataBlock;
@@ -100,12 +99,7 @@ impl<R: Rows> TopNCandidates<R> {
 
         let (block, rows) = match &self.boundary {
             Some(bound) => {
-                let bound_item = R::scalar_as_item(bound);
-                let mut bitmap = MutableBitmap::with_capacity(rows.len());
-                for i in 0..rows.len() {
-                    bitmap.push(rows.row(i) <= bound_item);
-                }
-                let bitmap = bitmap.into();
+                let bitmap = rows.rows_le_bound(bound);
                 let block = block.filter_with_bitmap(&bitmap)?;
                 if block.is_empty() {
                     return Ok(());
@@ -138,7 +132,9 @@ impl<R: Rows> TopNCandidates<R> {
         {
             if incoming_index == rows.len()
                 || (current_index < current_rows.len()
-                    && current_rows.row(current_index) <= rows.row(incoming_index))
+                    && current_rows
+                        .cmp_rows(current_index, &rows, incoming_index)
+                        .is_le())
             {
                 selected.push_merge(0, current_index as u32);
                 current_index += 1;
@@ -213,11 +209,11 @@ impl<R: Rows> TopNCandidates<R> {
         let mut permutation: Vec<u32> = (0..rows.len() as u32).collect();
         if permutation.len() > self.capacity {
             permutation.select_nth_unstable_by(self.capacity - 1, |&a, &b| {
-                rows.row(a as usize).cmp(&rows.row(b as usize))
+                rows.cmp_rows(a as usize, &rows, b as usize)
             });
             permutation.truncate(self.capacity);
         }
-        permutation.sort_unstable_by(|&a, &b| rows.row(a as usize).cmp(&rows.row(b as usize)));
+        permutation.sort_unstable_by(|&a, &b| rows.cmp_rows(a as usize, &rows, b as usize));
 
         let block = block.take(permutation.as_slice())?;
         let rows = self.order_rows(&block)?;

@@ -259,6 +259,12 @@ impl<'a> ViewProbe<'a> {
         Self { view, bytes }
     }
 
+    /// A probe of a column value, reusing its view instead of building one from the bytes.
+    #[inline(always)]
+    pub(crate) fn from_view(view: View, bytes: &'a [u8]) -> Self {
+        Self { view, bytes }
+    }
+
     #[inline(always)]
     pub(crate) fn view(&self) -> &View {
         &self.view

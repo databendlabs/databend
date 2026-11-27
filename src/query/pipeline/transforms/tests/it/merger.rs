@@ -19,9 +19,13 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::StringType;
 use databend_common_pipeline_transforms::sorts::core::Merger;
+use databend_common_pipeline_transforms::sorts::core::Rows;
 use databend_common_pipeline_transforms::sorts::core::SimpleRowsAsc;
+use databend_common_pipeline_transforms::sorts::core::SimpleRowsDesc;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
 use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
 use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
@@ -369,5 +373,72 @@ async fn test_fuzz_async() -> anyhow::Result<()> {
         async_test(merger, expected).await?;
     }
 
+    Ok(())
+}
+
+/// Strings around the 12-byte inline limit that share prefixes, with embedded `\0` and repeats,
+/// so the merge compares views that tie on their prefix and values that tie completely.
+fn random_string(rng: &mut ThreadRng) -> String {
+    const PREFIXES: [&str; 4] = ["", "ab", "abcd", "https://www.example.com/"];
+    let mut value = PREFIXES[rng.gen_range(0..PREFIXES.len())].to_string();
+    let len = rng.gen_range(0..=14);
+    value.extend((0..len).map(|_| ['\0', 'a', 'b', 'z'][rng.gen_range(0..4)]));
+    value
+}
+
+fn test_string_merge<A: SortAlgorithm>(rng: &mut ThreadRng) -> Result<()> {
+    let asc = <A::Rows as Rows>::IS_ASC_COLUMN;
+    let batch_size = rng.gen_range(1..=10);
+    let mut all = Vec::new();
+    let streams = (0..rng.gen_range(2..=8))
+        .map(|_| {
+            let mut values = (0..rng.gen_range(0..=40))
+                .map(|_| random_string(rng))
+                .collect::<Vec<_>>();
+            values.sort();
+            if !asc {
+                values.reverse();
+            }
+            all.extend(values.iter().cloned());
+            let blocks = values
+                .chunks(rng.gen_range(1..=10))
+                .map(|v| DataBlock::new_from_columns(vec![StringType::from_data(v.to_vec())]))
+                .collect::<VecDeque<_>>();
+            TestStream::new(blocks)
+        })
+        .collect::<Vec<_>>();
+    all.sort();
+    if !asc {
+        all.reverse();
+    }
+
+    let mut merger = Merger::<A, _>::new(streams, batch_size, None);
+    let mut output = Vec::new();
+    while !merger.is_finished() {
+        if let Some(block) = merger.next_block()? {
+            assert!(block.num_rows() <= batch_size);
+            output.push(block.get_last_column().clone());
+        }
+    }
+    let actual = output
+        .iter()
+        .flat_map(|column| {
+            let column = StringType::try_downcast_column(column).unwrap();
+            column.iter().map(str::to_string).collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(actual, all);
+    Ok(())
+}
+
+#[test]
+fn test_fuzz_string() -> Result<()> {
+    let mut rng = rand::thread_rng();
+    for _ in 0..50 {
+        test_string_merge::<HeapSort<SimpleRowsAsc<StringType>>>(&mut rng)?;
+        test_string_merge::<HeapSort<SimpleRowsDesc<StringType>>>(&mut rng)?;
+        test_string_merge::<LoserTreeSort<SimpleRowsAsc<StringType>>>(&mut rng)?;
+        test_string_merge::<LoserTreeSort<SimpleRowsDesc<StringType>>>(&mut rng)?;
+    }
     Ok(())
 }
