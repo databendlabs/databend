@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_settings::Settings;
 use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::planner::QueryExecutor;
@@ -25,6 +27,7 @@ use futures_util::TryStreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::common::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::auto_pipeline_width;
 use crate::physical_plans::build_broadcast_plans;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -88,14 +91,48 @@ pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
+    let mut settings = ctx.get_settings();
+    if cap_pipeline_width(ctx, &settings, plan)? {
+        // Merge the query-level cap into this context's settings.
+        settings = ctx.get_settings();
+    }
     let pipeline =
-        PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
+        PipelineBuilder::create(ctx.get_function_context()?, settings.clone(), ctx.clone());
     let mut build_res = pipeline.finalize(plan)?;
     ctx.check_materialized_cte_receivers_taken()?;
 
-    let settings = ctx.get_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);
     Ok(build_res)
+}
+
+/// Lower `max_threads` for this query when its plan matches a width rule, and
+/// report whether it did. The cap is a query-level setting, as
+/// `SET_VAR(max_threads = ..)` writes, so the pruning, the operators and the
+/// executor all see it and the session keeps its own value. A statement that
+/// sets `max_threads` itself is left alone.
+fn cap_pipeline_width(
+    ctx: &Arc<QueryContext>,
+    settings: &Settings,
+    plan: &PhysicalPlan,
+) -> Result<bool> {
+    if !settings.get_enable_auto_pipeline_width()? {
+        return Ok(false);
+    }
+    let query_settings = ctx.get_shared_settings();
+    if query_settings.changes().contains_key("max_threads") {
+        return Ok(false);
+    }
+    let Some(cap) = auto_pipeline_width(plan) else {
+        return Ok(false);
+    };
+    let max_threads = settings.get_max_threads()?;
+    let capped = max_threads.min(cap.get() as u64);
+    if capped == max_threads {
+        return Ok(false);
+    }
+    let change = HashMap::from([("max_threads".to_string(), capped.to_string())]);
+    query_settings.set_batch_settings(&change, true)?;
+    Ok(true)
 }
 
 /// Build distributed pipeline via fragment and actions.

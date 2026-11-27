@@ -220,6 +220,10 @@ impl Settings {
         self.try_get_u64("parquet_max_block_size")
     }
 
+    pub fn get_enable_auto_pipeline_width(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_pipeline_width")? != 0)
+    }
+
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         match self.try_get_u64("max_threads")? {

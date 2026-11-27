@@ -323,7 +323,18 @@ pub fn adjust_threads_and_request(
     mut max_io_requests: usize,
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
-    let blocks = match (plan.parts.partitions_type(), &plan.source_info) {
+    if let Some(blocks) = scan_block_bound(plan) {
+        max_threads = max_threads.min(blocks);
+        max_io_requests = max_io_requests.min(blocks);
+    }
+    (max_threads, max_io_requests)
+}
+
+/// Upper bound on the blocks a scan of `plan` reads, known without opening
+/// segments: the parts of a block-level scan, or the table's block count for a
+/// lazy index Top-K scan. `None` when the scan size is unknown.
+pub fn scan_block_bound(plan: &DataSourcePlan) -> Option<usize> {
+    match (plan.parts.partitions_type(), &plan.source_info) {
         (PartInfoType::BlockLevel, _) => Some(plan.parts.len().max(1)),
         (_, DataSourceInfo::TableSource(info))
             if plan
@@ -335,12 +346,7 @@ pub fn adjust_threads_and_request(
             lazy_index_scan_blocks(info, plan.parts.len())
         }
         _ => None,
-    };
-    if let Some(blocks) = blocks {
-        max_threads = max_threads.min(blocks);
-        max_io_requests = max_io_requests.min(blocks);
     }
-    (max_threads, max_io_requests)
 }
 
 /// The block count of a table whose segments are pruned lazily, from table

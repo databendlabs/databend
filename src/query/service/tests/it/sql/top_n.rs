@@ -255,6 +255,92 @@ async fn test_covering_index_top_n() -> Result<()> {
     Ok(())
 }
 
+/// `enable_auto_pipeline_width` narrows FTS and vector Top-K over a few blocks to
+/// one pipeline lane for that query only. Each query runs in a fresh context of
+/// one session, as in production, so a query-level cap cannot leak.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_auto_pipeline_width_for_index_search() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let table = format!("{}.search_width", fixture.default_db_name());
+    fixture.execute_command(&format!("CREATE TABLE {table} (id INT, body STRING, v VECTOR(4), INVERTED INDEX ft(body), VECTOR INDEX vi(v) distance='l2')")).await?;
+    let insert = |id: i32| format!("INSERT INTO {table} VALUES ({id}, 'red', [{id},0,0,0])");
+    for id in 1..=2 {
+        fixture.execute_command(&insert(id)).await?;
+    }
+
+    let session = fixture.new_query_ctx().await?.get_session_settings();
+    session.set_max_threads(4)?;
+    session.set_setting("enable_compact_after_write".into(), "0".into())?;
+    let lanes = async |sql: &str| -> Result<usize> {
+        let pipeline =
+            explain_text(fixture.new_query_ctx().await?, &format!("PIPELINE {sql}")).await?;
+        Ok(pipeline.matches("TransformPartialTopN").count())
+    };
+    let rows = async |sql: &str| execute_rows(fixture.new_query_ctx().await?, sql).await;
+    let set_auto = |on: bool| {
+        session.set_setting(
+            "enable_auto_pipeline_width".into(),
+            u8::from(on).to_string(),
+        )
+    };
+
+    assert!(
+        !fixture
+            .new_query_ctx()
+            .await?
+            .get_settings()
+            .get_enable_auto_pipeline_width()?
+    );
+    let fts = format!(
+        "SELECT score() FROM {table} WHERE match(body,'red') ORDER BY score() DESC LIMIT 2"
+    );
+    let vector = format!(
+        "SELECT id, l2_distance(v,[0,0,0,0]::VECTOR(4)) AS d FROM {table} ORDER BY d LIMIT 2"
+    );
+    let pinned = fts.replacen("SELECT", "SELECT /*+ SET_VAR(max_threads=2) */", 1);
+    for (sql, narrowed) in [
+        (fts.clone(), true),
+        (vector, true),
+        // Ascending scores: every match of a block, not an index Top-K.
+        (fts.replace("DESC", "ASC"), false),
+        // More candidates per block than the rule covers.
+        (format!("{fts} OFFSET 99"), false),
+        // The statement chose its own width.
+        (pinned, false),
+    ] {
+        set_auto(false)?;
+        let (before, reference) = (lanes(&sql).await?, rows(&sql).await?);
+        set_auto(true)?;
+        let after = lanes(&sql).await?;
+        assert!(before > 1, "{sql}: {before} lanes");
+        assert_eq!(after, if narrowed { 1 } else { before }, "{sql}");
+        assert_eq!(rows(&sql).await?, reference, "{sql}");
+    }
+    // The session keeps its width.
+    assert_eq!(
+        fixture
+            .new_query_ctx()
+            .await?
+            .get_settings()
+            .get_max_threads()?,
+        4
+    );
+
+    // Eager parts take the one-block IndexTopNSource path, unchanged.
+    session.set_setting("enable_distributed_pruning".into(), "0".into())?;
+    let eager = explain_text(fixture.new_query_ctx().await?, &format!("PIPELINE {fts}")).await?;
+    assert!(eager.contains("IndexTopNSource"), "{eager}");
+    session.set_setting("enable_distributed_pruning".into(), "1".into())?;
+
+    // The rule follows the current snapshot: five blocks are beyond its range.
+    for id in 3..=5 {
+        rows(&insert(id)).await?;
+    }
+    assert!(lanes(&fts).await? > 1);
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_top_n_forced_spill_restores_candidates_and_records_progress() -> Result<()> {
     let config = config_with_spill();

@@ -66,6 +66,7 @@ mod physical_udf;
 mod physical_union_all;
 mod physical_window;
 mod physical_window_partition;
+mod pipeline_width;
 mod runtime_filter;
 mod runtime_scan_filter;
 
@@ -126,6 +127,7 @@ pub use physical_udf::UdfFunctionDesc;
 pub use physical_union_all::UnionAll;
 pub use physical_window::*;
 pub use physical_window_partition::*;
+pub(crate) use pipeline_width::auto_pipeline_width;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
 

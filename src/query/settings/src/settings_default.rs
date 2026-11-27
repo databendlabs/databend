@@ -175,6 +175,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("enable_auto_pipeline_width", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Limit pipeline parallelism for bounded search plans without changing the executor.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("system_tables_count_db_concurrency", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16),
                     desc: "Sets the DB-level concurrency used by system.tables count optimization.",

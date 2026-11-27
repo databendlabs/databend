@@ -82,6 +82,27 @@ pub(super) fn try_build(plan: &FinalTopNPlan, builder: &mut PipelineBuilder) -> 
     Ok(true)
 }
 
+/// An index Top-K (FTS or vector) whose scan returns only the index's
+/// candidates, at most `per_block_candidates` from each block. It narrows the
+/// `covering_input` that `IndexTopNSource` uses, so the pipeline width rules
+/// see the same shapes the index answers.
+pub(super) struct IndexTopK<'a> {
+    pub scan: &'a TableScan,
+    pub per_block_candidates: usize,
+}
+
+pub(super) fn index_top_k(plan: &FinalTopNPlan) -> Option<IndexTopK<'_>> {
+    let input = covering_input(plan)?;
+    let push = input.scan.source.push_downs.as_ref()?;
+    if push.index_top_k_score().as_ref() != Some(input.key) {
+        return None;
+    }
+    Some(IndexTopK {
+        scan: input.scan,
+        per_block_candidates: push.limit?,
+    })
+}
+
 struct CoveringInput<'a> {
     scan: &'a TableScan,
     key: &'a InternalColumnType,
