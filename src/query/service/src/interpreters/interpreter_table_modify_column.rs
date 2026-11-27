@@ -480,19 +480,17 @@ impl ModifyTableColumnInterpreter {
                     let statistics_provider = fuse_table
                         .column_statistics_provider(self.ctx.clone())
                         .await?;
-                    let column_stat = statistics_provider
-                        .column_statistics(old_field.column_id)
-                        .ok_or_else(|| {
-                            ErrorCode::UnknownColumn(format!(
-                                "Cannot find statistics for column '{}' (id: {})",
-                                field.name, old_field.column_id
-                            ))
-                        })?;
-                    if column_stat.null_count() > 0 {
+                    let null_count =
+                        match statistics_provider.column_statistics(old_field.column_id) {
+                            Some(column_stat) => column_stat.null_count(),
+                            // Statistics are left out where they do not cover every
+                            // row, so count the NULL values from the blocks instead.
+                            None => self.count_null_values(fuse_table, old_field).await?,
+                        };
+                    if null_count > 0 {
                         return Err(ErrorCode::BadArguments(format!(
                             "Cannot change column '{}' to NOT NULL: contains {} NULL values",
-                            field.name,
-                            column_stat.null_count()
+                            field.name, null_count
                         )));
                     }
                 }
@@ -782,6 +780,39 @@ impl ModifyTableColumnInterpreter {
     }
 
     // Set column comment.
+    /// Count the NULL values of a column from the metadata of every block, as a
+    /// part of the ALTER: the check must not depend on SELECT privileges or row
+    /// access policies, which hide rows that the rewrite keeps.
+    async fn count_null_values(&self, table: &FuseTable, field: &TableField) -> Result<u64> {
+        let unverifiable = || {
+            ErrorCode::UnknownColumn(format!(
+                "Cannot find statistics for column '{}' (id: {})",
+                field.name, field.column_id
+            ))
+        };
+        // Statistics of nested columns are kept per leaf, and those below an
+        // Array or a Map count elements rather than rows.
+        if matches!(
+            field.data_type.remove_nullable(),
+            TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_)
+        ) {
+            return Err(unverifiable());
+        }
+        let (null_count, rows_without_column) = table
+            .column_null_count_from_blocks(self.ctx.clone(), field.column_id)
+            .await?
+            .ok_or_else(unverifiable)?;
+        // Blocks written before the column was added read its default.
+        if rows_without_column > 0
+            && DefaultExprBinder::try_new(self.ctx.clone())?
+                .get_scalar(field)?
+                .is_null()
+        {
+            return Ok(null_count + rows_without_column);
+        }
+        Ok(null_count)
+    }
+
     async fn do_set_comment(
         &self,
         table: Arc<dyn Table>,

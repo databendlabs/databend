@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -21,7 +23,11 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
@@ -36,9 +42,13 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::statistics::trim_column_min_max;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_index::Index;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
@@ -141,9 +151,9 @@ impl Interpreter for AddTableColumnInterpreter {
                     self.plan.field.name, self.plan.table
                 )));
             }
-            if field.default_expr().is_some() {
-                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
-            }
+            // Old blocks do not store the new column and read it as this value,
+            // unless an UPDATE below fills a non-deterministic default.
+            let default_value = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
             is_valid_column(field.name())?;
             table_info
                 .meta
@@ -203,9 +213,17 @@ impl Interpreter for AddTableColumnInterpreter {
                 tbl.as_ref(),
                 table_info.meta.clone(),
                 catalog,
-                |snapshot_opt, _| {
+                |snapshot_opt, table_meta| {
                     if let Some(snapshot) = snapshot_opt {
                         snapshot.schema = table_info.meta.schema.as_ref().clone();
+                        if self.plan.is_deterministic && field.computed_expr().is_none() {
+                            record_added_column_stats(
+                                snapshot,
+                                field.name(),
+                                &default_value,
+                                &table_meta.field_stats_truncate_len,
+                            );
+                        }
                     }
                 },
             )
@@ -241,6 +259,52 @@ impl Interpreter for AddTableColumnInterpreter {
             }
             Ok(PipelineBuildResult::create())
         })
+    }
+}
+
+/// Record the ranges of a column just added to a non-empty table, whose old
+/// rows all read the default value. A missing range does not show what the
+/// old rows hold, so appends and mutations cannot infer it later.
+fn record_added_column_stats(
+    snapshot: &mut TableSnapshot,
+    field_name: &str,
+    default_value: &Scalar,
+    stats_truncate_lens: &BTreeMap<ColumnId, u64>,
+) {
+    let row_count = snapshot.summary.row_count;
+    if row_count == 0 {
+        return;
+    }
+    let Ok(field) = snapshot.schema.field_with_name(field_name) else {
+        return;
+    };
+    // Keep the column ids the table schema assigned to the field.
+    let schema = TableSchema {
+        fields: vec![field.clone()],
+        metadata: Default::default(),
+        next_column_id: snapshot.schema.next_column_id(),
+    };
+    let leaf_types: HashMap<ColumnId, DataType> = schema
+        .leaf_fields()
+        .iter()
+        .map(|field| (field.column_id(), field.data_type().into()))
+        .collect();
+    let leaf_default_values = schema.field_leaf_default_values(std::slice::from_ref(default_value));
+    for (column_id, value) in leaf_default_values {
+        if !leaf_types
+            .get(&column_id)
+            .is_some_and(RangeIndex::supported_type)
+        {
+            continue;
+        }
+        let truncate_len = stats_truncate_lens.get(&column_id).map(|&len| len as usize);
+        let is_null = value.is_null();
+        let Some((min, max)) = trim_column_min_max(value.clone(), value, truncate_len) else {
+            continue;
+        };
+        let null_count = if is_null { row_count } else { 0 };
+        let stats = ColumnStatistics::new(min, max, null_count, 0, Some(u64::from(!is_null)));
+        snapshot.summary.col_stats.insert(column_id, stats);
     }
 }
 

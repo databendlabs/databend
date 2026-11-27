@@ -49,6 +49,7 @@ use databend_common_storages_fuse::operations::SegmentCompactor;
 use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
@@ -65,6 +66,7 @@ use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 use databend_storages_common_table_meta::meta::Compression;
@@ -116,6 +118,121 @@ async fn test_compact_segment_normal_case() -> anyhow::Result<()> {
     let stream = fixture.execute_query(qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_segment_writers_omit_incomplete_column_ranges() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
+    for sql in [
+        "create table evolved(a int, d int) storage_format='parquet' segment_format='row_oriented' block_per_segment=10",
+        "insert into evolved values (1, 10)",
+        "alter table evolved add column b int not null default 7",
+        "insert into evolved values (2, 20, 100)",
+        "insert into evolved values (3, 30, 100)",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), "default", "evolved")
+        .await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse.read_table_snapshot().await?.unwrap();
+    let [newest, middle, oldest] = snapshot.segments.as_slice() else {
+        panic!("expected three segments before compaction");
+    };
+    let operator = fuse.get_operator();
+    let schema = table.schema();
+    let a = schema.column_id_of("a")?;
+    let b = schema.column_id_of("b")?;
+    let d = schema.column_id_of("d")?;
+    let int = |v| Scalar::Number(NumberScalar::Int32(v));
+    let reader = SegmentInfoReader::new(operator.clone(), schema.clone());
+    let newest = SegmentInfo::try_from(reader.read(newest, &CachePolicy::BYPASS).await?)?;
+    let middle = SegmentInfo::try_from(reader.read(middle, &CachePolicy::BYPASS).await?)?;
+    let oldest = SegmentInfo::try_from(reader.read(oldest, &CachePolicy::BYPASS).await?)?;
+
+    // The old compactor persisted a key for b even with a block that lacks b.
+    let mut legacy_summary = oldest.summary;
+    merge_statistics_mut(&mut legacy_summary, &middle.summary, None);
+    legacy_summary
+        .col_stats
+        .insert(b, middle.summary.col_stats[&b].clone());
+    assert_eq!(legacy_summary.col_stats[&b].min(), &int(100));
+    let mut legacy_blocks = oldest.blocks;
+    legacy_blocks.extend(middle.blocks);
+    let legacy = SegmentInfo::new(legacy_blocks, legacy_summary);
+
+    // A split block physically stores d, but its statistics are unavailable.
+    let mut incomplete_blocks = newest.blocks;
+    let block = Arc::make_mut(&mut incomplete_blocks[0]);
+    let d_meta = block.col_metas[&d].clone();
+    block.append_column_group(ColumnGroupFileMeta {
+        location: ("test/d-column-group".to_string(), block.location.1),
+        file_size: 1,
+        leaf_column_metas: HashMap::from([(d, d_meta)]),
+        bloom: None,
+        compression: block.compression,
+    })?;
+    assert!(block.col_metas.is_empty());
+    assert!(block.column_meta(&d).is_some());
+    block.col_stats.remove(&d);
+    let incomplete = SegmentInfo::new(incomplete_blocks, newest.summary);
+
+    // Both mutation's block reducer and metadata-only compaction omit b and d
+    // but retain the full range of a, including its entry in the split block.
+    let blocks = legacy
+        .blocks
+        .iter()
+        .chain(&incomplete.blocks)
+        .cloned()
+        .collect::<Vec<_>>();
+    let block_summary = reduce_block_metas(&blocks, fuse.get_block_thresholds(), None)?;
+    let generator = fuse.meta_location_generator();
+    let timestamps = TestFixture::default_table_meta_timestamps();
+    let mut locations = Vec::new();
+    for segment in [&incomplete, &legacy] {
+        let path = generator.gen_segment_info_location(timestamps, false);
+        segment.write_meta(&operator, &path).await?;
+        locations.push((path, SegmentInfo::VERSION));
+    }
+    let state = SegmentCompactor::new(
+        10,
+        None,
+        1,
+        1,
+        schema,
+        &operator,
+        generator,
+        timestamps,
+        CachePolicy::DEFAULT,
+    )
+    .compact(&locations, None, |_| {})
+    .await?;
+    assert_eq!(state.new_segment_paths.len(), 1);
+    let output = (state.new_segment_paths[0].clone(), SegmentInfo::VERSION);
+    let merged = reader.read(&output, &CachePolicy::BYPASS).await?;
+    for summary in [&block_summary, &merged.summary] {
+        assert_eq!(summary.row_count, 3);
+        assert_eq!(summary.block_count, 3);
+        assert_eq!(summary.col_stats.len(), 1);
+        assert_eq!(
+            (summary.col_stats[&a].min(), summary.col_stats[&a].max()),
+            (&int(1), &int(3))
+        );
+    }
+    assert_eq!(merged.block_metas()?.len(), 3);
+
+    // Omitting the persisted ranges must not change the add/deduct accounting.
+    let mut source = legacy.summary;
+    merge_statistics_mut(&mut source, &incomplete.summary, None);
+    assert_eq!(state.removed_statistics, source);
     Ok(())
 }
 

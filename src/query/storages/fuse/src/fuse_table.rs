@@ -15,8 +15,6 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -170,7 +168,7 @@ use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
 use crate::pruning::PartitionPruningInfo;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
-use crate::statistics::reduce_block_statistics;
+use crate::statistics::reducers::reduce_column_statistics;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -1158,6 +1156,51 @@ impl FuseTable {
         new_table.table_info.meta.schema = schema;
         Arc::new(new_table)
     }
+
+    /// Count the NULL values of a leaf column from the block metadata of every
+    /// row in the current snapshot, independent of access policies.
+    ///
+    /// Returns the NULL count of the blocks that store the column, and the row
+    /// count of the blocks that do not, which read the column default. Returns
+    /// `None` if a block stores the column without statistics, or a segment is
+    /// column-oriented.
+    pub async fn column_null_count_from_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        column_id: ColumnId,
+    ) -> Result<Option<(u64, u64)>> {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some((0, 0)));
+        };
+        if snapshot.segments.iter().any(|(location, _)| {
+            crate::segment_format_from_location(location) == FuseSegmentFormat::Column
+        }) {
+            return Ok(None);
+        }
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
+        let chunk_size = (ctx.get_settings().get_max_threads()? as usize * 4).max(1);
+        let (mut null_count, mut rows_without_column) = (0, 0);
+        for chunk in snapshot.segments.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
+                .await?;
+            for segment in segments {
+                for block in segment?.block_metas()? {
+                    if block.row_count == 0 {
+                        continue;
+                    }
+                    match block.col_stats.get(&column_id) {
+                        Some(stats) => null_count += stats.null_count,
+                        None if block.column_meta(&column_id).is_none() => {
+                            rows_without_column += block.row_count;
+                        }
+                        None => return Ok(None),
+                    }
+                }
+            }
+        }
+        Ok(Some((null_count, rows_without_column)))
+    }
 }
 
 #[async_trait::async_trait]
@@ -1466,11 +1509,7 @@ impl Table for FuseTable {
             return Ok(Some(HashMap::new()));
         }
 
-        let column_ids: HashSet<&ColumnId, RandomState> = HashSet::from_iter(column_ids);
-
-        let schema = self.schema();
-        let num_fields = schema.fields.len();
-        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema);
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = std::cmp::min(
             ctx.get_settings().get_max_threads()? as usize * 4,
             num_segments,
@@ -1482,34 +1521,44 @@ impl Table for FuseTable {
             num_segments, chunk_size
         ));
 
-        // Fold column ranges of segments chunk by chunk
-        let mut reduced = HashMap::with_capacity(num_fields);
-
+        // Track only columns covered by every nonempty segment seen so far.
+        // Once removed, a column cannot reappear in a later chunk. This checks
+        // for absent statistics, not incorrect bounds in a legacy summary.
+        let mut covered: HashMap<_, _> = column_ids.iter().map(|&id| (id, None)).collect();
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
-            let segments = segments_io
+            let mut segments = segments_io
                 .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
-                .await?;
-            let mut partial_col_stats = Vec::with_capacity(chunk_size);
-            // 1. Carry the previously reduced ranges
-            partial_col_stats.push(reduced);
-            // 2. Append ranges of this chunk
-            for compacted_seg in segments.into_iter() {
-                let segment = compacted_seg?;
-                let mut cols_stats = segment.summary.col_stats.clone();
-                cols_stats.retain(|k, _| column_ids.contains(k));
-                partial_col_stats.push(cols_stats);
-            }
-            // 3. Reduces them
-            reduced = reduce_block_statistics(&partial_col_stats);
+                .await?
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
+            segments.retain(|s| s.summary.row_count != 0);
+            covered.retain(|id, previous| {
+                let mut inputs = Vec::with_capacity(segments.len() + 1);
+                inputs.extend(previous.as_ref());
+                for segment in &segments {
+                    let Some(stats) = segment.summary.col_stats.get(id) else {
+                        return false;
+                    };
+                    inputs.push(stats);
+                }
+                if !inputs.is_empty() {
+                    *previous = Some(reduce_column_statistics(&inputs));
+                }
+                true
+            });
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
+            if covered.is_empty() {
+                break;
+            }
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
         // ATTACH does not preserve the source column's STATS_TRUNCATE_LEN option.
         // Its string bounds may have been truncated at any number of characters.
         let unknown_string_truncation = self.table_type == FuseTableType::Attached;
-        let r = reduced
+        let r = covered
             .into_iter()
+            .filter_map(|(id, stats)| stats.map(|stats| (id, stats)))
             .map(|(k, v)| {
                 let truncate_len = col_stats_truncate_lens
                     .get(&k)

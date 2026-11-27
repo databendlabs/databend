@@ -54,14 +54,13 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     // Reduce the `Vec<&ColumnStatistics>` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>>`
     // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
-    let len = col_to_stats_lit.len();
+    // A range reduced from only some inputs may exclude rows of the inputs
+    // without statistics, so such columns are left out.
     col_to_stats_lit
-        .iter()
-        .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
-            acc
-        })
+        .into_iter()
+        .filter(|(_, stats)| stats.len() == stats_of_columns.len())
+        .map(|(id, stats)| (id, reduce_column_statistics(&stats)))
+        .collect()
 }
 
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
@@ -309,7 +308,10 @@ pub fn merge_statistics_mut(
         l.cluster_stats = r.cluster_stats.clone();
         l.partition_stats = r.partition_stats.clone();
     } else {
-        l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        // An empty input has no rows to cover, and must not drop the ranges of `l`.
+        if r.row_count != 0 {
+            l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        }
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats =
             reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
@@ -367,6 +369,11 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.uncompressed_byte_size -= r.uncompressed_byte_size;
     l.compressed_byte_size -= r.compressed_byte_size;
     l.index_size -= r.index_size;
+    // The counts of a column cannot be deducted if the removed rows have no
+    // statistics for it, e.g. old rows covered by the range ADD COLUMN records.
+    if r.row_count != 0 {
+        l.col_stats.retain(|id, _| r.col_stats.contains_key(id));
+    }
     for (id, col_stats) in &mut l.col_stats {
         if let Some(r_col_stats) = r.col_stats.get(id) {
             // The MinMax of a column cannot be recalculated by the right statistics,
@@ -405,6 +412,20 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     let virtual_block_count =
         l.virtual_block_count.unwrap_or_default() - r.virtual_block_count.unwrap_or_default();
     l.virtual_block_count = Option::from(virtual_block_count).filter(|&x| x > 0);
+}
+
+/// Segment ranges are safe only if every nonempty block supplies a physical
+/// column and its statistics. A missing column may read as a default value;
+/// missing stats on a physically present column give no bounds at all.
+pub(crate) fn has_complete_block_column_stats<T: Borrow<BlockMeta>>(
+    blocks: &[T],
+    id: &ColumnId,
+) -> bool {
+    blocks.iter().all(|block| {
+        let block = block.borrow();
+        block.row_count == 0
+            || (block.col_stats.contains_key(id) && block.column_meta(id).is_some())
+    })
 }
 
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
@@ -472,13 +493,16 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         {
             perfect_block_count += 1;
         }
-        col_stats.push(&b.col_stats);
+        if b.row_count != 0 {
+            col_stats.push(&b.col_stats);
+        }
         cluster_stats.push(&b.cluster_stats);
         partition_stats.push(&b.partition_stats);
         spatial_col_stats.push(&b.spatial_stats);
     });
 
-    let merged_col_stats = reduce_block_statistics(&col_stats);
+    let mut merged_col_stats = reduce_block_statistics(&col_stats);
+    merged_col_stats.retain(|id, _| has_complete_block_column_stats(block_metas, id));
     let merged_spatial_stats = reduce_spatial_statistics(&spatial_col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, cluster_key_info);
     let merged_partition_stats = validate_segment_partition_statistics(

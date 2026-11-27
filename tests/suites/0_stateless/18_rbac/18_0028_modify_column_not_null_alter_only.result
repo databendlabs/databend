@@ -1,0 +1,7 @@
+-- statistics of b
+0
+-- with a NULL value
+contains 1 NULL values
+-- without NULL values
+1	7
+2	200
