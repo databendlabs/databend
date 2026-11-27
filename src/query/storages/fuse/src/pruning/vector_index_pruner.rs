@@ -1265,17 +1265,24 @@ mod tests {
 
     /// A block passing more than `MIN_GRAPH_SEARCH_ROWS` rows, above
     /// `BRUTE_FORCE_PERCENT` and the candidates, is searched through the graph,
-    /// and that search with the passing rows finds their nearest rows: the same
-    /// SQ8 scores as scoring the passing rows one by one.
+    /// and that search with the passing rows finds their nearest rows, as scoring
+    /// the passing rows one by one does. As in qdrant's `test_filterable_hnsw`:
+    /// the search is approximate, and the graph is random (its levels come from
+    /// `thread_rng`), so a few queries out of 100 may miss a row.
     #[test]
     fn test_filtered_graph_search_of_block() -> Result<()> {
-        let (rows, dim, limit) = (2000, 4, 10);
-        // Distinct vectors from the row number, the same on every run.
-        let vector = |i: usize| {
-            let i = i as f32;
-            [i.sin(), (1.3 * i).cos(), (0.7 * i).sin(), (2.1 * i).cos()]
-        };
-        let values: Vec<F32> = (0..rows).flat_map(vector).map(F32::from).collect();
+        use rand::Rng as _;
+        use rand::SeedableRng as _;
+
+        // Random vectors of 16 dimensions: in 4, the heuristic keeps about 7
+        // links per row, and a filter rejecting a third of the rows cuts off about
+        // 100 passing rows from the search, which crosses passing rows only.
+        let (rows, dim, limit) = (2000, 16, 10);
+        let (attempts, max_failures) = (100, 5);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let values: Vec<F32> = (0..rows * dim)
+            .map(|_| F32::from(rng.gen_range(-1.0_f32..1.0)))
+            .collect();
         let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
         let (_, entries) = HNSWIndex::build(16, 64, 0, column, DistanceType::L2)?;
         let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
@@ -1297,21 +1304,30 @@ mod tests {
             panic!("expected a graph search");
         };
 
-        // An ef of every row explores all passing rows reachable in the graph.
-        let query = [0.3, -0.2, 0.5, 0.1];
-        let found = index.search_with_ef(limit, Some(rows), &query, false, Some(&passing))?;
-        assert_eq!(found.len(), limit);
-        assert!(found.iter().all(|point| filter.get_bit(point.idx as usize)));
-
         // Compare scores, not rows: two rows may share an SQ8 score.
         let sorted = |mut points: Vec<ScoredPointOffset>| -> Vec<f32> {
             points.sort_by(|a, b| a.score.total_cmp(&b.score));
             points.into_iter().map(|point| point.score).collect()
         };
-        let mut scanned = sorted(index.generate_scores(rows as u32, &query, Some(&passing))?);
-        assert_eq!(scanned.len(), filter.true_count());
-        scanned.truncate(limit);
-        assert_eq!(sorted(found), scanned);
+        let mut hits = 0;
+        for _ in 0..attempts {
+            let query: Vec<f32> = (0..dim).map(|_| rng.gen_range(-1.0..1.0)).collect();
+            // An ef of every row explores every passing row the graph reaches.
+            let found = index.search_with_ef(limit, Some(rows), &query, false, Some(&passing))?;
+            assert_eq!(found.len(), limit);
+            assert!(found.iter().all(|point| filter.get_bit(point.idx as usize)));
+
+            let mut nearest = sorted(index.generate_scores(rows as u32, &query, Some(&passing))?);
+            assert_eq!(nearest.len(), filter.true_count());
+            nearest.truncate(limit);
+            if sorted(found) == nearest {
+                hits += 1;
+            }
+        }
+        assert!(
+            attempts - hits <= max_failures,
+            "hits: {hits} of {attempts}"
+        );
         Ok(())
     }
 
@@ -1483,3 +1499,4 @@ mod tests {
         }
     }
 }
+
