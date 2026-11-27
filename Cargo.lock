@@ -6053,7 +6053,6 @@ dependencies = [
  "databend-storages-common-table-meta",
  "divan",
  "fastrace",
- "feistel-permutation-rs",
  "geo",
  "goldenfile",
  "half",
@@ -7040,12 +7039,6 @@ dependencies = [
  "chrono",
  "semver",
 ]
-
-[[package]]
-name = "feistel-permutation-rs"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db6c829a796418de937efceee04e784abd1c756a82037d84a26f868bc2279f2"
 
 [[package]]
 name = "ff"
