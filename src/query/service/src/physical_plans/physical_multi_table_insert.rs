@@ -22,11 +22,14 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -35,11 +38,13 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::AsyncTransformer;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::Transformer;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::DefaultExprBinder;
+use databend_common_sql::Symbol;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::operations::TransformPartitionBy;
@@ -53,6 +58,7 @@ use crate::physical_plans::format::ChunkFillAndReorderFormatter;
 use crate::physical_plans::format::ChunkFilterFormatter;
 use crate::physical_plans::format::ChunkMergeFormatter;
 use crate::physical_plans::format::DuplicateFormatter;
+use crate::physical_plans::format::MultiInsertRouteFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::ShuffleFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -60,6 +66,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
+use crate::pipelines::processors::transforms::TransformMultiInsertRoute;
 use crate::sessions::TableContextSession;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -108,6 +115,90 @@ impl IPhysicalPlan for Duplicate {
         self.input.build_pipeline(builder)?;
 
         builder.main_pipeline.duplicate(true, self.n)
+    }
+}
+
+/// Appends one boolean route column per WHEN condition of a multi-table insert, before the
+/// rows fan out to the INTO branches. See [`TransformMultiInsertRoute`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MultiInsertRoute {
+    pub meta: PhysicalPlanMeta,
+    pub input: PhysicalPlan,
+    pub is_first: bool,
+    /// Non-null boolean WHEN conditions over the input schema.
+    pub conditions: Vec<RemoteExpr>,
+    /// The output column of each condition.
+    pub route_symbols: Vec<Symbol>,
+}
+
+#[typetag::serde]
+impl IPhysicalPlan for MultiInsertRoute {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    #[recursive::recursive]
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = self.input.output_schema()?.fields().clone();
+        fields.extend(
+            self.route_symbols
+                .iter()
+                .map(|symbol| DataField::new(&symbol.to_string(), DataType::Boolean)),
+        );
+        Ok(Arc::new(DataSchema::new(fields)))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(MultiInsertRouteFormatter::create(self))
+    }
+
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        assert_eq!(children.len(), 1);
+        let input = children.pop().unwrap();
+        PhysicalPlan::new(MultiInsertRoute {
+            meta: self.meta.clone(),
+            input,
+            is_first: self.is_first,
+            conditions: self.conditions.clone(),
+            route_symbols: self.route_symbols.clone(),
+        })
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let conditions = self
+            .conditions
+            .iter()
+            .map(|condition| condition.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
+        let max_block_size = builder.settings.get_max_block_size()? as usize;
+        let func_ctx = builder.func_ctx.clone();
+        let is_first = self.is_first;
+        builder.main_pipeline.add_transformer(|| {
+            TransformMultiInsertRoute::new(
+                conditions.clone(),
+                is_first,
+                func_ctx.clone(),
+                max_block_size,
+            )
+        });
+        Ok(())
     }
 }
 

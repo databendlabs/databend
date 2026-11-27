@@ -30,15 +30,18 @@ Commit
         ├── branch 2: orders_placed.order_id (#0), 'StandardHandling'
         ├── branch 3: orders_placed.order_id (#0), 'ReviewNeeded'
         └── Filter
-            ├── branch 0: _insert_multi_first_when (#4) = 1
-            ├── branch 1: _insert_multi_first_when (#4) = 2
-            ├── branch 2: _insert_multi_first_when (#4) = 3
-            ├── branch 3: _insert_multi_first_when (#4) = 0
+            ├── branch 0: _insert_multi_matched_0 (#4)
+            ├── branch 1: _insert_multi_matched_1 (#5)
+            ├── branch 2: _insert_multi_matched_2 (#6)
+            ├── branch 3: NOT ((_insert_multi_matched_0 (#4) OR _insert_multi_matched_1 (#5)) OR _insert_multi_matched_2 (#6))
             └── Duplicate
                 ├── Duplicate data to 4 branch
-                └── EvalScalar
-                    ├── output columns: [orders_placed.order_id (#0), orders_placed.order_amount (#2), _insert_multi_first_when (#4)]
-                    ├── expressions: [0, 2, if(CAST(is_true(orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL)) AS Boolean NULL), 1, CAST(is_true(orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)) AS Boolean NULL), 2, CAST(is_true(orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL)) AS Boolean NULL), 3, 0)]
+                └── MultiInsertRoute
+                    ├── output columns: [orders_placed.order_id (#0), orders_placed.order_amount (#2), _insert_multi_matched_0 (#4), _insert_multi_matched_1 (#5), _insert_multi_matched_2 (#6)]
+                    ├── kind: FIRST
+                    ├── when 0: is_true(orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL))
+                    ├── when 1: is_true(orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL))
+                    ├── when 2: is_true(orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL))
                     └── TableScan
                         ├── table: default.default.orders_placed
                         ├── scan id: 0
