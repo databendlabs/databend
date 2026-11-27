@@ -239,16 +239,26 @@ impl RangeIndex {
                 }
                 Some(column_ids) => {
                     let mut column_stats = Vec::with_capacity(column_ids.len());
+                    // Statistics made up for a column the block does not store and
+                    // whose default is NULL, with their position in `column_stats`.
+                    // Blocks that store all their columns never fill it.
+                    let mut null_defaults = Vec::new();
                     for column_id in column_ids {
                         if let Some(stat) = stats.get(column_id) {
-                            column_stats.push(Cow::Borrowed(stat));
+                            column_stats.push(stat);
                         } else if column_is_default(column_id) {
                             if let Some(stat) = self.default_stats.get(column_id) {
-                                column_stats.push(default_statistics(stat, row_count));
+                                if let Some(null_default) = null_default_statistics(stat, row_count)
+                                {
+                                    null_defaults.push((column_stats.len(), null_default));
+                                }
+                                column_stats.push(stat);
                             }
                         }
                     }
-                    let column_stats = column_stats.iter().map(Cow::as_ref).collect();
+                    for (position, null_default) in &null_defaults {
+                        column_stats[*position] = null_default;
+                    }
                     statistics_to_domain(column_stats, &slot.data_type, row_count)
                 }
             };
@@ -347,21 +357,22 @@ impl RangeIndex {
     }
 }
 
-/// The statistics that stand in for a column a block does not store, whose
-/// rows all read as the column's default value.
-fn default_statistics(
+/// The statistics that stand in for a column a block does not store when the
+/// column's default is NULL, or `None` if the default statistics do as they are.
+///
+/// A NULL default makes every row of the block null, which is told by the null
+/// count, so it has to be the row count of the block.
+fn null_default_statistics(
     stat: &ColumnStatistics,
     row_count: Option<u64>,
-) -> Cow<'_, ColumnStatistics> {
-    match row_count {
-        // A null default makes every row null, which is told by the null count.
-        Some(row_count) if stat.min.is_null() && stat.max.is_null() => {
-            let mut stat = stat.clone();
-            stat.null_count = row_count;
-            Cow::Owned(stat)
-        }
-        _ => Cow::Borrowed(stat),
+) -> Option<ColumnStatistics> {
+    let row_count = row_count?;
+    if !(stat.min.is_null() && stat.max.is_null()) {
+        return None;
     }
+    let mut stat = stat.clone();
+    stat.null_count = row_count;
+    Some(stat)
 }
 
 /// The domain of a column over `row_count` rows, from the statistics of its
