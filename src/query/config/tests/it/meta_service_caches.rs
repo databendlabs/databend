@@ -45,11 +45,7 @@ fn test_meta_service_caches_from_flag() {
 
 #[test]
 fn test_meta_service_cache_defaults() {
-    let expected = [
-        MetaServiceCache::ClusterNode,
-        MetaServiceCache::Setting,
-        MetaServiceCache::User,
-    ];
+    let expected = [MetaServiceCache::ClusterNode, MetaServiceCache::Setting];
     let cli = Args::try_parse_from(["databend-query"]).unwrap().config;
     let file: Config = toml::from_str("[cache]").unwrap();
     for config in [Config::default(), cli, file] {
