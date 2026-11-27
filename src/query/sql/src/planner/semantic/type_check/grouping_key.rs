@@ -181,9 +181,9 @@ pub(super) struct GroupingKeyState {
 pub(super) struct GroupingKeyMemo {
     /// The eligibility of subtrees, by node.
     eligibility: HashMap<usize, Eligibility>,
-    /// The pre-aggregate forms of candidate nodes, by node and position of the
-    /// scope in the context chain.
-    forms: HashMap<(usize, usize), PreAggregateForm>,
+    /// The pre-aggregate forms of candidate nodes, or their binding errors, by
+    /// node and position of the scope in the context chain.
+    forms: HashMap<(usize, usize), Result<PreAggregateForm>>,
 }
 
 #[derive(Clone, Copy)]
@@ -818,12 +818,16 @@ where A: TypeCheckAdapter
         position: usize,
     ) -> Result<BoundScalar> {
         let key = (id.index, position);
-        if let Some(form) = self.grouping_key_memo.forms.get(&key) {
-            self.grouping_key.input_unavailable |= form.input_unavailable;
-            if self.grouping_key.deferred_error.is_none() {
-                self.grouping_key.deferred_error = form.deferred_error.clone();
+        match self.grouping_key_memo.forms.get(&key) {
+            Some(Ok(form)) => {
+                self.grouping_key.input_unavailable |= form.input_unavailable;
+                if self.grouping_key.deferred_error.is_none() {
+                    self.grouping_key.deferred_error = form.deferred_error.clone();
+                }
+                return Ok(form.bound.clone());
             }
-            return Ok(form.bound.clone());
+            Some(Err(err)) => return Err(err.clone()),
+            None => {}
         }
         let (result, node) = self.with_grouping_key_input(position, |checker| {
             checker.resolve_core_bound_node(arena, id)
@@ -832,15 +836,15 @@ where A: TypeCheckAdapter
         if self.grouping_key.deferred_error.is_none() {
             self.grouping_key.deferred_error = node.deferred_error.clone();
         }
-        let resolved = result?;
         if self.is_grouping_key_candidate(arena, id) {
-            self.grouping_key_memo.forms.insert(key, PreAggregateForm {
-                bound: resolved.clone(),
+            let form = result.clone().map(|bound| PreAggregateForm {
+                bound,
                 input_unavailable: node.input_unavailable,
                 deferred_error: node.deferred_error,
             });
+            self.grouping_key_memo.forms.insert(key, form);
         }
-        Ok(resolved)
+        result
     }
 
     /// Resolve an alias of the SELECT item at `position`, whose form after the
