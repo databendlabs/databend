@@ -1005,14 +1005,14 @@ impl DefaultSettings {
                 }),
                 ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
+                    desc: "Enables Compact and permits automatic background Recluster after writes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_compact_after_multi_table_insert", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enables recluster and compact after multi-table insert.",
+                    desc: "Enables inline Compact and background index Refresh after multi-table insert. Background Recluster does not depend on this setting.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1026,7 +1026,7 @@ impl DefaultSettings {
                 }),
                 ("auto_compaction_segments_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
-                    desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
+                    desc: "Deprecated; automatic recluster runs only in the background and ignores this setting.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=128)),
@@ -1072,6 +1072,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("recluster_accumulation_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(30),
+                    desc: "Minimum accumulation window for a new automatic background Recluster batch. Zero skips the window, but does not bypass write volume or foreground idle admission.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=600)),
                 }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),

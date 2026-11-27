@@ -30,11 +30,12 @@ use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
+use crate::io::block_index::BlockIndexBuildMode;
 use crate::io::block_index::BlockIndexMerge;
 use crate::io::block_index::BlockIndexMergeContext;
 use crate::io::block_index::BlockIndexMergeSource;
 pub use crate::io::block_index::BlockIndexSourceRows as ReclusterIndexRowRange;
-use crate::io::block_index::create_block_index_specs;
+use crate::io::block_index::create_block_index_specs_with_mode;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
 
@@ -70,6 +71,14 @@ pub struct ReclusterIndexMergeInputs {
 
 impl ReclusterIndexMergeInputs {
     pub fn try_create(table: &FuseTable, task: &ReclusterTask) -> Result<Option<Self>> {
+        Self::try_create_for_recluster(table, task, false)
+    }
+
+    pub fn try_create_for_recluster(
+        table: &FuseTable,
+        task: &ReclusterTask,
+        automatic_maintenance: bool,
+    ) -> Result<Option<Self>> {
         if task.parts.is_empty() || task.inverted_index_sources.len() != task.parts.len() {
             return Ok(None);
         }
@@ -92,7 +101,8 @@ impl ReclusterIndexMergeInputs {
             .map(|(&num_rows, indexes)| BlockIndexMergeSource { num_rows, indexes })
             .collect::<Vec<_>>();
         let mut indexes = Vec::new();
-        for spec in create_block_index_specs(table, table.schema_with_stream())? {
+        let mode = BlockIndexBuildMode::for_recluster(automatic_maintenance);
+        for spec in create_block_index_specs_with_mode(table, table.schema_with_stream(), mode)? {
             if let Some(index) = spec.prepare_merge(&sources)? {
                 indexes.push(index);
             }

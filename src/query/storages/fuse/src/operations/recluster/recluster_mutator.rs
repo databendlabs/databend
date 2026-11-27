@@ -34,6 +34,8 @@ use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
+use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -264,20 +266,22 @@ impl ReclusterCandidateWindow {
 /// Carry-over state reused across rounds of one `RECLUSTER FINAL` statement.
 #[derive(Clone, Default)]
 pub struct ReclusterFinalCarry {
-    // State reused across rounds of one RECLUSTER FINAL statement.
+    // State reused across rounds of one recluster job.
     pub(crate) pending: Vec<ReclusterCandidateWindow>,
     // Next scan-range start in the latest snapshot. A successful task resets this to the current
     // range start so the next round can continue reclustering replacement segments.
     pub(crate) scan_cursor: usize,
     // Cached candidates must match this cluster key.
     pub(crate) cluster_key_id: u32,
-    // Reuse block-meta decode workers across rounds of one FINAL statement.
+    // Reuse block-meta decode workers across rounds of one recluster job.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
     // The full pass of a vector RECLUSTER FINAL (see `vector_final_plan`): the blocks
     // present when it starts, rewritten once together regardless of level, so new
     // data is mixed with older clustered blocks. Blocks written by this pass are not
     // in the set, which ends it.
     pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
+    pub(crate) scan_incomplete: bool,
+    pub(crate) skipped_claimed_ranges: bool,
 }
 
 impl ReclusterFinalCarry {
@@ -295,7 +299,31 @@ impl ReclusterFinalCarry {
         self.vector_full_pass = vector_full_pass;
     }
 
-    /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.
+    pub fn skipped_claimed_ranges(&self) -> bool {
+        self.skipped_claimed_ranges
+    }
+
+    pub fn reset_candidates(&mut self) {
+        self.skipped_claimed_ranges = false;
+        self.scan_cursor = 0;
+        self.scan_incomplete = false;
+        self.release_round_resources();
+    }
+
+    pub fn scan_incomplete(&self) -> bool {
+        self.scan_incomplete
+    }
+
+    /// Release candidate metadata and decode workers without changing scan/claim progress.
+    /// Background hooks call this before returning their execution slot: keeping candidates
+    /// charged to an old grant could prevent admission of the next round that drops them.
+    /// Manual FINAL's existing reset/caching policy is unchanged.
+    pub fn release_round_resources(&mut self) {
+        self.pending = Vec::new();
+        self.decode_runtime = None;
+    }
+
+    /// Lazily create or reuse the block-meta decode runtime of the job.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {
             self.decode_runtime = Some(Arc::new(Runtime::with_worker_threads(
@@ -323,11 +351,29 @@ pub struct ReclusterMutator {
     virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
-/// Caps the selected block bytes of one recluster task.
-///
-/// Takes the tighter of the node-global (`GLOBAL_MEM_STAT`) and query-local
-/// remaining-memory views; logs when pressure shrinks the task below the
-/// nominal `recluster_block_size`.
+/// Maximum input bytes per node for an automatic Recluster round. Leave room
+/// in its grant for sorting, serialization and all indexes, including ASYNC ones.
+/// This sizes the plan; the memory tracker enforces actual allocation limits.
+pub fn automatic_recluster_input_limit(ctx: &dyn TableContext, meta: &TableMeta) -> Result<usize> {
+    let settings = ctx.get_settings();
+    let cost = meta.indexes.values().fold(4u64, |cost, index| {
+        cost.saturating_add(match index.index_type {
+            TableIndexType::Vector => 4,
+            TableIndexType::Inverted => 2,
+            _ => 1,
+        })
+    });
+    let limit =
+        (settings.get_max_query_memory_usage()? / cost).min(settings.get_recluster_block_size()?);
+    if limit == 0 {
+        return Err(ErrorCode::NoResourcesAvailable(
+            "No input budget for automatic Recluster",
+        ));
+    }
+    Ok(limit as usize)
+}
+
+/// Caps the selected block bytes for manual Recluster using remaining memory.
 fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
     let settings = ctx.get_settings();
     let recluster_block_size = settings.get_recluster_block_size()? as usize;
@@ -396,7 +442,11 @@ impl ReclusterMutator {
             _ => DEFAULT_RECLUSTER_DEPTH,
         } as f64;
 
-        let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
+        let memory_threshold = if ctx.is_automatic_maintenance() {
+            automatic_recluster_input_limit(ctx.as_ref(), &table.get_table_info().meta)?
+        } else {
+            recluster_memory_threshold(ctx.as_ref())?
+        };
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
         if !cluster.is_empty() {
@@ -1175,6 +1225,19 @@ impl ReclusterMutator {
                         total_compressed += block_meta.file_size as usize;
                         block_metas.push((None, block_meta));
                     }
+                }
+
+                // Candidate sizing is intentionally soft (e.g. Hilbert keeps at least
+                // two blocks). Automatic maintenance still enforces its grant-derived
+                // input limit here: an oversized candidate is deferred, not executed,
+                // and can remain deferred if the grant does not grow.
+                if self.ctx.is_automatic_maintenance()
+                    && total_bytes > self.properties.memory_threshold
+                {
+                    return Err(ErrorCode::NoResourcesAvailable(format!(
+                        "Recluster candidate exceeds this round's input budget: task_bytes = {}, threshold = {}",
+                        total_bytes, self.properties.memory_threshold
+                    )));
                 }
 
                 if self.properties.split_sort_tasks

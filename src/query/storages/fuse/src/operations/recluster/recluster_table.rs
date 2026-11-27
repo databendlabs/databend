@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -34,6 +35,7 @@ use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
@@ -59,7 +61,19 @@ use crate::pruning::SegmentPruner;
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
 
+/// A statement scans until it finds work or hits its LIMIT. A background unit
+/// also yields after a stable range to let other maintenance use its slot.
+#[derive(Clone, Copy)]
+pub enum ReclusterScan {
+    Statement(Option<usize>),
+    YieldAfterRange(Option<usize>),
+}
+
 type RankedTaskCandidate = (usize, usize, CandidateScore, bool);
+
+fn index_segment_range(segments: &[Location], range: Range<usize>) -> HashMap<&Location, usize> {
+    segments[range.clone()].iter().zip(range).collect()
+}
 
 fn sort_task_candidates(tasks: &mut [RankedTaskCandidate]) {
     tasks.sort_by(|left, right| right.3.cmp(&left.3).then_with(|| right.2.cmp_desc(&left.2)));
@@ -301,12 +315,17 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
+        scan: ReclusterScan,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
+        carry.scan_incomplete = false;
+        let (limit, yield_after_scan) = match scan {
+            ReclusterScan::Statement(limit) => (limit, false),
+            ReclusterScan::YieldAfterRange(limit) => (limit, true),
+        };
 
         ctx.set_status_info("[FUSE-RECLUSTER] Starting recluster operation");
 
@@ -332,40 +351,40 @@ impl FuseTable {
                 .with_vector_full_pass(carry.vector_full_pass.clone()),
         );
 
-        // Carry is tied to the current cluster key because cached block metas
-        // may be normalized during candidate probing.
-        let carry_has_state = !carry.pending.is_empty() || carry.scan_cursor != 0;
-        if carry_has_state
-            && carry.cluster_key_id != mutator.properties.cluster_key_info.cluster_key_id()
+        // Cached candidates and scan progress belong to the original cluster key.
+        let cluster_key_id = mutator.properties.cluster_key_info.cluster_key_id();
+        if (!carry.pending.is_empty() || carry.scan_cursor != 0)
+            && carry.cluster_key_id != cluster_key_id
         {
             debug!(
                 "recluster: reset carry reason=cluster_key_changed old_cluster_key_id={} new_cluster_key_id={}",
-                carry.cluster_key_id,
-                mutator.properties.cluster_key_info.cluster_key_id(),
+                carry.cluster_key_id, cluster_key_id,
             );
             carry.scan_cursor = 0;
             carry.pending.clear();
         }
-        carry.cluster_key_id = mutator.properties.cluster_key_info.cluster_key_id();
+        carry.cluster_key_id = cluster_key_id;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let segment_limit = limit.unwrap_or(DEFAULT_RECLUSTER_SEGMENT_LIMIT);
         // LIMIT is applied to scan/window sizing, not task selection. It is a
         // soft scan bound because recluster still keeps a minimum candidate window.
-        let chunk_size = segment_limit.max(max_threads * 4);
+        let chunk_size = if yield_after_scan && limit.is_none() {
+            // The queued hook scans one default range per unit even on large nodes.
+            DEFAULT_RECLUSTER_SEGMENT_LIMIT
+        } else {
+            segment_limit.max(max_threads * 4)
+        };
         // LIMIT also caps one candidate window; select_segments treats this as
         // a soft upper bound when hotspot blocks are inseparable.
         let max_seg_num =
             segment_limit.min((max_threads * 2).max(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW));
 
-        // Snapshot index for carry validation and task materialization.
-        let live_segments = snapshot
-            .segments
-            .iter()
-            .enumerate()
-            .map(|(idx, location)| (location, idx))
-            .collect::<HashMap<_, _>>();
         let number_segments = snapshot.segments.len();
+        // Only candidates carried from another snapshot need table-wide relocation.
+        // Background units retain a cursor, not candidate windows.
+        let carry_index = (!carry.pending.is_empty())
+            .then(|| index_segment_range(&snapshot.segments, 0..number_segments));
         let mut repack_count = 0;
         let mut recluster_segment_pruner = None;
         let mut decode_semaphore = None;
@@ -377,12 +396,16 @@ impl FuseTable {
                 .into_iter()
                 .filter(|window| {
                     let within_budget = mutator.task_budget.is_none_or(|budget| {
-                        budget.assign(window.tasks.iter().filter(|task| !task.is_repack_only())
-                            .map(|task| (task.score.selected_total_bytes, task.kind))).is_some()
+                        budget
+                            .assign(
+                                window.tasks.iter().filter(|task| !task.is_repack_only())
+                                    .map(|task| (task.score.selected_total_bytes, task.kind)),
+                            )
+                            .is_some()
                     });
                     let valid = within_budget
                         && window.segments.iter().all(|(location, _)| {
-                            live_segments.contains_key(location)
+                            carry_index.as_ref().is_some_and(|index| index.contains_key(location))
                                 && !claimed_segments.contains(location.0.as_str())
                         });
                     if !valid {
@@ -435,14 +458,17 @@ impl FuseTable {
                 });
                 let mut scan_locations = Vec::with_capacity(scan_range.len());
                 for (offset, location) in scan_range.iter().enumerate() {
-                    // Intentional FINAL semantics: claimed segments are treated as work delegated
-                    // to concurrent recluster tasks. This statement does not wait for claim owners;
-                    // if every remaining candidate is claimed, it may return success even if an
-                    // owner later fails. A subsequent RECLUSTER statement can pick that work up.
-                    if claimed_segments.contains(location.0.as_str())
-                        || carry_locations
-                            .as_ref()
-                            .is_some_and(|locations| locations.contains(location))
+                    if claimed_segments.contains(location.0.as_str()) {
+                        // Manual FINAL delegates this segment to its owner. Background jobs
+                        // revisit only if a claim actually excluded input from their scan.
+                        if yield_after_scan {
+                            carry.skipped_claimed_ranges = true;
+                        }
+                        continue;
+                    }
+                    if carry_locations
+                        .as_ref()
+                        .is_some_and(|locations| locations.contains(location))
                     {
                         continue;
                     }
@@ -652,9 +678,18 @@ impl FuseTable {
                 pending_windows = remaining_windows;
 
                 // Step 4: build ReclusterParts from selected candidates.
-                mutator
-                    .materialize_task_candidates(&live_segments, selected)
-                    .await?
+                if selected.is_empty() {
+                    (0, ReclusterParts::default())
+                } else {
+                    let range_index;
+                    let index = if let Some(index) = &carry_index {
+                        index
+                    } else {
+                        range_index = index_segment_range(&snapshot.segments, scan_start..scan_end);
+                        &range_index
+                    };
+                    mutator.materialize_task_candidates(index, selected).await?
+                }
             };
 
             if parts.removed_segment_indexes.len() > MAX_SEGMENT_LOCATIONS_PER_CLAIM {
@@ -671,6 +706,7 @@ impl FuseTable {
                 // whole range once against the latest snapshot before declaring it stable.
                 carry.pending = pending_windows;
                 carry.scan_cursor = scan_start;
+                carry.scan_incomplete = true;
                 break parts;
             }
 
@@ -690,14 +726,21 @@ impl FuseTable {
                 "recluster: candidate stable range advanced next_scan_start={} number_segments={}",
                 scan_end, number_segments,
             );
-            // LIMIT stops after the first non-pruned scan range.
-            if scan_end >= number_segments || (limit.is_some() && scan_had_compact_segments) {
+            // Manual LIMIT retains its statement semantics. Background jobs use the
+            // same window bound, but yield and continue after stable ranges as well.
+            carry.scan_incomplete = scan_end < number_segments;
+            if scan_end >= number_segments
+                || yield_after_scan
+                || (limit.is_some() && scan_had_compact_segments)
+            {
                 break parts;
             }
         };
 
-        if mode != ReclusterMode::Aggressive {
-            // Keeps a started vector full pass.
+        // Manual Conservative statements reset scan state while keeping a started
+        // vector full pass. Background jobs retain scan progress across execution
+        // units, validated against the latest snapshot on the next round.
+        if !yield_after_scan && mode != ReclusterMode::Aggressive {
             carry.reset();
         }
 
@@ -731,7 +774,12 @@ impl FuseTable {
         push_down: &Option<PushDownInfo>,
     ) -> Result<(Arc<PruningContext>, Arc<SegmentPruner>, usize)> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_concurrency = std::cmp::max(max_threads, 10);
+        let mut max_concurrency = std::cmp::max(max_threads, 10);
+        if ctx.is_automatic_maintenance() {
+            max_concurrency = max_concurrency
+                .min(ctx.get_settings().get_max_storage_io_requests()? as usize)
+                .max(1);
+        }
         if max_concurrency > max_threads {
             warn!(
                 "recluster: max_threads setting too low {}, increased to {}",
@@ -960,6 +1008,27 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 3);
 
         assert_eq!(selected, vec![vec![0], vec![], vec![0]]);
+    }
+
+    #[test]
+    fn test_carry_resets_preserve_vector_pass() {
+        let mut carry = ReclusterFinalCarry::default();
+        let blocks = HashSet::from(["block".to_string()]);
+        carry.start_vector_full_pass(blocks.clone());
+        carry.scan_cursor = 8;
+        carry.reset();
+        assert_eq!(carry.scan_cursor, 0);
+        assert_eq!(carry.vector_full_pass.as_deref(), Some(&blocks));
+
+        carry.scan_cursor = 8;
+        carry.scan_incomplete = true;
+        carry.skipped_claimed_ranges = true;
+        assert!(carry.skipped_claimed_ranges());
+        carry.reset_candidates();
+        assert_eq!(carry.scan_cursor, 0);
+        assert!(!carry.skipped_claimed_ranges());
+        assert!(!carry.scan_incomplete());
+        assert_eq!(carry.vector_full_pass.as_deref(), Some(&blocks));
     }
 
     #[test]

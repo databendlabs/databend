@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::plans::TruncateMode;
@@ -27,7 +25,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::FuseTable;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
-use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TruncateGenerator;
 
 impl FuseTable {
@@ -62,19 +59,7 @@ impl FuseTable {
             None
         };
         pipeline.add_source(
-            |output| {
-                let meta = CommitMeta {
-                    conflict_resolve_context: ConflictResolveContext::None,
-                    new_segment_locs: vec![],
-                    table_id: self.get_id(),
-                    logical_updated_rows: 0,
-                    logical_deleted_rows: 0,
-                    hll: HashMap::new(),
-                    top_n: HashMap::new(),
-                };
-                let block = DataBlock::empty_with_meta(Box::new(meta));
-                OneBlockSource::create(output, block)
-            },
+            |output| OneBlockSource::create(output, CommitMeta::empty(self.get_id()).into()),
             1,
         )?;
 

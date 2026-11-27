@@ -42,6 +42,7 @@ use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::debug;
 use log::error;
 use log::info;
@@ -106,8 +107,10 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut imperfect_counts = HashMap::with_capacity(self.commit_metas.len());
         let mut logical_deltas = HashMap::with_capacity(self.commit_metas.len());
         let insert_rows = std::mem::take(&mut self.insert_rows);
+        let mut written_bytes = HashMap::with_capacity(self.commit_metas.len());
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             let table = self.tables.get(&table_id).unwrap();
+            written_bytes.insert(table_id, commit_meta.logical_written_bytes);
 
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
@@ -188,6 +191,18 @@ impl AsyncSink for CommitMultiTableInsert {
                         .await?;
                 }
 
+                if !self.ctx.txn_mgr().lock().is_active() {
+                    for (update, _) in &update_table_metas {
+                        if let MatchSeq::Exact(seq) = update.seq
+                            && let Some(location) =
+                                update.new_table_meta.options.get(OPT_KEY_SNAPSHOT_LOCATION)
+                        {
+                            self.ctx
+                                .record_refresh_anchor(update.table_id, seq, location);
+                        }
+                    }
+                }
+
                 let table_descriptions = self
                     .tables
                     .values()
@@ -207,11 +222,21 @@ impl AsyncSink for CommitMultiTableInsert {
                 );
                 for (table_id, imperfect_count) in imperfect_counts.iter() {
                     if let Some(table) = self.tables.get(table_id) {
+                        let table_info = table.get_table_info();
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
-                            table.get_table_info(),
+                            table_info,
                             *imperfect_count,
                         );
+                        if insert_rows.get(table_id).is_some_and(|rows| *rows > 0)
+                            && let Some(cluster_key_id) = table_info.meta.cluster_key_id()
+                        {
+                            self.ctx.record_recluster_write(
+                                *table_id,
+                                cluster_key_id,
+                                written_bytes[table_id],
+                            );
+                        }
                     }
                 }
                 self.ctx

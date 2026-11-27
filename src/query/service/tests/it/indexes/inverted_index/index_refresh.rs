@@ -26,6 +26,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -33,10 +34,12 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_sql::Planner;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentInfoReader;
@@ -51,6 +54,7 @@ use databend_common_storages_fuse::operations::do_refresh_table_index;
 use databend_common_storages_fuse::operations::prepare_refresh_virtual_column;
 use databend_common_storages_fuse::pruning::create_inverted_index_query;
 use databend_query::interpreters::Interpreter;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
@@ -253,10 +257,9 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()> {
+async fn test_partial_compact_refresh_skips_untouched_history() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let settings = fixture.default_session().get_settings();
-    settings.set_setting("enable_compact_after_write".into(), "0".into())?;
     fixture.create_default_database().await?;
     let database = fixture.default_db_name();
     let table_name = fixture.default_table_name();
@@ -266,65 +269,74 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
              ROW_PER_BLOCK = 1000 BLOCK_PER_SEGMENT = 1000"
         ))
         .await?;
+    // Seed three segments without enqueueing Refresh from an earlier write.
     for word in ["alpha", "beta", "gamma"] {
+        let table = fixture.latest_default_table().await?;
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![word])]);
         fixture
-            .execute_command(&format!(
-                "INSERT INTO {database}.{table_name} VALUES ('{word}')"
-            ))
+            .append_commit_blocks(table, vec![block], false, true)
             .await?;
     }
-    // Existing blocks lack the ASYNC index, so refresh must cover both untouched
-    // blocks and Compact outputs; the block writer cannot mask missing hints.
+    settings.set_setting("enable_compact_after_write".into(), "1".into())?;
+    settings.set_auto_compaction_imperfect_blocks_threshold(1)?;
+    let (before, old_blocks) = refresh_batch_blocks(&fixture).await?;
+    assert_eq!(before.segments.len(), 3);
+    // A threshold of 1 gives a two-block hint. Compact includes one boundary
+    // segment, rewriting three of the four segments and leaving one untouched.
+    let ctx = fixture.new_query_ctx().await?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql(&format!(
+            "INSERT INTO {database}.{table_name} VALUES ('delta')"
+        ))
+        .await?;
+    let insert = InterpreterFactory::get(ctx.clone(), &plan)
+        .await?
+        .execute2()
+        .await?;
+    // Register the ASYNC index after INSERT captures the write hook. Refresh must
+    // discover it and index the Compact output without backfilling history.
     fixture
         .execute_command(&format!(
             "CREATE ASYNC INVERTED INDEX idx ON {database}.{table_name}(content)"
         ))
         .await?;
-    settings.set_setting("enable_compact_after_write".into(), "1".into())?;
-    settings.set_auto_compaction_imperfect_blocks_threshold(1)?;
-    let ctx = fixture.new_query_ctx().await?;
-    let table = ctx.get_table("default", &database, &table_name).await?;
-    let before = FuseTable::try_from_table(table.as_ref())?
-        .read_table_snapshot()
-        .await?
-        .unwrap();
-    assert_eq!(before.segments.len(), 3);
-    // Model accumulated write hints, as when async hooks coalesce writes.
-    ctx.written_segment_locations()
-        .extend(before.segments.iter().cloned());
-    // A threshold of 1 gives a two-block hint. Compact includes one boundary
-    // segment, rewriting three of the four segments and leaving one untouched.
-    TestFixture::execute_query_with_ctx(
-        ctx.clone(),
-        &format!("INSERT INTO {database}.{table_name} VALUES ('delta')"),
-    )
-    .await?
-    .try_collect::<Vec<_>>()
-    .await?;
+    execute_pipeline(ctx, insert).await?;
 
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
-    assert_eq!(snapshot.summary.row_count, 4);
-    assert_eq!(snapshot.summary.block_count, 2);
-    let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
-    let mut block_rows = Vec::new();
-    for (location, version) in &snapshot.segments {
-        let segment = reader
-            .read(&(location.clone(), *version), &CachePolicy::BYPASS)
-            .await?;
-        for block in segment.block_metas()? {
-            block_rows.push(block.row_count);
-            assert!(
-                block
-                    .inverted_index_metas
-                    .as_deref()
-                    .is_some_and(|metas| { metas.iter().any(|meta| meta.index_name == "idx") })
-            );
+    let is_historical =
+        |block: &BlockMeta| old_blocks.iter().any(|old| old.location == block.location);
+    let has_index = |block: &BlockMeta| {
+        block
+            .inverted_index_metas
+            .as_deref()
+            .is_some_and(|metas| metas.iter().any(|meta| meta.index_name == "idx"))
+    };
+    // Compact is complete at statement return; index coverage is now asynchronous.
+    let (snapshot, blocks) = tokio::time::timeout(std::time::Duration::from_secs(20), async {
+        loop {
+            let (snapshot, blocks) = refresh_batch_blocks(&fixture).await?;
+            if blocks
+                .iter()
+                .all(|block| is_historical(block) || has_index(block))
+            {
+                break anyhow::Ok((snapshot, blocks));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
-    }
-    block_rows.sort_unstable();
-    assert_eq!(block_rows, vec![1, 3]);
+    })
+    .await??;
+    assert_eq!(snapshot.summary.row_count, 4);
+    let retained = blocks.iter().filter(|block| is_historical(block)).count();
+    assert!(
+        (1..old_blocks.len()).contains(&retained),
+        "Compact must rewrite some historical blocks and leave others untouched"
+    );
+    assert!(
+        blocks
+            .iter()
+            .filter(|block| is_historical(block))
+            .all(|block| !has_index(block)),
+        "Refresh must not index untouched history"
+    );
     Ok(())
 }
 
@@ -553,18 +565,22 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
         .get_table_info()
         .meta
         .indexes
-        .keys()
-        .cloned()
+        .values()
+        .filter(|index| !index.sync_creation)
+        .map(|index| index.name.clone())
         .collect::<Vec<_>>();
     let mut pipeline = Pipeline::create();
-    fuse.do_refresh_indexes(
-        ctx.clone(),
-        &names,
-        Some(before.segments.clone()),
-        &mut pipeline,
-    )
-    .await?;
-    // Metadata-only DDL invalidates the table version but does not publish a new snapshot.
+    let pending = fuse
+        .do_refresh_indexes(
+            ctx.clone(),
+            &names,
+            Some(before.segments.clone()),
+            &mut pipeline,
+        )
+        .await?;
+    assert!(pending > 0);
+
+    // Metadata-only DDL invalidates the table version without publishing a snapshot.
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     catalog
         .create_table_index(CreateTableIndexReq {
@@ -578,16 +594,13 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
             index_type: TableIndexType::Inverted,
         })
         .await?;
-    assert!(
-        PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx)?)?
-            .execute()
-            .await
-            .is_err()
-    );
-    let (failed, _) = refresh_batch_blocks(&fixture).await?;
-    assert_eq!(failed.snapshot_id, before.snapshot_id);
-    // Preserve the old Ngram in-place behavior. This test promises metadata
-    // publication atomicity, not rollback of physical files on commit failure.
+    PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx)?)?
+        .execute()
+        .await
+        .expect_err("a stale Refresh must not publish over a foreground change");
+    let (after, _) = refresh_batch_blocks(&fixture).await?;
+    assert_eq!(after.snapshot_id, before.snapshot_id);
+    // Ngram files can be updated in place; only metadata publication is atomic.
     Ok(())
 }
 
@@ -598,7 +611,8 @@ enum RefreshBatchMode {
 }
 
 async fn refresh_batch_fixture(mode: RefreshBatchMode) -> anyhow::Result<TestFixture> {
-    let fixture = TestFixture::setup().await?;
+    // A queued INSERT hook must not refresh the indexes while the fixture prepares them.
+    let fixture = TestFixture::setup_with_stopped_maintenance().await?;
     let settings = fixture.default_session().get_settings();
     settings.set_max_threads(2)?;
     settings.set_enable_experimental_virtual_column(1)?;

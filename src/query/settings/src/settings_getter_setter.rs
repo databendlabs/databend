@@ -782,10 +782,6 @@ impl Settings {
         self.try_set_u64("auto_compaction_imperfect_blocks_threshold", val)
     }
 
-    pub fn get_auto_compaction_segments_limit(&self) -> Result<u64> {
-        self.try_get_u64("auto_compaction_segments_limit")
-    }
-
     pub fn get_use_parquet2(&self) -> Result<bool> {
         Ok(self.try_get_u64("use_parquet2")? != 0)
     }
@@ -805,6 +801,16 @@ impl Settings {
     pub fn get_replace_into_shuffle_strategy(&self) -> Result<ReplaceIntoShuffleStrategy> {
         let v = self.try_get_u64("replace_into_shuffle_strategy")?;
         ReplaceIntoShuffleStrategy::try_from(v)
+    }
+
+    pub fn get_recluster_accumulation_secs(&self) -> Result<u64> {
+        let seconds = self.try_get_u64("recluster_accumulation_secs")?;
+        // Config defaults and loaded global values bypass SET's range validation.
+        let defaults = DefaultSettings::instance()?;
+        if let Some(range) = &defaults.settings["recluster_accumulation_secs"].range {
+            range.is_within_numeric_range(seconds)?;
+        }
+        Ok(seconds)
     }
 
     pub fn get_recluster_timeout_secs(&self) -> Result<u64> {

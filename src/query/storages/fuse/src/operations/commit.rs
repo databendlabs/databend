@@ -192,6 +192,15 @@ impl FuseTable {
         let table_statistics_location = snapshot.table_statistics_location();
         let lvt_check = Self::build_table_lvt_check(table_info, snapshot.timestamp)?;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
+        if ctx.is_automatic_maintenance() && table_info.meta.drop_on.is_some() {
+            return Err(ErrorCode::InvalidOperation(format!(
+                "table {} was dropped before maintenance publication",
+                table_info.ident.table_id
+            )));
+        }
+        // Direct snapshot publishers rely on the exact-sequence commit, not a
+        // table lock. Still protect the commit from cooperative cancellation.
+        let _publication_guard = ctx.begin_maintenance_publication()?;
         // 2. update table meta
         let res = self
             .update_table_meta(
@@ -299,6 +308,12 @@ impl FuseTable {
                 update_temp_tables,
             })
             .await?;
+
+        if !new_table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX)
+            && !ctx.txn_mgr().lock().is_active()
+        {
+            ctx.record_refresh_anchor(table_id, table_version, &snapshot_location);
+        }
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         FuseCaches::instance()

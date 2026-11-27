@@ -64,6 +64,7 @@ use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
+use futures::stream;
 use log::error;
 use log::info;
 use log::warn;
@@ -82,6 +83,7 @@ use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
+use crate::servers::flight::v1::actions::FOREGROUND_IDLE;
 
 pub struct ClusterDiscovery {
     local_id: String,
@@ -453,6 +455,49 @@ impl ClusterDiscovery {
         }
     }
 
+    /// Probe the actual warehouse membership, without connection or version filtering.
+    /// The caller checks local foreground activity and bounds the whole probe.
+    pub(crate) async fn are_warehouse_peers_idle(&self, warehouse: &str) -> Result<bool> {
+        if GlobalConfig::is_embedded_mode() {
+            return Ok(true);
+        }
+        if warehouse.is_empty() {
+            return Ok(false);
+        }
+        let nodes = self
+            .warehouse_manager
+            .list_warehouse_nodes(warehouse.to_owned())
+            .await?;
+        if !nodes.iter().any(|node| node.id == self.local_id) {
+            return Ok(false);
+        }
+
+        let config = GlobalConfig::instance();
+        let mut probes = stream::iter(nodes.into_iter().filter(|node| node.id != self.local_id))
+            .map(|node| {
+                let config = &config;
+                async move {
+                    let mut client = create_client(
+                        config,
+                        &node.id,
+                        &node.flight_address,
+                        FlightKeepAliveParams::default(),
+                    )
+                    .await?;
+                    client
+                        .do_action::<_, bool>(FOREGROUND_IDLE, node.secret, (), 1)
+                        .await
+                }
+            })
+            .buffer_unordered(16);
+        while let Some(idle) = probes.next().await {
+            if !idle? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     pub async fn discover_warehouse_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         let nodes = match config.query.common.warehouse_id.is_empty() {
             true => {
@@ -484,6 +529,40 @@ impl ClusterDiscovery {
             }
         };
 
+        self.create_cluster_with_try_connect(config, nodes).await
+    }
+
+    /// Queued work on a dynamically assigned node needs a real local member in
+    /// the discovery result. The foreground heartbeat fallback can otherwise
+    /// synthesize it from peers left in the old warehouse after reassignment.
+    pub(crate) async fn discover_for_maintenance(
+        &self,
+        config: &InnerConfig,
+    ) -> Result<Arc<Cluster>> {
+        if GlobalConfig::is_embedded_mode() {
+            return self.single_node_cluster(config).await;
+        }
+        if !config.query.common.cluster_id.is_empty() {
+            return self.discover(config).await;
+        }
+
+        let nodes = self
+            .warehouse_manager
+            .discover(&config.query.node_id)
+            .await
+            .and_then(|nodes| {
+                if nodes
+                    .iter()
+                    .any(|node| node.id == self.local_id && node.assigned_warehouse())
+                {
+                    Ok(nodes)
+                } else {
+                    Err(ErrorCode::InvalidWarehouse(format!(
+                        "Maintenance requires node '{}' to be a discovered warehouse member",
+                        self.local_id
+                    )))
+                }
+            });
         self.create_cluster_with_try_connect(config, nodes).await
     }
 

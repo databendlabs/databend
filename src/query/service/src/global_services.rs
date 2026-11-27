@@ -55,7 +55,6 @@ use crate::catalogs::IcebergCreator;
 use crate::catalogs::PaimonCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
-use crate::interpreters::TableHookScheduler;
 use crate::locks::CoordinationManager;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -64,6 +63,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 use crate::spillers::SpillsBufferPool;
+use crate::table_maintenance::TableMaintenanceService;
 #[cfg(feature = "task-support")]
 use crate::task::service::TaskService;
 
@@ -175,7 +175,7 @@ impl GlobalServices {
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         CoordinationManager::init()?;
-        TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
+        TableMaintenanceService::init(&config.query)?;
         AuthMgr::init(config, version)?;
 
         // Init user manager.

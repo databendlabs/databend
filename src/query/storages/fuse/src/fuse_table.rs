@@ -544,10 +544,8 @@ impl FuseTable {
         &self,
         policy: CachePolicy,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        let loc = self.snapshot_loc();
-        let ver = self.snapshot_format_version(loc.clone())?;
-        let cache = &FuseCaches::instance().snapshots.with_policy(policy);
-        Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
+        self.read_table_snapshot_with_location_and_policy(self.snapshot_loc(), policy)
+            .await
     }
 
     #[fastrace::trace]
@@ -556,8 +554,17 @@ impl FuseTable {
         &self,
         loc: Option<String>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
+        self.read_table_snapshot_with_location_and_policy(loc, CachePolicy::DEFAULT)
+            .await
+    }
+
+    pub async fn read_table_snapshot_with_location_and_policy(
+        &self,
+        loc: Option<String>,
+        policy: CachePolicy,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         let ver = self.snapshot_format_version(loc.clone())?;
-        let cache = &FuseCaches::instance().snapshots;
+        let cache = &FuseCaches::instance().snapshots.with_policy(policy);
         Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
     }
 

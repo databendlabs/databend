@@ -178,8 +178,12 @@ async fn test_failed_transaction_commit_preserves_snapshot_hint() -> anyhow::Res
         ("hint_conflict_existing", true),
     ] {
         let target = format!("{db}.{temp}_persistent");
+        // Disable Auto Analyze on the table: the writer session does not inherit
+        // the fixture session's settings, and its DELETE must leave a stable baseline.
         fixture
-            .execute_command(&format!("CREATE TABLE {target}(id INT)"))
+            .execute_command(&format!(
+                "CREATE TABLE {target}(id INT) enable_auto_analyze = 0"
+            ))
             .await?;
         fixture
             .execute_command(&format!("INSERT INTO {target} VALUES (1),(2)"))

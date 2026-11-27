@@ -182,6 +182,9 @@ impl FuseTable {
         });
         let previous = snapshot.snapshot_id;
         let generator = MutationGenerator::new(Some(snapshot), MutationKind::Refresh);
+        // Background refresh scans without a table lock. Only publication joins
+        // the table lock queue and revalidates the fixed table version.
+        let acquire_commit_lock = ctx.is_automatic_maintenance();
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
@@ -193,7 +196,7 @@ impl FuseTable {
                 None,
                 Some(previous),
                 timestamps,
-                false,
+                acquire_commit_lock,
                 None,
             )
         })?;

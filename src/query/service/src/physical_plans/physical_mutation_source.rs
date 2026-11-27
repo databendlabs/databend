@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::borrow::Cow;
-use std::collections::HashMap;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::Filters;
@@ -25,7 +24,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -47,7 +45,6 @@ use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 use databend_common_storages_fuse::operations::CommitMeta;
-use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 
@@ -135,19 +132,7 @@ impl IPhysicalPlan for MutationSource {
             // we can truncate the table directly.
             debug_assert!(self.partitions.is_empty() && is_delete);
             return builder.main_pipeline.add_source(
-                |output| {
-                    let meta = CommitMeta {
-                        conflict_resolve_context: ConflictResolveContext::None,
-                        new_segment_locs: vec![],
-                        table_id: table.get_id(),
-                        logical_updated_rows: 0,
-                        logical_deleted_rows: 0,
-                        hll: HashMap::new(),
-                        top_n: HashMap::new(),
-                    };
-                    let block = DataBlock::empty_with_meta(Box::new(meta));
-                    OneBlockSource::create(output, block)
-                },
+                |output| OneBlockSource::create(output, CommitMeta::empty(table.get_id()).into()),
                 1,
             );
         }

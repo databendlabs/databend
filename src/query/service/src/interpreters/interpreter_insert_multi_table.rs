@@ -42,6 +42,7 @@ use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_session::TableHookScope;
 
 use super::HookOperator;
 use crate::interpreters::Interpreter;
@@ -110,24 +111,28 @@ impl Interpreter for InsertMultiTableInterpreter {
             let physical_plan = self.build_physical_plan(false).await?;
             let mut build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            // Execute hook.
-            if self
+            let scope = if self
                 .ctx
                 .get_settings()
                 .get_enable_compact_after_multi_table_insert()?
             {
-                for (_, (db, tbl)) in &self.plan.target_tables {
-                    let hook_operator = HookOperator::create(
-                        self.ctx.clone(),
-                        // multi table insert only support default catalog
-                        CATALOG_DEFAULT.to_string(),
-                        db.to_string(),
-                        tbl.to_string(),
-                        MutationKind::Insert,
-                        LockTableOption::LockNoRetry,
-                    );
-                    hook_operator.execute(&mut build_res.main_pipeline).await;
-                }
+                TableHookScope::Full
+            } else {
+                TableHookScope::ReclusterOnly
+            };
+            for (_, (db, tbl)) in &self.plan.target_tables {
+                HookOperator::create(
+                    self.ctx.clone(),
+                    // Multi-table INSERT only supports the default catalog.
+                    CATALOG_DEFAULT.to_string(),
+                    db.to_string(),
+                    tbl.to_string(),
+                    MutationKind::Insert,
+                    LockTableOption::LockNoRetry,
+                )
+                .with_scope(scope)
+                .execute(&mut build_res.main_pipeline)
+                .await;
             }
             Ok(build_res)
         })

@@ -3231,7 +3231,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline",
  "databend-common-storage",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]

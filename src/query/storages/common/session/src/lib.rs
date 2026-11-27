@@ -16,6 +16,8 @@ mod temp_table;
 mod transaction;
 pub use temp_table::TempTblMgr;
 pub use temp_table::TempTblMgrRef;
+pub use transaction::ReclusterWriteHint;
+pub use transaction::TableHookScope;
 pub use transaction::TxnManager;
 pub use transaction::TxnManagerRef;
 pub use transaction::TxnState;

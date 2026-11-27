@@ -82,6 +82,10 @@ select segment_count , block_count , row_count from fuse_snapshot('i15760', 't')
 
 
 #ISSUE 16498
+# Keep background Recluster pending so this only checks the inline write hooks.
+statement ok
+set global recluster_accumulation_secs = 600;
+
 statement ok
 create table t1(a int) cluster by(a) row_per_block=5;
 
@@ -97,15 +101,20 @@ insert into t1 values(4),(6),(10),(11);
 statement ok
 insert into t1 values(0),(9),(12);
 
+statement ok
+unset global recluster_accumulation_secs;
+
+# Compact still runs inline, but the overlapping blocks have not been reclustered.
+query B
+SELECT max(info:average_depth::DOUBLE) > 1.0
+FROM clustering_information('i15760', 't1');
+----
+1
+
 query B
 select count() > 4 from fuse_snapshot('i15760', 't1');
 ----
 1
-
-query T
-select info:average_depth from clustering_information('i15760', 't1')
-----
-1.0
 
 #ISSUE 18859
 statement ok
@@ -246,6 +255,25 @@ insert into t_refresh_multi values
 ('alpha', 'gamma', [1,2,3,4], [4,3,2,1], to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)')),
 ('beta', 'delta', [4,3,2,1], [1,2,3,4], to_geometry('POINT(3 3)'), to_geometry('POINT(4 4)'));
 
+# Observe the batch publication before issuing manual Refresh, which could
+# publish individual indexes first. The zero-work and exact snapshot-count
+# assertions below still verify all eight siblings.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := (SELECT count(DISTINCT snapshot_id) >= 2 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+    WHILE NOT ready AND attempts < 200 DO
+        SELECT sleep(0.1);
+        ready := (SELECT count(DISTINCT snapshot_id) >= 2 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN ready;
+END;
+$$;
+----
+1
+
 query I
 refresh inverted index idx_content on t_refresh_multi;
 ----
@@ -319,6 +347,23 @@ set auto_compaction_imperfect_blocks_threshold = 1;
 
 statement ok
 insert into t_refresh_multi values ('alpha', 'gamma', [1,2,3,4], [4,3,2,1], to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
+
+# Append and synchronous Compact add two snapshots; await the batch Refresh.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := (SELECT count(DISTINCT snapshot_id) >= 5 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+    WHILE NOT ready AND attempts < 200 DO
+        SELECT sleep(0.1);
+        ready := (SELECT count(DISTINCT snapshot_id) >= 5 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN ready;
+END;
+$$;
+----
+1
 
 query I
 refresh inverted index idx_content on t_refresh_multi;

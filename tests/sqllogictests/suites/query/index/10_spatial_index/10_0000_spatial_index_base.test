@@ -55,6 +55,25 @@ SELECT count() FROM fuse_block('test_spatial_index', 't') WHERE spatial_index_si
 ----
 0
 
+# INSERT already emits statistics for every Geometry column, including geom2.
+# This unclustered table has no auto Analyze: its second snapshot is the ASYNC
+# index publication. Neither aggregate size nor geom2's statistics proves it.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := (SELECT count(DISTINCT snapshot_id) >= 2 FROM fuse_snapshot('test_spatial_index', 't'));
+    WHILE NOT ready AND attempts < 200 DO
+        SELECT sleep(0.1);
+        ready := (SELECT count(DISTINCT snapshot_id) >= 2 FROM fuse_snapshot('test_spatial_index', 't'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN ready;
+END;
+$$;
+----
+1
+
 # INSERT's automatic hook has already published the ASYNC index on all blocks.
 query I
 REFRESH SPATIAL INDEX idx_refresh ON t

@@ -402,10 +402,6 @@ impl TableContext for CtxDelegation {
         self.ctx.result_cache_state()
     }
 
-    fn written_segment_locations(&self) -> &SegmentLocationsState {
-        self.ctx.written_segment_locations()
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

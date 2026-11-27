@@ -12,9 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::panic::AssertUnwindSafe;
+
+use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::take_alloc_error_panic;
+use databend_common_catalog::table_context::RefreshAnchor;
 use databend_common_meta_app::schema::LockKey;
+use databend_storages_common_session::ReclusterWriteHint;
 
 use super::*;
+
+impl QueryContext {
+    pub(crate) fn take_recluster_write(&self, table_id: u64) -> Option<ReclusterWriteHint> {
+        self.shared.recluster_writes.lock().remove(&table_id)
+    }
+
+    pub(crate) fn expect_refresh_anchor(&self, table_id: u64) {
+        let mut anchors = self.shared.refresh_anchors.lock();
+        if anchors.try_reserve(1).is_ok() {
+            anchors.entry(table_id).or_insert(None);
+        } else {
+            drop(anchors);
+            let _guard = LimitMemGuard::enter_unlimited();
+            databend_common_metrics::table_maintenance::record_rejected("metadata_capacity");
+        }
+    }
+
+    pub(crate) fn take_refresh_anchor(&self, table_id: u64) -> Option<RefreshAnchor> {
+        self.shared
+            .refresh_anchors
+            .lock()
+            .remove(&table_id)
+            .flatten()
+    }
+}
+
+/// Best-effort notification capture must not fail a write that already succeeded.
+fn record_maintenance_input(record: impl FnOnce()) {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "recover without allocating an ErrorCode"
+    )]
+    if std::panic::catch_unwind(AssertUnwindSafe(record)).is_err() {
+        let _guard = LimitMemGuard::enter_unlimited();
+        take_alloc_error_panic();
+        databend_common_metrics::table_maintenance::record_rejected("capture_panic");
+    }
+}
 
 impl TableContextTableFactory for QueryContext {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
@@ -462,6 +506,51 @@ impl QueryContext {
 
 #[async_trait::async_trait]
 impl TableContextTableManagement for QueryContext {
+    fn record_recluster_write(
+        &self,
+        table_id: u64,
+        cluster_key_id: u32,
+        logical_written_bytes: Option<u64>,
+    ) {
+        record_maintenance_input(|| {
+            // Honor the writing statement's setting before its hint can enter a
+            // transaction buffer. Refresh and Analyze capture their inputs separately.
+            if !self
+                .get_settings()
+                .get_enable_compact_after_write()
+                .unwrap_or_default()
+            {
+                return;
+            }
+            let write = ReclusterWriteHint {
+                known_bytes: logical_written_bytes.unwrap_or_default(),
+                cluster_key_id,
+                committed_at: std::time::Instant::now(),
+            };
+            self.shared
+                .recluster_writes
+                .lock()
+                .entry(table_id)
+                .and_modify(|existing| existing.merge(write))
+                .or_insert(write);
+        });
+    }
+
+    fn record_refresh_anchor(&self, table_id: u64, base_table_seq: u64, snapshot_location: &str) {
+        record_maintenance_input(|| {
+            if let Some(anchor) = self.shared.refresh_anchors.lock().get_mut(&table_id)
+                && anchor
+                    .as_ref()
+                    .is_none_or(|old| base_table_seq < old.base_table_seq)
+            {
+                *anchor = Some(RefreshAnchor {
+                    snapshot_location: snapshot_location.to_owned(),
+                    base_table_seq,
+                });
+            }
+        });
+    }
+
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
         self.shared.evict_table_from_cache(catalog, database, table)
     }

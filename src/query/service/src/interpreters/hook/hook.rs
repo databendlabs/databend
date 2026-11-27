@@ -15,32 +15,41 @@
 // Logs from this module will show up as "[TABLE-HOOK] ...".
 databend_common_tracing::register_module_tag!("[TABLE-HOOK]");
 
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_base::runtime::take_alloc_error_panic;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::RefreshAnchor;
 use databend_common_exception::Result;
+use databend_common_metrics::table_maintenance::record_rejected;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_session::ReclusterWriteHint;
+use databend_storages_common_session::TableHookScope;
 use databend_storages_common_session::TxnTableHook;
 use log::warn;
 
+use crate::interpreters::hook::TableHookTarget;
 use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
-use crate::interpreters::hook::table_hook_scheduler::TableHookScheduler;
-use crate::interpreters::hook::table_hook_task::TableHookTarget;
 use crate::interpreters::hook::table_hook_task::TableHookTask;
-use crate::interpreters::hook::table_hook_task::TableHookTaskSettings;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
-use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextQueryInfo;
 use crate::sessions::TableContextSession;
 use crate::sessions::TableContextTableAccess;
+use crate::table_maintenance::MaintenanceContext;
+use crate::table_maintenance::TableMaintenanceService;
+use crate::table_maintenance::task::MaintenanceTask;
 
 /// Register the release point of a handed-over table lock on the finished-callback chain.
 ///
@@ -70,11 +79,11 @@ pub struct HookOperator {
     table: String,
     mutation_kind: MutationKind,
     lock_opt: LockTableOption,
+    scope: TableHookScope,
     /// The table lock acquired by the main operation, if any.
     ///
-    /// The main pipeline and the compact/refresh hooks run under this lock. It is released
-    /// before the analyze hook, which only reads snapshots and commits statistics through a
-    /// sequence CAS, so it must not extend the lock hold time.
+    /// The main pipeline and inline Compact run under this lock.
+    /// Release it before inline Analyze or dispatching any background maintenance.
     lock_guard: Option<SharedLockGuard>,
 }
 
@@ -94,13 +103,14 @@ impl HookOperator {
             table,
             mutation_kind,
             lock_opt,
+            scope: TableHookScope::Full,
             lock_guard: None,
         }
     }
 
-    /// Hand the main operation's table lock over to the hook chain.
+    /// Hand the main operation's table lock over to the write-finished callbacks.
     ///
-    /// The caller must not also register the guard on the pipeline; the hook chain owns its
+    /// The caller must not also register the guard on the pipeline; these callbacks own its
     /// release point. Callers that hand over a lock should pass `LockTableOption::NoLock` as
     /// `lock_opt`, otherwise the compact hook would queue a second lock revision behind the
     /// one it already holds.
@@ -109,87 +119,106 @@ impl HookOperator {
         self
     }
 
-    /// Execute the hook operator.
-    /// The hook operator will:
-    /// 1. Compact/recluster if needed.
-    /// 2. Refresh indexes if needed.
-    /// 3. Analyze if needed.
+    pub(crate) fn with_scope(mut self, scope: TableHookScope) -> Self {
+        self.scope = scope;
+        self
+    }
+
+    /// Register write-finished callbacks for maintenance and lock release.
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub async fn execute(&self, pipeline: &mut Pipeline) {
+    pub async fn execute(self, pipeline: &mut Pipeline) {
         if pipeline.is_empty() {
+            return;
+        }
+        let Some((target, route)) = self.resolve_target().await else {
+            self.release_lock_guard(pipeline);
+            return;
+        };
+        let full = self.scope == TableHookScope::Full;
+        if !full && !route.queues_background() {
+            self.release_lock_guard(pipeline);
             return;
         }
         if self.ctx.txn_mgr().lock().is_active() {
             // Preserve the statement's lock lifetime, but never execute or enqueue automatic
             // maintenance until the user transaction has actually committed.
             self.release_lock_guard(pipeline);
-            self.defer_until_commit(pipeline).await;
+            self.defer_until_commit(pipeline, target);
             return;
         }
-        let is_async = TableHookScheduler::is_async_enabled();
-        let lock_opt = if is_async {
-            // Async hooks acquire maintenance locks where required. Release the statement lock
-            // before the success callback enqueues the task, even if task creation fails.
-            self.release_lock_guard(pipeline);
-            LockTableOption::LockWithRetry
-        } else {
-            self.lock_opt.clone()
-        };
-        if let Some(mut task) = self.create_task(lock_opt).await {
-            if !is_async {
-                task.lock_guard = self.lock_guard.clone();
-            }
-            pipeline.set_on_finished(move |info: &ExecutionInfo| {
-                if info.res.is_ok() {
-                    if is_async {
-                        enqueue_table_hook(task);
-                    } else {
-                        GlobalIORuntime::instance()
-                            .block_on(async move {
-                                task.execute(is_async).await;
-                                Ok::<_, databend_common_exception::ErrorCode>(())
-                            })
-                            .unwrap_or_else(|e| warn!("Table hook execution failed: {e}"));
-                    }
-                }
-                Ok(())
-            });
+        let capture_refresh = full && route.queues_background();
+        if capture_refresh {
+            self.ctx.expect_refresh_anchor(target.table_id);
         }
-        if !is_async {
-            // Successful tasks release the lock before analyze. Keep the callback-chain
-            // fallback for task creation failures and skipped or interrupted execution.
-            self.release_lock_guard(pipeline);
+        let compact_after_write = full && compact_after_write_enabled(&self.ctx);
+        let main_operation_start = Instant::now();
+        let lock_release = self.lock_guard.clone();
+        let Self {
+            ctx,
+            lock_opt,
+            lock_guard,
+            mutation_kind,
+            ..
+        } = self;
+        register_write_hook(pipeline, target.table_id, move || {
+            GlobalIORuntime::instance().block_on(async move {
+                let write = ctx.take_recluster_write(target.table_id);
+                // Take the original write's anchor before inline Compact can publish.
+                let refresh = capture_refresh
+                    .then(|| ctx.take_refresh_anchor(target.table_id))
+                    .flatten();
+                if full {
+                    route
+                        .run_inline(TableHookTask {
+                            ctx: &ctx,
+                            target: &target,
+                            compact_after_write,
+                            lock_opt,
+                            lock_guard,
+                            operation_name: mutation_kind.to_string(),
+                            main_operation_start,
+                        })
+                        .await;
+                } else if let Some(guard) = lock_guard {
+                    drop(guard.try_take());
+                }
+                route.enqueue(&ctx, target, write, refresh).await;
+                Ok(())
+            })
+        });
+        // Fallback for an interrupted callback chain.
+        if let Some(guard) = &lock_release {
+            register_lock_release(pipeline, guard);
         }
     }
 
-    async fn defer_until_commit(&self, pipeline: &mut Pipeline) {
-        let table_id = match self
-            .ctx
-            .get_table(&self.catalog, &self.database, &self.table)
-            .await
-        {
-            Ok(table) => table.get_id(),
-            Err(e) => {
-                warn!("Failed to resolve deferred table hook target: {e}");
-                return;
-            }
-        };
+    fn defer_until_commit(&self, pipeline: &mut Pipeline, target: TableHookTarget) {
+        let TableHookTarget {
+            catalog,
+            database,
+            table,
+            table_id,
+        } = target;
         let before = self
             .ctx
             .txn_mgr()
             .lock()
             .buffered_snapshot_location(table_id);
         let ctx = self.ctx.clone();
-        let catalog = self.catalog.clone();
-        let database = self.database.clone();
-        let table = self.table.clone();
-        let compact_after_write = compact_after_write_enabled(&ctx);
+        let scope = self.scope;
+        let full = scope == TableHookScope::Full;
+        let compact_after_write = full && compact_after_write_enabled(&ctx);
         pipeline.set_on_finished(move |info: &ExecutionInfo| {
             if info.res.is_ok() {
+                let recluster_write = ctx.take_recluster_write(table_id);
+                if !full && recluster_write.is_none() {
+                    return Ok(());
+                }
                 let hook = TxnTableHook {
                     catalog,
                     database,
+                    scope,
                     compaction_num_block_hint: if compact_after_write {
                         ctx.get_compaction_num_block_hint(&table)
                     } else {
@@ -197,8 +226,8 @@ impl HookOperator {
                     },
                     table,
                     table_id,
-                    written_segments: ctx.written_segment_locations().list().into_iter().collect(),
-                    enable_auto_analyze: ctx.get_enable_auto_analyze(),
+                    enable_auto_analyze: full && ctx.get_enable_auto_analyze(),
+                    recluster_write,
                 };
                 ctx.txn_mgr()
                     .lock()
@@ -214,13 +243,13 @@ impl HookOperator {
         }
     }
 
-    async fn create_task(&self, lock_opt: LockTableOption) -> Option<TableHookTask> {
-        let table_id = match self
+    async fn resolve_target(&self) -> Option<(TableHookTarget, HookRoute)> {
+        let table = match self
             .ctx
             .get_table(&self.catalog, &self.database, &self.table)
             .await
         {
-            Ok(table) => table.get_id(),
+            Ok(table) => table,
             Err(e) => {
                 warn!(
                     "Failed to resolve table hook target {}.{}.{}: {e}",
@@ -229,96 +258,225 @@ impl HookOperator {
                 return None;
             }
         };
-        Some(TableHookTask {
-            ctx: self.ctx.clone(),
-            target: TableHookTarget {
-                catalog: self.catalog.clone(),
-                database: self.database.clone(),
-                table: self.table.clone(),
-                table_id,
-            },
-            hook_settings: TableHookTaskSettings::create(&self.ctx),
-            lock_opt,
-            lock_guard: None,
-            operation_name: self.mutation_kind.to_string(),
-            main_operation_start: Instant::now(),
-        })
-    }
-}
-
-fn enqueue_table_hook(task: TableHookTask) {
-    match TableHookScheduler::try_instance() {
-        Some(scheduler) => scheduler.enqueue(task),
-        None => warn!(
-            "Async table hook scheduler is not initialized, table_id={}",
-            task.target.table_id
-        ),
-    }
-}
-
-/// Called only after the committed transaction has been cleared. Each task owns a separate
-/// session, so a later BEGIN on the caller's session cannot capture background maintenance.
-pub(crate) async fn execute_deferred_table_hooks(
-    ctx: Arc<QueryContext>,
-    hooks: Vec<TxnTableHook>,
-    txn_id: &str,
-) {
-    let is_async = TableHookScheduler::is_async_enabled();
-    for hook in hooks {
-        let table_id = hook.table_id;
-        log::info!("Dispatch post-commit table hook, txn_id={txn_id}, table_id={table_id}");
-        let task = match create_deferred_table_hook_task(&ctx, hook).await {
-            Ok(task) => task,
-            Err(e) => {
-                warn!(
-                    "Failed to initialize post-commit table hook, txn_id={txn_id}, table_id={table_id}: {e}"
-                );
-                continue;
-            }
+        let target = TableHookTarget {
+            catalog: self.catalog.clone(),
+            database: self.database.clone(),
+            table: self.table.clone(),
+            table_id: table.get_id(),
         };
-        if is_async {
-            enqueue_table_hook(task);
-        } else {
-            task.execute(is_async).await;
+        let route = HookRoute::for_table(&target, table.as_ref());
+        Some((target, route))
+    }
+}
+
+/// Compact always runs inline when triggered. Other work depends on the table type.
+pub(super) enum HookRoute {
+    /// Non-Fuse or read-only for maintenance: Compact only.
+    CompactOnly,
+    /// TEMP, TRANSIENT and `default.system_history`: inline Compact and Analyze only.
+    ForegroundOnly,
+    /// Ordinary persistent Fuse: also queue index Refresh and eligible FINAL rounds.
+    Background,
+}
+
+impl HookRoute {
+    /// COMMIT uses the same routing rule with the table's current name.
+    pub(super) fn for_table(target: &TableHookTarget, table: &dyn Table) -> Self {
+        let Some(fuse) = table.as_any().downcast_ref::<FuseTable>() else {
+            return Self::CompactOnly;
+        };
+        if table.is_read_only_for_maintenance() {
+            return Self::CompactOnly;
+        }
+        // A queued index publication on a transient table can vacuum objects still
+        // needed by the next explicit transaction, even with a fixed-snapshot commit.
+        if table.is_temp() || fuse.is_transient() || target.is_system_history() {
+            return Self::ForegroundOnly;
+        }
+        Self::Background
+    }
+
+    pub(super) fn queues_background(&self) -> bool {
+        matches!(self, Self::Background)
+    }
+
+    async fn run_inline(&self, task: TableHookTask<'_>) {
+        task.execute_compact().await;
+        if let Some(guard) = &task.lock_guard {
+            drop(guard.try_take());
+        }
+        // Statistics still publish through the table version, so Analyze remains inline.
+        if !matches!(self, Self::CompactOnly) {
+            task.execute_analyze().await;
+        }
+    }
+
+    async fn enqueue(
+        &self,
+        ctx: &Arc<QueryContext>,
+        target: TableHookTarget,
+        write: Option<ReclusterWriteHint>,
+        refresh: Option<RefreshAnchor>,
+    ) {
+        // Only the worker checks index definitions: the writer may predate CREATE INDEX.
+        if self.queues_background() && (write.is_some() || refresh.is_some()) {
+            enqueue_table_hook(ctx, target, write, refresh).await;
         }
     }
 }
 
-async fn create_deferred_table_hook_task(
-    parent: &Arc<QueryContext>,
-    hook: TxnTableHook,
-) -> Result<TableHookTask> {
-    let session = parent
-        .get_current_session()
-        .create_internal_session()
-        .await?;
-    let ctx = session.create_query_context_with_cluster(
-        parent.get_cluster(),
-        parent.get_version(),
-        None,
-    )?;
-    ctx.set_compaction_num_block_hint(&hook.table, hook.compaction_num_block_hint);
-    ctx.written_segment_locations()
-        .extend(hook.written_segments);
-    ctx.set_enable_auto_analyze(hook.enable_auto_analyze);
-    Ok(TableHookTask {
-        ctx,
-        target: TableHookTarget {
-            catalog: hook.catalog,
-            database: hook.database,
-            table: hook.table,
-            table_id: hook.table_id,
-        },
-        hook_settings: TableHookTaskSettings {
-            compact_after_write: hook.compaction_num_block_hint > 0,
-        },
-        // The write transaction and any enclosing lifecycle lock have ended. Maintenance
-        // acquires its own locks where required, regardless of whether the caller waits for it.
-        lock_opt: LockTableOption::LockWithRetry,
-        lock_guard: None,
-        operation_name: "transaction".to_string(),
-        main_operation_start: Instant::now(),
+/// All routes run after the write has succeeded. Isolate only maintenance, including
+/// `Runtime::block_on` setup, which allocates before polling the dispatch future.
+fn register_write_hook(
+    pipeline: &mut Pipeline,
+    table_id: u64,
+    dispatch: impl FnOnce() -> Result<()> + Send + Sync + 'static,
+) {
+    pipeline.set_on_finished(move |info: &ExecutionInfo| {
+        if info.res.is_err() {
+            return Ok(());
+        }
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "defer panic diagnostics until outside the memory limit"
+        )]
+        match std::panic::catch_unwind(AssertUnwindSafe(dispatch)) {
+            Ok(Ok(())) => (),
+            Ok(Err(error)) => {
+                let _guard = LimitMemGuard::enter_unlimited();
+                warn!(table_id, error :? = error; "Post-write table hook failed");
+            }
+            Err(panic) => {
+                let _guard = LimitMemGuard::enter_unlimited();
+                take_alloc_error_panic();
+                record_rejected("dispatch_panic");
+                let message = panic
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| panic.downcast_ref::<&str>().copied())
+                    .unwrap_or("unknown panic");
+                warn!(table_id, error = message; "Post-write table hook panicked");
+            }
+        }
+        Ok(())
+    });
+}
+
+async fn enqueue_table_hook(
+    ctx: &Arc<QueryContext>,
+    target: TableHookTarget,
+    recluster: Option<ReclusterWriteHint>,
+    refresh: Option<RefreshAnchor>,
+) {
+    let table_id = target.table_id;
+    // Capture allocates identity/settings and independent notifications before enqueue's
+    // own boundary. It must not turn an already committed write into a client error.
+    let result = CatchUnwindFuture::create(async {
+        match MaintenanceTask::from_write(ctx, target, recluster, refresh).await {
+            Ok(tasks) => match TableMaintenanceService::try_instance() {
+                Some(service) => {
+                    for task in tasks {
+                        service.enqueue(task);
+                    }
+                }
+                None => {
+                    let _guard = LimitMemGuard::enter_unlimited();
+                    warn!("Table maintenance service is not initialized, table_id={table_id}");
+                }
+            },
+            Err(e) => {
+                let _guard = LimitMemGuard::enter_unlimited();
+                warn!("Failed to capture table maintenance request, table_id={table_id}: {e}");
+            }
+        }
     })
+    .await;
+    if let Err(error) = result {
+        let _guard = LimitMemGuard::enter_unlimited();
+        record_rejected("capture_panic");
+        warn!(table_id, error :? = error; "Discard best-effort maintenance notification after capture panic");
+    }
+}
+
+/// Called only after the committed transaction has been cleared. Synchronous maintenance
+/// runs before dispatching background tasks, which capture identity/settings, not the
+/// caller's transaction or query context.
+pub(crate) async fn execute_deferred_table_hooks(
+    ctx: Arc<QueryContext>,
+    hooks: Vec<(TxnTableHook, Option<RefreshAnchor>)>,
+    txn_id: &str,
+) {
+    for (hook, refresh) in hooks {
+        let table_id = hook.table_id;
+        // Isolate each table after the user commit, including context preparation,
+        // synchronous Compact and notification capture. Never catch the commit itself here.
+        let result = CatchUnwindFuture::create(async {
+            log::info!("Dispatch post-commit table hook, txn_id={txn_id}, table_id={table_id}");
+            let maintenance = match MaintenanceContext::create(&ctx).await {
+                Ok(maintenance) => maintenance,
+                Err(e) => {
+                    let _guard = LimitMemGuard::enter_unlimited();
+                    warn!(
+                        "Failed to initialize post-commit table hook, txn_id={txn_id}, table_id={table_id}: {e}"
+                    );
+                    return;
+                }
+            };
+            if let Err(error) = maintenance.tracking.tracking(dispatch_deferred_table_hook(maintenance.ctx, hook, refresh)).await {
+                let _guard = LimitMemGuard::enter_unlimited();
+                warn!(txn_id, table_id, error :? = error; "Post-commit maintenance preparation failed");
+            }
+        })
+        .await;
+        if let Err(error) = result {
+            let _guard = LimitMemGuard::enter_unlimited();
+            record_rejected("post_commit_panic");
+            warn!(txn_id, table_id, error :? = error; "Post-commit table maintenance panicked");
+        }
+    }
+}
+
+async fn dispatch_deferred_table_hook(
+    ctx: Arc<QueryContext>,
+    hook: TxnTableHook,
+    refresh: Option<RefreshAnchor>,
+) -> Result<()> {
+    let recorded = TableHookTarget {
+        catalog: hook.catalog,
+        database: hook.database,
+        table: hook.table,
+        table_id: hook.table_id,
+    };
+    // Resolve by ID again: a rename may change the route; a replacement is not our target.
+    let Some(target) = recorded.resolve(&ctx, "post-commit").await? else {
+        return Ok(());
+    };
+    let table = ctx
+        .get_table(&target.catalog, &target.database, &target.table)
+        .await?;
+    if !target.matches_id("post-commit", table.get_id()) {
+        return Ok(());
+    }
+    let route = HookRoute::for_table(&target, table.as_ref());
+    if hook.scope == TableHookScope::Full {
+        ctx.set_compaction_num_block_hint(&target.table, hook.compaction_num_block_hint);
+        ctx.set_enable_auto_analyze(hook.enable_auto_analyze);
+        route
+            .run_inline(TableHookTask {
+                ctx: &ctx,
+                target: &target,
+                compact_after_write: hook.compaction_num_block_hint > 0,
+                lock_opt: LockTableOption::LockWithRetry,
+                lock_guard: None,
+                operation_name: "transaction".to_owned(),
+                main_operation_start: Instant::now(),
+            })
+            .await;
+    }
+    route
+        .enqueue(&ctx, target, hook.recluster_write, refresh)
+        .await;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -392,10 +550,10 @@ mod tests {
     #[test]
     fn test_lock_released_between_callbacks_in_order() -> Result<()> {
         let mut locked = LockedPipeline::create();
-        // Compact and refresh hooks register before the release and run under the lock.
+        // Synchronous write callbacks registered before release run under the lock.
         locked.observe_lock();
         register_lock_release(&mut locked.pipeline, &locked.guard);
-        // The analyze hook registers after the release and runs without the lock.
+        // Callbacks registered after release run without the lock.
         locked.observe_lock();
 
         locked.finish()?;

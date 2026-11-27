@@ -529,31 +529,36 @@ impl DataExchangeManager {
     }
 
     fn remove_if_leak_query(&self, query_id: String, leak_timeout: Duration) {
-        let leak_query_id = {
-            let queries_coordinator_guard = self.queries_coordinator.lock();
-            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-
-            match queries_coordinator.get(&query_id) {
-                None => None,
-                Some(may_leak_query) => {
-                    let info = may_leak_query.info.as_ref().expect("expect query info");
-                    match info.started.load(Ordering::SeqCst) {
-                        true => None,
-                        false => Some(query_id),
-                    }
-                }
-            }
-        };
-
-        if let Some(query_id) = leak_query_id {
-            let message = format!(
+        if self.abort_query_env(&query_id) {
+            warn!(
                 "Query {} cannot start command while in {} seconds (flight_query_leak_timeout_secs)",
                 query_id,
                 leak_timeout.as_secs()
             );
-            warn!("{}", message);
-            self.on_finished_query(&query_id, Some(ErrorCode::Internal(message)));
         }
+    }
+
+    /// Remove an unstarted environment, including exchange state created before its INIT.
+    /// Check `started` and remove under one lock so a late abort cannot stop execution.
+    pub(crate) fn abort_query_env(&self, query_id: &str) -> bool {
+        let mut coordinator = {
+            let guard = self.queries_coordinator.lock();
+            let coordinators = unsafe { &mut *guard.deref().get() };
+            let Some(coordinator) = coordinators.get(query_id) else {
+                return false;
+            };
+            if coordinator
+                .info
+                .as_ref()
+                .is_some_and(|info| info.started.load(Ordering::SeqCst))
+            {
+                return false;
+            }
+            coordinators.remove(query_id).expect("registered query")
+        };
+        coordinator.shutdown_query(None);
+        coordinator.on_finished();
+        true
     }
 
     fn create_info(query_ctx: Option<Arc<QueryContext>>) -> Result<Option<QueryInfo>> {

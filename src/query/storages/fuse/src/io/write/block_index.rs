@@ -42,7 +42,7 @@ use super::SpatialIndexBuilder;
 use super::VectorIndexBuilder;
 use super::WriteSettings;
 use super::bloom_index_writer::BloomIndexWriteSpec;
-use super::create_inverted_index_builders;
+use super::inverted_index_writer::create_inverted_index_builders_with_mode;
 use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 
@@ -202,24 +202,82 @@ pub trait BlockIndexMerge: Send + Sync {
     fn apply_output(&self, block: &mut BlockMeta, output: WrittenBlockIndexOutput) -> Result<()>;
 }
 
+/// Select indexes for a write without changing the table's SYNC/ASYNC definitions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockIndexBuildMode {
+    Synchronous,
+    All,
+}
+
+impl BlockIndexBuildMode {
+    pub(super) fn synchronous_only(self) -> bool {
+        self == Self::Synchronous
+    }
+
+    pub fn for_recluster(automatic: bool) -> Self {
+        if automatic {
+            Self::All
+        } else {
+            Self::Synchronous
+        }
+    }
+}
+
 pub fn create_block_index_specs(
     table: &FuseTable,
     schema: TableSchemaRef,
+) -> Result<Vec<Arc<dyn BlockIndexSpec>>> {
+    create_block_index_specs_with_mode(table, schema, BlockIndexBuildMode::Synchronous)
+}
+
+pub fn create_block_index_specs_with_mode(
+    table: &FuseTable,
+    schema: TableSchemaRef,
+    mode: BlockIndexBuildMode,
 ) -> Result<Vec<Arc<dyn BlockIndexSpec>>> {
     let columns = table
         .bloom_index_cols
         .bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
     let indexes = &table.table_info.meta.indexes;
-    let ngram_args = FuseTable::create_ngram_index_args(indexes, &table.schema(), true)?;
+    if mode == BlockIndexBuildMode::All {
+        // Writers can skip missing columns. Check the serialized schema so a
+        // background rewrite cannot publish a block without its indexes.
+        for index in indexes.values() {
+            if index
+                .column_ids
+                .iter()
+                .any(|id| !schema.fields().iter().any(|field| field.column_id() == *id))
+            {
+                return Err(ErrorCode::UnsupportedIndex(format!(
+                    "Index {} must reference top-level stored columns",
+                    index.name
+                )));
+            }
+        }
+    }
+    let ngram_schema = if mode.synchronous_only() {
+        table.schema()
+    } else {
+        schema.clone()
+    };
+    let ngram_args =
+        FuseTable::create_ngram_index_args(indexes, &ngram_schema, mode.synchronous_only())?;
     let mut specs: Vec<Arc<dyn BlockIndexSpec>> =
         vec![Arc::new(BloomIndexWriteSpec::new(columns, ngram_args))];
-    for builder in create_inverted_index_builders(table)? {
+    for builder in create_inverted_index_builders_with_mode(table, mode)? {
         specs.push(Arc::new(builder.into_write_spec()));
     }
-    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true)? {
-        specs.push(Arc::new(builder.into_write_spec()));
+    if let Some(builder) =
+        VectorIndexBuilder::try_create(indexes, schema.clone(), mode.synchronous_only())?
+    {
+        specs.push(Arc::new(
+            builder
+                .with_parallel_build(mode.synchronous_only())
+                .into_write_spec(),
+        ));
     }
-    if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, true) {
+    if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, mode.synchronous_only())
+    {
         specs.push(Arc::new(builder.into_write_spec()));
     }
     Ok(specs)

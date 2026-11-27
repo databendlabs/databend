@@ -15,15 +15,34 @@
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use arrow_flight::Empty;
 use arrow_flight::flight_service_client::FlightServiceClient;
+use arrow_flight::flight_service_server::FlightServiceServer;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_settings::FlightKeepAliveParams;
+use databend_meta_client::types::NodeInfo;
+use databend_query::clusters::Cluster;
+use databend_query::clusters::ClusterHelper;
+use databend_query::clusters::FlightParams;
 use databend_query::servers::flight::FlightService;
+use databend_query::servers::flight::v1::DatabendQueryFlightService;
+use databend_query::servers::flight::v1::exchange::DataExchangeManager;
+use databend_query::servers::flight::v1::packets::DataflowDiagramBuilder;
+use databend_query::servers::flight::v1::packets::QueryEnv;
+use databend_query::sessions::TableContextAuthorization;
+use databend_query::sessions::TableContextCluster;
+use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextQueryInfo;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
+use tokio_stream::wrappers::TcpListenerStream;
+use uuid::Uuid;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -120,5 +139,86 @@ async fn test_rpc_server_port_used() -> anyhow::Result<()> {
     let r = srv.start_with_incoming(local_socket).await;
 
     assert!(r.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_maintenance_init_failure_releases_remote_grant() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().build();
+    config.query.common.table_hook_async_max_concurrency = 1;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let config = GlobalConfig::instance();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    let server = databend_common_base::runtime::spawn(
+        tonic::transport::Server::builder()
+            .add_service(FlightServiceServer::new(
+                DatabendQueryFlightService::create(),
+            ))
+            .serve_with_incoming(TcpListenerStream::new(listener)),
+    );
+
+    // Route two logical workers to one server. The first INIT owns its only
+    // maintenance grant; the next INIT must fail before touching that context,
+    // regardless of the coordinator's iteration order.
+    let node = |id| {
+        Arc::new(NodeInfo::create(
+            id,
+            config.query.node_secret.clone(),
+            String::new(),
+            addr.to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+        ))
+    };
+    let worker = node(config.query.node_id.clone());
+    let workers = vec![worker.clone(), node("second-worker".to_string())];
+    let request_server_id = "maintenance-coordinator".to_string();
+    let cluster = Cluster::create(workers.clone(), request_server_id.clone());
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.set_cluster(cluster.clone());
+    let settings = ctx.get_settings();
+    settings.set_max_query_memory_usage(256 * 1024 * 1024)?;
+    let mut env = QueryEnv {
+        automatic_maintenance: true,
+        query_id: ctx.get_id(),
+        query_created_time: ctx.get_query_created_time(),
+        cluster,
+        settings,
+        query_kind: ctx.get_query_kind(),
+        dataflow_diagram: Arc::new(DataflowDiagramBuilder::create(workers).build()),
+        request_server_id,
+        workload_group: None,
+        create_rpc_clint_with_current_rt: false,
+        perf_config: Default::default(),
+        user: ctx.get_current_user()?,
+        audit_role_name: None,
+        cache_policy: Default::default(),
+    };
+    let flight_params = FlightParams {
+        timeout: 5,
+        retry_times: 0,
+        retry_interval: 0,
+        keep_alive: FlightKeepAliveParams::default(),
+        reuse_control_channel: true,
+    };
+    let error = env.init(&ctx, flight_params).await.unwrap_err();
+    assert_eq!(error.code(), ErrorCode::NO_RESOURCES_AVAILABLE, "{error}");
+    let exchange = DataExchangeManager::instance();
+    assert!(
+        exchange.get_query_ctx(&env.query_id).is_err(),
+        "the admitted worker must be cleaned up before returning the error"
+    );
+
+    // Remove the rejecting alias and retry immediately with a fresh query ID.
+    // If the first grant was retained, admission would fail again.
+    env.query_id = Uuid::new_v4().to_string();
+    env.dataflow_diagram = Arc::new(DataflowDiagramBuilder::create(vec![worker]).build());
+    env.init(&ctx, flight_params).await?;
+    assert!(exchange.get_query_ctx(&env.query_id).is_ok());
+    exchange.on_finished_query(&env.query_id, None);
+    server.abort();
     Ok(())
 }

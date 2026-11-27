@@ -30,7 +30,6 @@ use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
@@ -50,7 +49,6 @@ use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -117,12 +115,13 @@ pub struct CommitSink<F: SnapshotGenerator> {
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
 
-    new_segment_locs: Vec<Location>,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
     statistics_hll: BlockHLL,
     insert_top_n: BlockTopN,
     statistics_rows: u64,
+    logical_written_bytes: Option<u64>,
+    has_logical_writes: bool,
     enable_auto_analyze: bool,
 
     change_tracking: bool,
@@ -187,10 +186,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
             retries: 0,
             max_retry_elapsed,
             input,
-            new_segment_locs: vec![],
             statistics_hll: HashMap::new(),
             insert_top_n: HashMap::new(),
             statistics_rows: 0,
+            logical_written_bytes: None,
+            has_logical_writes: false,
             start_time: Instant::now(),
             enable_auto_analyze,
             prev_snapshot_id,
@@ -278,28 +278,20 @@ where F: SnapshotGenerator + Send + Sync + 'static
             self.ctx.set_status_info("begin commit");
         }
 
-        let input_meta = self
-            .input
-            .pull_data()
-            .unwrap()?
-            .get_meta()
-            .cloned()
-            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-
+        let block = self.input.pull_data().unwrap()?;
         self.input.finish();
-
-        let meta = CommitMeta::downcast_from(input_meta)
-            .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
         let CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
             logical_updated_rows,
             logical_deleted_rows,
+            logical_written_bytes,
             hll,
             top_n,
             ..
-        } = meta;
+        } = CommitMeta::try_from(block)?;
+        self.logical_written_bytes = logical_written_bytes;
 
         let has_new_segments = !new_segment_locs.is_empty();
         let statistics_rows = conflict_resolve_context.logical_insert_rows(logical_deleted_rows)
@@ -307,10 +299,23 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let has_hll = statistics_rows > 0 && !hll.is_empty();
         let has_top_n = !top_n.is_empty();
         let is_append_only_txn = self.is_append_only_txn();
+        self.has_logical_writes = statistics_rows > 0
+            && (is_append_only_txn
+                || self
+                    .snapshot_gen
+                    .as_any()
+                    .downcast_ref::<MutationGenerator>()
+                    .is_some_and(|generator| {
+                        matches!(
+                            generator.mutation_kind,
+                            MutationKind::Insert
+                                | MutationKind::Update
+                                | MutationKind::MergeInto
+                                | MutationKind::Replace
+                        )
+                    }));
         let should_preserve_statistics_rows =
             has_hll || has_top_n || (has_new_segments && is_append_only_txn);
-
-        self.new_segment_locs = new_segment_locs;
 
         if should_preserve_statistics_rows {
             self.statistics_rows = statistics_rows;
@@ -716,6 +721,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 let commit_guard = if self.acquire_commit_lock {
+                    // Fixed-snapshot maintenance must replan after a foreground
+                    // commit, so don't hold a worker slot waiting behind its lock.
+                    let lock_opt = if self.prev_snapshot_id.is_some() {
+                        LockTableOption::LockNoRetry
+                    } else {
+                        LockTableOption::LockWithRetry
+                    };
                     let wait_start = Instant::now();
                     let guard = self
                         .ctx
@@ -723,7 +735,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         .acquire_table_lock_by_id(
                             table_info.catalog(),
                             table_info.ident.table_id,
-                            &LockTableOption::LockWithRetry,
+                            &lock_opt,
                         )
                         .await?;
                     metrics_observe_maintenance_commit_gate_wait_milliseconds(
@@ -734,6 +746,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     None
                 };
 
+                // Protect the metadata RPC and successful-publication bookkeeping from
+                // cooperative maintenance cancellation. The caller may still force an
+                // unknown outcome after its bounded cleanup grace; never delete on that
+                // assumption. Foreground/temporary-table behavior is unchanged.
+                let mut publication_guard = self.ctx.begin_maintenance_publication()?;
                 let commit_result = async {
                     if self.acquire_commit_lock {
                         self.table = self.table.refresh(self.ctx.as_ref()).await?;
@@ -772,9 +789,27 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 .await;
                 // Do not hold the commit gate during vacuum, retry backoff, or snapshot rebase.
                 drop(commit_guard);
+                if commit_result.is_err() {
+                    // No retry/backoff is part of the publication critical section.
+                    drop(publication_guard.take());
+                    if self.ctx.is_automatic_maintenance() {
+                        self.ctx
+                            .check_aborting()
+                            .map_err(|cause| cause.with_context("after maintenance publication"))?;
+                    }
+                }
 
                 match commit_result {
                     Ok(_) => {
+                        if self.has_logical_writes
+                            && let Some(cluster_key_id) = table_info.meta.cluster_key_id()
+                        {
+                            self.ctx.record_recluster_write(
+                                table_info.ident.table_id,
+                                cluster_key_id,
+                                self.logical_written_bytes,
+                            );
+                        }
                         self.ctx.txn_mgr().lock().add_table_delta(
                             table_info.ident.table_id,
                             logical_delta,
@@ -832,10 +867,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
-                        for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
-                            self.ctx.written_segment_locations().add(segment_loc);
-                        }
-
                         if enable_auto_analyze {
                             self.ctx.set_enable_auto_analyze(true);
                         }
@@ -851,6 +882,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             (tbl, stream_descriptions)
                         };
                         info!(
+                            logical_written_bytes :? = self.logical_written_bytes;
                             "Mutation committed successfully, targets: {:?}",
                             target_descriptions
                         );

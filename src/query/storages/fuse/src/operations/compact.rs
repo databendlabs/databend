@@ -119,6 +119,7 @@ impl FuseTable {
             self.get_id(),
             0,
             0,
+            None,
             HashMap::new(),
             HashMap::new(),
         );

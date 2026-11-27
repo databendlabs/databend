@@ -68,6 +68,7 @@ use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
+use databend_common_storages_fuse::operations::automatic_recluster_input_limit;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -236,6 +237,12 @@ impl Recluster {
                 }
             }
         }
+        if ctx.is_automatic_maintenance() {
+            // The input limit applies to all tasks assigned to this node, not
+            // independently to each task sharing the reserved grant.
+            self.check_maintenance_input_budget(ctx, bytes)?;
+            return Ok(bytes);
+        }
         let max_memory = settings.get_max_memory_usage()? as usize;
         if max_memory != 0
             && self.tasks.len() > 1
@@ -263,6 +270,16 @@ impl Recluster {
             }
         }
         Ok(bytes)
+    }
+
+    fn check_maintenance_input_budget(&self, ctx: &QueryContext, input_bytes: usize) -> Result<()> {
+        let input_limit = automatic_recluster_input_limit(ctx, &self.table_info.meta)?;
+        if input_bytes > input_limit {
+            return Err(ErrorCode::NoResourcesAvailable(format!(
+                "Recluster input exceeds this execution grant: input_bytes = {input_bytes}, input_limit = {input_limit}"
+            )));
+        }
+        Ok(())
     }
 
     fn build_task_pipeline(
@@ -304,9 +321,11 @@ impl Recluster {
             && cluster_stats_gen.is_linear()
             && !is_materialized_view_engine(table.engine());
 
-        // Blockwise sort cannot spill, so recheck the worker's input budget
-        // even when sort spilling is enabled. Multiway merge manages its own budget.
-        if !multiway_merge && (blockwise_sort || !builder.ctx.get_enable_sort_spill()) {
+        // Automatic fragments have a reserved envelope. Manual blockwise sort cannot
+        // spill and must recheck the worker's live budget even when spill is enabled.
+        if builder.ctx.is_automatic_maintenance() {
+            self.check_maintenance_input_budget(&builder.ctx, task.total_bytes)?;
+        } else if !multiway_merge && (blockwise_sort || !builder.ctx.get_enable_sort_spill()) {
             let max_memory_usage = settings.get_max_memory_usage()? as usize;
             // `max_memory_usage == 0` means memory usage is unlimited.
             if max_memory_usage != 0 {
@@ -367,7 +386,11 @@ impl Recluster {
                     matches!(field.data_type(), TableDataType::AggregateState { .. })
                 }) =>
             {
-                ReclusterIndexMergeInputs::try_create(table, task)?
+                ReclusterIndexMergeInputs::try_create_for_recluster(
+                    table,
+                    task,
+                    builder.ctx.is_automatic_maintenance(),
+                )?
             }
             _ => None,
         };
@@ -722,6 +745,8 @@ impl Recluster {
 mod tests {
     use databend_common_catalog::plan::ReclusterInfoSideCar;
     use databend_common_expression::ScalarRef;
+    use databend_common_meta_app::schema::TableIndex;
+    use databend_common_meta_app::schema::TableIndexType;
     use databend_common_sql::executor::physical_plans::FragmentKind;
     use databend_common_storage::ColumnNodes;
     use databend_common_storages_fuse::io::SegmentInfoReader;
@@ -736,6 +761,7 @@ mod tests {
     use crate::physical_plans::PhysicalPlanCast;
     use crate::schedulers::Fragmenter;
     use crate::schedulers::QueryFragmentsActions;
+    use crate::table_maintenance::TableMaintenanceService;
     use crate::test_kits::ClusterDescriptor;
     use crate::test_kits::TestFixture;
     use crate::test_kits::execute_pipeline;
@@ -921,6 +947,42 @@ mod tests {
             let input_bytes: usize = source.tasks.iter().map(|task| task.total_bytes).sum();
             assert!(input_bytes > 1);
             assert_eq!(source.validate_node_batch(&ctx)?, input_bytes);
+
+            if multiway && threads == 2 && task_count == 2 {
+                let automatic = fixture.new_query_ctx().await?;
+                automatic
+                    .set_maintenance_reservation(TableMaintenanceService::instance().reserve()?)?;
+                let mib = 1024 * 1024;
+                automatic
+                    .get_settings()
+                    .set_max_query_memory_usage(256 * mib)?;
+                automatic
+                    .get_settings()
+                    .set_setting("recluster_block_size".into(), (64 * mib).to_string())?;
+                let mut indexed = source.clone();
+                indexed
+                    .table_info
+                    .meta
+                    .indexes
+                    .insert("vi".into(), TableIndex {
+                        index_type: TableIndexType::Vector,
+                        name: "vi".into(),
+                        column_ids: vec![0],
+                        sync_creation: false,
+                        version: "v1".into(),
+                        options: Default::default(),
+                    });
+                for task in &mut indexed.tasks {
+                    task.total_bytes = 24 * mib as usize;
+                }
+                indexed.check_maintenance_input_budget(&automatic, 24 * mib as usize)?;
+                // Individually the tasks fit; together they exceed the 32 MiB
+                // index-aware limit, despite fitting the nominal 64 MiB limit.
+                assert_eq!(
+                    indexed.validate_node_batch(&automatic).unwrap_err().code(),
+                    ErrorCode::NO_RESOURCES_AVAILABLE
+                );
+            }
 
             // A whole batch follows either coordinator; worker indices are local
             // even when planning-time task indices arrive in reverse order.

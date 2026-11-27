@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::PerfConfig;
@@ -30,15 +31,19 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_meta_client::types::NodeInfo;
+use futures::future::join_all;
 use log::debug;
+use log::warn;
 use petgraph::Graph;
 use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::timeout;
 
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
+use crate::servers::flight::v1::actions::ABORT_QUERY_ENV;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -158,6 +163,9 @@ impl DataflowDiagramBuilder {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
+    /// Run on the recipient's maintenance grant, with automatic rewrite semantics.
+    #[serde(default)]
+    pub automatic_maintenance: bool,
     pub query_id: String,
     pub query_created_time: SystemTime,
     pub cluster: Arc<Cluster>,
@@ -190,9 +198,42 @@ impl QueryEnv {
             message.insert(node.id.clone(), self.clone());
         }
 
-        let _ = cluster
+        if let Err(error) = cluster
             .do_action::<_, ()>(INIT_QUERY_ENV, message, flight_params)
-            .await?;
+            .await
+        {
+            if self.automatic_maintenance {
+                // A peer can already hold a maintenance grant, even if its INIT response
+                // was lost. Try every peer independently so one unavailable node cannot
+                // prevent the others from freeing their grants before the next attempt.
+                let cluster = cluster.as_ref();
+                let abort_params = FlightParams {
+                    retry_times: 0,
+                    ..flight_params
+                };
+                let peers = self
+                    .dataflow_diagram
+                    .node_weights()
+                    .filter(|node| node.id != self.request_server_id);
+                join_all(peers.map(|node| async move {
+                    let request = HashMap::from([(node.id.clone(), self.query_id.clone())]);
+                    let result = timeout(
+                        Duration::from_secs(3),
+                        cluster.do_action::<_, ()>(ABORT_QUERY_ENV, request, abort_params),
+                    )
+                    .await;
+                    let cause = match result {
+                        Ok(Ok(_)) => return,
+                        Ok(Err(cause)) => cause.to_string(),
+                        Err(_) => "request timed out".to_string(),
+                    };
+                    warn!(query_id = self.query_id.as_str(), node_id = node.id.as_str();
+                        "Failed to abort remote query environment: {cause}");
+                }))
+                .await;
+            }
+            return Err(error);
+        }
 
         Ok(())
     }

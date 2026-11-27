@@ -15,8 +15,24 @@
 use super::*;
 use crate::interpreters::access_log::AccessLogger;
 use crate::interpreters::access_log::ObjectDomain;
+use crate::table_maintenance::MaintenanceReservation;
 
 impl QueryContext {
+    pub(crate) fn is_automatic_maintenance(&self) -> bool {
+        self.shared.is_automatic_maintenance()
+    }
+
+    pub(crate) fn set_maintenance_reservation(
+        &self,
+        reservation: Arc<MaintenanceReservation>,
+    ) -> Result<()> {
+        self.shared.set_maintenance_reservation(reservation)
+    }
+
+    pub(crate) fn force_maintenance_cancellation(&self, cause: ErrorCode) {
+        self.shared.force_maintenance_cancellation(cause);
+    }
+
     pub(crate) fn set_remote_audit_role(&self, role: Option<String>) {
         let _ = self.shared.remote_audit_role.set(role);
     }
@@ -71,8 +87,12 @@ impl TableContext for QueryContext {
         &self.shared.result_cache_state
     }
 
-    fn written_segment_locations(&self) -> &SegmentLocationsState {
-        &self.shared.written_segment_locs
+    fn is_automatic_maintenance(&self) -> bool {
+        QueryContext::is_automatic_maintenance(self)
+    }
+
+    fn begin_maintenance_publication(&self) -> Result<Option<Box<dyn Send>>> {
+        self.shared.begin_maintenance_publication()
     }
 
     fn as_any(&self) -> &dyn Any {
