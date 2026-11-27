@@ -32,6 +32,7 @@ use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::principal::task;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskMessageType;
 use databend_common_meta_app::principal::task::TaskSql as MetaTaskSql;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::schema::CreateOption;
@@ -313,6 +314,34 @@ impl TaskMgr {
         let change = self.kv_api.upsert_pb(&req).await?;
 
         Ok(change.is_changed())
+    }
+
+    /// Removes the schedule message of the dropped task `task_name`, unless a task created with
+    /// the same name after the drop has replaced it. Returns whether this call removed it.
+    ///
+    /// `task_id` is the id of the dropped task, or `None` from a `DeleteTask` message of an older
+    /// version, which removes the message whatever task it belongs to. A task created after the
+    /// drop has a larger id.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn remove_dropped_schedule(
+        &self,
+        task_name: &str,
+        task_id: Option<u64>,
+    ) -> Result<bool, MetaError> {
+        let key = TaskMessageIdent::new(
+            &self.tenant,
+            TaskMessage::key_with_type(TaskMessageType::Schedule, task_name),
+        );
+        let Some(message) = self.kv_api.get_pb(&key).await? else {
+            return Ok(false);
+        };
+        if let (Some(task_id), TaskMessage::ScheduleTask(task)) = (task_id, &message.data) {
+            if task.task_id > task_id {
+                return Ok(false);
+            }
+        }
+        self.accept(&key, MatchSeq::Exact(message.seq)).await
     }
 
     async fn create_task_inner(

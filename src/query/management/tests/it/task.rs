@@ -30,6 +30,7 @@ use databend_common_meta_app::principal::Task;
 use databend_common_meta_app::principal::WarehouseOptions;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskMessageType;
 use databend_common_meta_app::principal::task::TaskSql as MetaTaskSql;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::schema::CreateOption;
@@ -283,6 +284,71 @@ async fn test_accept_keeps_a_later_message() -> anyhow::Result<()> {
     assert!(kv.get_pb(&key).await?.is_none());
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_remove_dropped_schedule_keeps_a_recreated_task() -> anyhow::Result<()> {
+    let (kv, task_mgr) = new_task_api().await?;
+    let key = TaskMessageIdent::new(
+        Tenant::new_literal("admin"),
+        TaskMessage::key_with_type(TaskMessageType::Schedule, "task_1"),
+    );
+
+    task_mgr
+        .create_task(scheduled_task("task_1"), &CreateOption::Create)
+        .await??;
+    let dropped = task_mgr.drop_task("task_1").await?.unwrap();
+
+    // The task is created again before a node handles the DeleteTask message of the drop: the
+    // schedule message of the new task replaces the old one at the same key.
+    task_mgr
+        .create_task(scheduled_task("task_1"), &CreateOption::Create)
+        .await??;
+    let created = task_mgr.describe_task("task_1").await??.unwrap();
+    assert!(created.task_id > dropped.task_id);
+
+    // A node that handles the DeleteTask message keeps the schedule message of the new task.
+    assert!(
+        !task_mgr
+            .remove_dropped_schedule("task_1", Some(dropped.task_id))
+            .await?
+    );
+    let message = kv.get_pb(&key).await?.unwrap();
+    assert!(matches!(
+        &message.data,
+        TaskMessage::ScheduleTask(task) if task.task_id == created.task_id
+    ));
+
+    // The DeleteTask message of the new task removes it.
+    task_mgr.drop_task("task_1").await?.unwrap();
+    assert!(
+        task_mgr
+            .remove_dropped_schedule("task_1", Some(created.task_id))
+            .await?
+    );
+    assert!(kv.get_pb(&key).await?.is_none());
+
+    // A DeleteTask message of an older version has no task id, and removes the schedule message
+    // whatever task it belongs to.
+    task_mgr
+        .create_task(scheduled_task("task_1"), &CreateOption::Create)
+        .await??;
+    assert!(task_mgr.remove_dropped_schedule("task_1", None).await?);
+    assert!(kv.get_pb(&key).await?.is_none());
+
+    Ok(())
+}
+
+fn scheduled_task(name: &str) -> Task {
+    let mut task = test_task(name, "select 1");
+    task.schedule_options = Some(ScheduleOptions {
+        interval: Some(60),
+        cron: None,
+        time_zone: None,
+        schedule_type: ScheduleType::IntervalType,
+        milliseconds_interval: None,
+    });
+    task
 }
 
 fn test_task(name: &str, query_text: &str) -> Task {
