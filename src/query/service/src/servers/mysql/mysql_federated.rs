@@ -203,7 +203,7 @@ impl MySQLFederated {
                         MySQLFederated::select_variable_data_block,
                     ),
                     (
-                        Regex::new("(?i)^(/\\* mysql-connector-java(.*))").unwrap(),
+                        Regex::new(r"(?i)^/\* mysql-connector-j").unwrap(),
                         MySQLFederated::select_variable_data_block,
                     ),
                 ]
