@@ -42,7 +42,7 @@ The following will usually result in the issue/PR being closed, possibly without
 
 3. **Slop submissions**
    - PRs that do not compile, fail basic lint, or clearly were not read by the author
-   - Fake or tautological tests that only mirror the implementation
+   - Fake or tautological tests that only mirror the implementation, and bulk generated unit tests with no falsifiable behavior
    - Huge unrelated diffs, noisy renames, or “cleanup” mixed into a behavior change without need
    - Secret redaction failures, license-incompatible pasted code, or unexplained dependency churn
 
@@ -122,10 +122,15 @@ AI-assisted changes must still satisfy normal Databend contribution expectations
 - Do not mix drive-by refactors into bug fixes
 
 ### Evidence
-- Bug fixes: include a regression test whenever practical
+- Bug fixes: include a regression test that fails without the fix (see Test admission)
 - Planner / executor / storage behavior: add or update logic tests (or the relevant suite) with expected output when deterministic
 - Performance claims: include before/after measurements, not anecdotes
 - “No Test — Explain why” in the PR template requires a real reason, not convenience
+
+### Test admission
+A test earns its place by being able to fail. Every added test must state, in one sentence, which implementation mistake it would catch, and take expected values from an independent source (SQL semantics, a spec, another engine, hand computation) rather than re-deriving them from the implementation. Cover one behavior; parameterize with a table and name the axes instead of copying a test body with different literals. A bug-fix regression must be shown to fail on the parent commit or with the fix reverted.
+
+Prefer the existing SQL logic suites for behavior changes; keep unit tests for pure logic those suites cannot reach. Do not test constructors, constants, or getters. Test volume is not evidence, and a review finding is not by itself a reason to add one — a simplification or a reasoned refusal is also a valid fix.
 
 ### Local validation
 - Run the smallest relevant checks first, then stronger validation before handoff
@@ -148,6 +153,15 @@ Review the change, not the tool.
 - If a PR looks AI-generated and low-effort, ask for a tighter summary, tests, or a reduced diff; close it if the author cannot engage
 - Domain CODEOWNERS remain the authority for their areas
 - It is fine to use AI to help review, but merge decisions stay with humans
+
+## AI review discipline
+
+An AI reviewer optimizes for findings; closing every finding produces more branches, more tests, a larger diff, and more findings on the next round. Break the loop:
+
+- **Evidence before severity.** A finding must include a reproducible path (query, settings, data shape) and the user-visible wrong result. Without it, it is a hypothesis, not a blocker; "not reachable because ..." closes it
+- **P2 is not a merge gate.** Only an actual wrong result, data loss, or a security boundary issue blocks a PR
+- **Two rounds per PR.** Re-run the reviewer at most twice, only on the diff since the last round; then human triage (`.github/workflows/review-budget.yml` warns past the budget)
+- **Findings are inputs, not a work queue.** A valid fix may be a simplification, a deletion, or a reasoned refusal — not necessarily new code and a new test. Do not require "Fixed in ..." for every comment
 
 ## Security, license, and confidentiality
 

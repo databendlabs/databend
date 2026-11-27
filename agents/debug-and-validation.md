@@ -15,6 +15,14 @@
 - Use cluster variants such as `make stateless-cluster-test` and TLS mode when coordination, transactions, or auth are involved.
 - Document new fixtures or configs in `tests/README.md` or inline comments so CI stays reproducible.
 
+## Test admission for AI-assisted changes
+
+See `AI_POLICY.md` -> Test admission. In this repository that means:
+
+- Add SQL logic cases to the existing suite file covering that function or operator; do not create a new `.test` file for a handful of cases.
+- Prefer one multi-column query over several near-identical cases. Keep unit tests for logic SQL cannot reach.
+- For bug fixes, run the new case against the parent commit or with the fix reverted, and report the command and failing result in the PR summary.
+
 ## Temporary Investigation Outputs
 
 - Do not apply the full submission-level test bar by default.
