@@ -22,6 +22,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::NumberScalar;
+use databend_common_sql::planner::QueryExecutor;
+use databend_query::schedulers::ServiceQueryExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextSettings;
@@ -298,6 +300,17 @@ async fn test_auto_pipeline_width_for_index_search() -> Result<()> {
     let vector = format!(
         "SELECT id, l2_distance(v,[0,0,0,0]::VECTOR(4)) AS d FROM {table} ORDER BY d LIMIT 2"
     );
+    // An unrelated statement override must not promote the session's max_threads
+    // into an explicit hint. Check the real SELECT path as well as EXPLAIN.
+    let hinted = fts.replacen(
+        "SELECT",
+        "SELECT /*+ SET_VAR(enable_auto_pipeline_width=1) */",
+        1,
+    );
+    let ctx = fixture.new_query_ctx().await?;
+    execute_rows(ctx.clone(), &hinted).await?;
+    assert_eq!(ctx.get_settings().get_max_threads()?, 1);
+    assert_eq!(lanes(&hinted).await?, 1);
     let pinned = fts.replacen("SELECT", "SELECT /*+ SET_VAR(max_threads=2) */", 1);
     for (sql, narrowed) in [
         (fts.clone(), true),
@@ -317,6 +330,24 @@ async fn test_auto_pipeline_width_for_index_search() -> Result<()> {
         assert_eq!(after, if narrowed { 1 } else { before }, "{sql}");
         assert_eq!(rows(&sql).await?, reference, "{sql}");
     }
+    // Binder subqueries run a nested interpreter on the parent's shared settings.
+    let parent = fixture.new_query_ctx().await?;
+    let nested = ServiceQueryExecutor::new(QueryContext::create_from(&parent));
+    nested.execute_query_with_sql_string(&fts).await?;
+    assert!(
+        !parent
+            .get_shared_settings()
+            .changes()
+            .contains_key("max_threads")
+    );
+    let outer = explain_text(
+        parent.clone(),
+        &format!("PIPELINE {}", fts.replace("DESC", "ASC")),
+    )
+    .await?;
+    assert!(outer.matches("TransformPartialTopN").count() > 1, "{outer}");
+    assert_eq!(parent.get_settings().get_max_threads()?, 4);
+
     // The session keeps its width.
     assert_eq!(
         fixture

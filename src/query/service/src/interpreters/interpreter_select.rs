@@ -45,8 +45,10 @@ use databend_common_users::UserApiProvider;
 use log::error;
 use log::info;
 
+use crate::interpreters::ExecutionScope;
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::build_update_stream_reqs;
+use crate::interpreters::pipeline_width::apply_pipeline_width;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -297,11 +299,16 @@ impl Interpreter for SelectInterpreter {
         false
     }
 
-    /// This method will create a new pipeline
-    /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        self.execute2_in_scope(ExecutionScope::Nested)
+    }
+
     #[fastrace::trace(name = "SelectInterpreter::execute2")]
     #[async_backtrace::framed]
-    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+    fn execute2_in_scope(
+        &self,
+        scope: ExecutionScope,
+    ) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             self.attach_tables_to_ctx();
 
@@ -309,6 +316,7 @@ impl Interpreter for SelectInterpreter {
 
             // 0. Need to build physical plan first to get the partitions.
             let physical_plan = self.build_physical_plan().await?;
+            apply_pipeline_width(scope, &self.ctx, &physical_plan)?;
 
             let query_plan = {
                 let metadata = self.metadata.read();

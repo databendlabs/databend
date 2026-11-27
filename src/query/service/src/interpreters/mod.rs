@@ -230,6 +230,7 @@ mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
 mod interpreter_virtual_column_vacuum;
+mod pipeline_width;
 pub(crate) mod util;
 
 pub use access::ManagementModeAccess;
@@ -238,6 +239,7 @@ pub use common::InterpreterQueryLog;
 pub use common::QueryFinishHooks;
 pub use hook::HookOperator;
 pub use hook::TableHookScheduler;
+pub use interpreter::ExecutionScope;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter::interpreter_plan_sql;

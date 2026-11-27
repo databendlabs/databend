@@ -361,31 +361,26 @@ impl TableContextSettings for QueryContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        if self.shared.query_settings.is_changed()
-            && self.shared.query_settings.query_level_change()
-        {
-            let shared_settings = self.shared.query_settings.changes();
-            if self.get_session_settings().is_changed() {
-                for r in self.get_session_settings().changes().iter() {
-                    if !self.shared.query_settings.changes().contains_key(r.key()) {
-                        shared_settings.insert(r.key().clone(), r.value().clone());
-                    }
-                }
-                unsafe {
-                    self.query_settings.unchecked_apply_changes(shared_settings);
-                }
-            } else {
-                unsafe {
-                    self.query_settings.unchecked_apply_changes(shared_settings);
+        let session = self.get_session_settings();
+        let statement = &self.shared.query_settings;
+        if statement.query_level_change() {
+            // Inherit session values in the effective settings, never in the
+            // statement overrides. Don't temporarily overwrite an explicit hint.
+            let overrides = statement.changes();
+            for entry in session.changes().iter() {
+                if !overrides.contains_key(entry.key()) {
+                    self.query_settings
+                        .changes()
+                        .insert(entry.key().clone(), entry.value().clone());
                 }
             }
+            unsafe { self.query_settings.unchecked_apply_changes(overrides) };
         } else {
             unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(self.get_session_settings().changes())
-            }
+                    .unchecked_apply_changes(session.changes())
+            };
         }
-
         self.query_settings.clone()
     }
 

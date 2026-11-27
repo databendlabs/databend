@@ -50,10 +50,12 @@ use serde_json;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
+use crate::interpreters::ExecutionScope;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFinishHooks;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
+use crate::interpreters::pipeline_width::apply_pipeline_width;
 use crate::physical_plans::FormatContext;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
@@ -100,8 +102,15 @@ impl Interpreter for ExplainInterpreter {
         false
     }
 
-    #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        self.execute2_in_scope(ExecutionScope::Nested)
+    }
+
+    #[async_backtrace::framed]
+    fn execute2_in_scope(
+        &self,
+        scope: ExecutionScope,
+    ) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let options = FormatOptions {
                 verbose: self.config.verbose,
@@ -232,6 +241,7 @@ impl Interpreter for ExplainInterpreter {
                         ..
                     } => {
                         self.explain_analyze(
+                            scope,
                             s_expr.planned()?.expr(),
                             metadata,
                             bind_context.column_set(),
@@ -245,6 +255,7 @@ impl Interpreter for ExplainInterpreter {
                         let mutation_build_info =
                             build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
                         self.explain_analyze(
+                            ExecutionScope::Nested,
                             s_expr.planned()?.child(0)?,
                             &plan.metadata,
                             *plan.required_columns.clone(),
@@ -267,7 +278,7 @@ impl Interpreter for ExplainInterpreter {
                             let result = async {
                                 let interpreter =
                                     InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
-                                interpreter.execute2().await
+                                interpreter.execute2_in_scope(scope).await
                             }
                             .await;
                             self.ctx.attach_query_lineage(previous_query_lineage);
@@ -540,6 +551,7 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
+        scope: ExecutionScope,
         s_expr: &PExpr,
         metadata: &MetadataRef,
         required: ColumnSet,
@@ -551,6 +563,7 @@ impl ExplainInterpreter {
             builder.set_mutation_build_info(build_info);
         }
         let mut plan = builder.build(s_expr, required).await?;
+        apply_pipeline_width(scope, &self.ctx, &plan)?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data

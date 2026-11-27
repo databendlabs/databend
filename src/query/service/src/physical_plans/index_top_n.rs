@@ -19,6 +19,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,12 +33,15 @@ use databend_common_pipeline::core::SourcePipeBuilder;
 use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::operations::read::scan_block_bound;
 
 use super::EvalScalar;
 use super::Filter;
 use super::FinalTopNPlan;
 use super::PartialTopNPlan;
+use super::PhysicalPlan;
 use super::PhysicalPlanCast;
+use super::RowFetch;
 use super::TableScan;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextProgress;
@@ -82,24 +86,30 @@ pub(super) fn try_build(plan: &FinalTopNPlan, builder: &mut PipelineBuilder) -> 
     Ok(true)
 }
 
-/// An index Top-K (FTS or vector) whose scan returns only the index's
-/// candidates, at most `per_block_candidates` from each block. It narrows the
-/// `covering_input` that `IndexTopNSource` uses, so the pipeline width rules
-/// see the same shapes the index answers.
-pub(super) struct IndexTopK<'a> {
-    pub scan: &'a TableScan,
-    pub per_block_candidates: usize,
+pub(crate) struct LazyIndexTopK {
+    pub candidates_per_block: usize,
+    pub blocks: usize,
 }
 
-pub(super) fn index_top_k(plan: &FinalTopNPlan) -> Option<IndexTopK<'_>> {
-    let input = covering_input(plan)?;
-    let push = input.scan.source.push_downs.as_ref()?;
-    if push.index_top_k_score().as_ref() != Some(input.key) {
+/// Size of a complete covering index Top-K, optionally followed by a local row
+/// fetch. Eager scored partitions are handled by `IndexTopNSource` instead.
+pub(crate) fn lazy_index_top_k(root: &PhysicalPlan) -> Option<LazyIndexTopK> {
+    let root = match RowFetch::from_physical_plan(root) {
+        Some(fetch) if fetch.enable_block_id_repartition => return None,
+        Some(fetch) => &fetch.input,
+        None => root,
+    };
+    let input = covering_input(FinalTopNPlan::from_physical_plan(root)?)?;
+    let source = &input.scan.source;
+    let push = source.push_downs.as_ref()?;
+    if source.parts.partitions_type() != PartInfoType::LazyLevel
+        || push.index_top_k_score().as_ref() != Some(input.key)
+    {
         return None;
     }
-    Some(IndexTopK {
-        scan: input.scan,
-        per_block_candidates: push.limit?,
+    Some(LazyIndexTopK {
+        candidates_per_block: push.limit?,
+        blocks: scan_block_bound(source)?,
     })
 }
 

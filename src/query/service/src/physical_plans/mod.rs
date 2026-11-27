@@ -66,11 +66,11 @@ mod physical_udf;
 mod physical_union_all;
 mod physical_window;
 mod physical_window_partition;
-mod pipeline_width;
 mod runtime_filter;
 mod runtime_scan_filter;
 
 pub use databend_common_sql::executor::physical_plans::window::*;
+pub(crate) use index_top_n::lazy_index_top_k;
 pub use physical_add_stream_column::AddStreamColumn;
 pub use physical_aggregate_expand::AggregateExpand;
 pub use physical_aggregate_final::AggregateFinal;
@@ -127,7 +127,6 @@ pub use physical_udf::UdfFunctionDesc;
 pub use physical_union_all::UnionAll;
 pub use physical_window::*;
 pub use physical_window_partition::*;
-pub(crate) use pipeline_width::auto_pipeline_width;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
 
