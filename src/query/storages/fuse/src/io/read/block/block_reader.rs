@@ -211,6 +211,7 @@ impl BlockReader {
         let parquet_read_schema = Arc::new(ParquetReadSchema::try_new(
             &original_schema,
             parquet_hint_fields,
+            None,
         )?);
         let parquet_name_paths = Arc::new(column_name_paths(&projection, &original_schema));
 

@@ -39,7 +39,7 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
 /// The sorted Parquet leaves read from a block, and the positions of the dictionary hints
-/// dropped for its column chunks that are not dictionary encoded throughout.
+/// dropped for chunks that cannot use dictionary output.
 type FieldLevelsKey = (Vec<usize>, Vec<usize>);
 
 const MAX_CACHED_FIELD_LEVEL_LAYOUTS: usize = 16;
@@ -58,12 +58,15 @@ pub struct ParquetReadSchema {
     /// Arrow fields the columns are read as if they differ from `arrow_schema`, see
     /// [`dictionary_hint_fields`].
     hint_fields: Option<Fields>,
+    /// When set, limit dictionary entries relative to the number of selected rows.
+    dictionary_ndv_ratio: Option<u64>,
 }
 
 impl ParquetReadSchema {
     pub fn try_new(
         original_schema: &TableSchema,
         hint_fields: Option<Fields>,
+        dictionary_ndv_ratio: Option<u64>,
     ) -> databend_common_exception::Result<Self> {
         let arrow_schema = Schema::from(original_schema);
         let parquet_schema = Arc::new(ArrowSchemaConverter::new().convert(&arrow_schema)?);
@@ -78,6 +81,7 @@ impl ParquetReadSchema {
             parquet_schema,
             column_id_to_dfs_id,
             hint_fields,
+            dictionary_ndv_ratio,
         })
     }
 
@@ -158,19 +162,20 @@ pub fn dictionary_hint_fields(
 
 /// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
 ///
-/// `hint_fields` overrides the Arrow fields the columns are read as, see
-/// [`dictionary_hint_fields`]; by default they are the fields of `original_schema`. A dictionary
-/// hint only applies to column chunks that are dictionary encoded: the others are read as their
-/// regular type, as the reader would otherwise rebuild a dictionary row by row.
+/// `dictionary_hint` pairs the fields from [`dictionary_hint_fields`] with the maximum NDV
+/// percentage of the selected rows. Plain, mixed, and over-threshold chunks use the original
+/// Arrow type.
 pub fn column_chunks_to_record_batch(
     original_schema: &TableSchema,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
     selection: Option<RowSelection>,
-    hint_fields: Option<&Fields>,
+    dictionary_hint: Option<(Fields, u64)>,
 ) -> databend_common_exception::Result<RecordBatch> {
-    let read_schema = ParquetReadSchema::try_new(original_schema, hint_fields.cloned())?;
+    let (hint_fields, dictionary_ndv_ratio) = dictionary_hint.unzip();
+    let read_schema =
+        ParquetReadSchema::try_new(original_schema, hint_fields, dictionary_ndv_ratio)?;
     column_chunks_to_record_batch_with_codecs(
         original_schema,
         &read_schema,
@@ -261,13 +266,18 @@ pub(super) fn column_chunks_record_reader(
     // a dictionary page. Otherwise Arrow would rebuild a dictionary of plain values row by row.
     let mut plain_hints = Vec::new();
     if let Some(hint_fields) = &read_schema.hint_fields {
+        // Arrow retains the chunk's entire dictionary even for a sparse row selection.
+        let max_dictionary_len = read_schema.dictionary_ndv_ratio.map(|ratio| {
+            let rows = selection.as_ref().map_or(num_rows, RowSelection::row_count);
+            rows as u64 * ratio / 100
+        });
         for (index, field) in hint_fields.iter().enumerate() {
             let column_id = original_schema.fields()[index].column_id();
             if matches!(field.data_type(), ArrowDataType::Dictionary(..))
                 && read_schema
                     .column_id_to_dfs_id
                     .get(&column_id)
-                    .is_some_and(|dfs_id| !builder.all_pages_dictionary_encoded(*dfs_id))
+                    .is_some_and(|dfs_id| !builder.can_read_dictionary(*dfs_id, max_dictionary_len))
             {
                 plain_hints.push(index);
             }
@@ -394,6 +404,66 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_dictionary_hint_uses_selected_rows() -> databend_common_exception::Result<()> {
+        let schema = TableSchema::new(vec![TableField::new(
+            "s",
+            TableDataType::String.wrap_nullable(),
+        )]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let values =
+            arrow_array::StringViewArray::from(vec![Some("a"), Some("b"), Some("a"), None]);
+        let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(values)])?;
+        let num_rows = batch.num_rows();
+        let mut bytes = Vec::new();
+        let properties = WriterProperties::builder()
+            .set_dictionary_enabled(true)
+            .build();
+        let mut writer = ArrowWriter::try_new(&mut bytes, arrow_schema, Some(properties))?;
+        writer.write(&batch)?;
+        let metadata = writer.close()?;
+        let (offset, len) = metadata.row_group(0).column(0).byte_range();
+        let chunk = Bytes::from(bytes).slice(offset as usize..(offset + len) as usize);
+        let column_id = schema.field(0).column_id();
+        let chunks = HashMap::from([(column_id, DataItem::RawData(Buffer::from(chunk)))]);
+        let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
+
+        // The same two-entry dictionary fits exactly at the threshold, but not above it.
+        for (rows, ratio, keep_dictionary) in [
+            (None, 50, true),
+            (Some(2), 100, true),
+            (Some(1), 100, false),
+            (Some(2), 50, false),
+            (Some(0), 100, false),
+        ] {
+            let selection = rows
+                .map(|n| RowSelection::from_consecutive_ranges(std::iter::once(0..n), num_rows));
+            let record = column_chunks_to_record_batch(
+                &schema,
+                num_rows,
+                &chunks,
+                &Compression::None,
+                selection,
+                Some((hint.clone(), ratio)),
+            )?;
+            assert_eq!(record.num_rows(), rows.unwrap_or(num_rows));
+            let output_type = record.column(0).data_type();
+            if keep_dictionary {
+                assert!(
+                    matches!(output_type, ArrowDataType::Dictionary(..)),
+                    "rows={rows:?}, ratio={ratio}: got {output_type:?}"
+                );
+            } else {
+                assert_eq!(
+                    output_type,
+                    &ArrowDataType::Utf8View,
+                    "rows={rows:?}, ratio={ratio}"
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// A dictionary hint applies only to chunks encoded as dictionaries throughout, even when
     /// one [`FieldLevelsCache`] serves dictionary, plain, and fallback chunks in succession.
     #[test]
@@ -403,7 +473,7 @@ mod tests {
         let arrow_schema = Arc::new(Schema::from(&schema));
         let column_id = schema.field(0).column_id();
         let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
-        let read_schema = Arc::new(ParquetReadSchema::try_new(&schema, Some(hint))?);
+        let read_schema = Arc::new(ParquetReadSchema::try_new(&schema, Some(hint), None)?);
         let mut field_levels = FieldLevelsCache::new(read_schema.clone());
 
         for (dictionary_enabled, falls_back) in

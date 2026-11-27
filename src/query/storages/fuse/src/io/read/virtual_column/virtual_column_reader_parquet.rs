@@ -233,7 +233,7 @@ impl VirtualColumnReader {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
                 // Slot IDs (not query column IDs) identify physical sidecar fields.
                 // Only request codes for strings projected directly as strings.
-                let hint = self.dictionary_ndv_ratio.and_then(|_| {
+                let hint = self.dictionary_ndv_ratio.and_then(|ratio| {
                     let slots = self
                         .virtual_column_info
                         .virtual_column_fields
@@ -244,6 +244,7 @@ impl VirtualColumnReader {
                             _ => None,
                         });
                     dictionary_hint_fields(&virtual_data.schema, slots)
+                        .map(|fields| (fields, ratio))
                 });
                 column_chunks_to_record_batch(
                     &virtual_data.schema,
@@ -251,7 +252,7 @@ impl VirtualColumnReader {
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
-                    hint.as_ref(),
+                    hint,
                 )
             })
             .transpose()?;
