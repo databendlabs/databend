@@ -51,6 +51,7 @@ use super::status;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
+use crate::sessions::TableContext;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryIdentity;
 
@@ -169,6 +170,8 @@ impl FlightSqlServiceImpl {
             .create_query_context(self.version)
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
+        // See `execute_query`.
+        context.result_cache_state().set_cacheable(false);
 
         context.attach_query_str(
             get_query_kind(&plan_extras.statement),
@@ -197,6 +200,9 @@ impl FlightSqlServiceImpl {
             .create_query_context(self.version)
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
+        // The plan was bound in another context, which kept the values of user and role functions
+        // for the result cache key. Without them, sessions of other users would share results.
+        context.result_cache_state().set_cacheable(false);
 
         context.attach_query_str(
             get_query_kind(&plan_extras.statement),

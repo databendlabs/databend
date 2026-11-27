@@ -38,6 +38,7 @@ use databend_common_config::InnerConfig;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
@@ -374,6 +375,86 @@ async fn test_query() -> Result<()> {
         serve_future.await.unwrap();
         debug!("Server shutdown!");
 
+        Ok(())
+    })
+}
+
+async fn query_cache_entries(fixture: &TestFixture) -> String {
+    let blocks: Vec<DataBlock> = fixture
+        .execute_query("SELECT count(*) FROM system.query_cache")
+        .await
+        .unwrap()
+        .try_collect()
+        .await
+        .unwrap();
+    blocks[0].get_by_offset(0).index(0).unwrap().to_string()
+}
+
+/// Flight SQL binds a plan in one query context and runs it in another, so the result cache key
+/// misses the values of user and role functions that binding added. Its queries must not use the
+/// result cache, or another user reads a result cached for the first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_query_result_cache_disabled() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    let table = format!(
+        "{}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    for sql in [
+        format!("INSERT INTO {table}(id) VALUES (1)"),
+        "CREATE USER flight_cache_a IDENTIFIED BY 'password'".to_string(),
+        "CREATE USER flight_cache_b IDENTIFIED BY 'password'".to_string(),
+        format!("GRANT SELECT ON {table} TO flight_cache_a"),
+        format!("GRANT SELECT ON {table} TO flight_cache_b"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let runtime = Runtime::with_default_worker_threads(Some("flight-sql-test".to_string()))?;
+    runtime.block_on(async {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.into_temp_path().to_str().unwrap().to_string();
+        let _ = fs::remove_file(path.clone());
+        let stream = UnixListenerStream::new(UnixListener::bind(path.clone()).unwrap());
+        let service = Arc::new(FlightSqlServiceImpl::create(
+            &databend_common_version::BUILD_INFO,
+        ));
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+        let serve_future = Server::builder()
+            .add_service(FlightServiceServer::from_arc(service))
+            .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
+
+        let request_future = async {
+            let sql = format!("SELECT current_user(), id FROM {table}");
+            for user in ["flight_cache_a", "flight_cache_b"] {
+                let mut client = client_with_uds(path.clone()).await;
+                client.handshake(user, "password").await.unwrap();
+                for setting in [
+                    "SET enable_query_result_cache = 1",
+                    "SET query_result_cache_min_execute_secs = 0",
+                ] {
+                    run_query(&mut client, setting).await.unwrap();
+                }
+                let result = run_query(&mut client, &sql).await.unwrap();
+                assert!(result.contains(&format!("'{user}'@'%'")), "{result}");
+                // The result cache is written after the result is sent: give it time to appear.
+                for _ in 0..20 {
+                    assert_eq!(query_cache_entries(&fixture).await, "0");
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            }
+        };
+        tokio::pin!(serve_future);
+
+        tokio::select! {
+            _ = &mut serve_future => panic!("server returned first"),
+            _ = request_future => {}
+        }
+        shutdown_tx.send(()).unwrap();
+        serve_future.await.unwrap();
         Ok(())
     })
 }
