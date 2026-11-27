@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::error::Error as StdError;
+use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,7 +35,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_grpc::DNSService;
 use databend_common_metrics::external_server::record_connect_external_duration;
 use databend_common_metrics::external_server::record_request_external_batch_rows;
 use databend_common_metrics::external_server::record_request_external_duration;
@@ -43,8 +43,8 @@ use databend_common_metrics::external_server::record_running_requests_external_s
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
-use hyper_util::client::legacy::connect::HttpConnector;
 use itertools::Itertools;
+use tonic::Code;
 use tonic::Request;
 use tonic::Status;
 use tonic::metadata::KeyAndValueRef;
@@ -62,6 +62,12 @@ use crate::DataSchema;
 use crate::types::DataType;
 use crate::variant_transform::contains_variant;
 use crate::variant_transform::transform_variant;
+
+mod connector;
+
+use connector::ConnectObservation;
+pub use connector::UdfConnectDiagnostics;
+pub use connector::UdfConnectResult;
 
 const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
 const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
@@ -90,11 +96,125 @@ enum FlightDecodeIssue {
     Other,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UdfFailurePhase {
+    AcquirePermit,
+    AccessCheck,
+    Connect,
+    PrepareRequest,
+    AwaitResponse,
+    ReadResponseStream,
+    Decode,
+}
+
+impl UdfFailurePhase {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AcquirePermit => "acquire_permit",
+            Self::AccessCheck => "access_check",
+            Self::Connect => "connect",
+            Self::PrepareRequest => "prepare_request",
+            Self::AwaitResponse => "await_response",
+            Self::ReadResponseStream => "read_response_stream",
+            Self::Decode => "decode",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct UdfFlightFailure {
+    pub error: ErrorCode,
+    pub phase: UdfFailurePhase,
+    pub grpc_code: Option<Code>,
+    pub status_origin: Option<&'static str>,
+    pub io_error_kind: Option<io::ErrorKind>,
+    pub connection: Option<UdfConnectDiagnostics>,
+}
+
+impl UdfFlightFailure {
+    pub fn new(error: ErrorCode, phase: UdfFailurePhase) -> Self {
+        Self {
+            error,
+            phase,
+            grpc_code: None,
+            status_origin: None,
+            io_error_kind: None,
+            connection: None,
+        }
+    }
+
+    pub fn with_connection(mut self, connection: UdfConnectDiagnostics) -> Self {
+        self.connection = Some(connection);
+        self
+    }
+
+    fn grpc_diagnostics(
+        status: &Status,
+    ) -> (Option<Code>, Option<&'static str>, Option<io::ErrorKind>) {
+        let source = status.source();
+        // A local cause is evidence of a client-side error. With no cause,
+        // tonic may have synthesized the status or received it from a peer.
+        let origin = if source.is_some() {
+            "client"
+        } else {
+            "unknown"
+        };
+        (
+            Some(status.code()),
+            Some(origin),
+            source.and_then(find_io_error_kind),
+        )
+    }
+
+    fn response_status(status: Status) -> Self {
+        let phase = UdfFailurePhase::AwaitResponse;
+        let (grpc_code, status_origin, io_error_kind) = Self::grpc_diagnostics(&status);
+        Self {
+            error: status.into(),
+            phase,
+            grpc_code,
+            status_origin,
+            io_error_kind,
+            connection: None,
+        }
+    }
+
+    fn response_stream(func_name: &str, err: FlightError) -> Self {
+        if let FlightError::Tonic(status) = &err {
+            let phase = UdfFailurePhase::ReadResponseStream;
+            let (grpc_code, status_origin, io_error_kind) = Self::grpc_diagnostics(status);
+            Self {
+                error: handle_flight_decode_error(func_name, err),
+                phase,
+                grpc_code,
+                status_origin,
+                io_error_kind,
+                connection: None,
+            }
+        } else {
+            Self::new(
+                handle_flight_decode_error(func_name, err),
+                UdfFailurePhase::Decode,
+            )
+        }
+    }
+}
+
+fn find_io_error_kind(mut error: &(dyn StdError + 'static)) -> Option<io::ErrorKind> {
+    loop {
+        if let Some(error) = error.downcast_ref::<io::Error>() {
+            return Some(error.kind());
+        }
+        error = error.source()?;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
     inner: FlightServiceClient<Channel>,
     batch_rows: usize,
     headers: MetadataMap,
+    connection: ConnectObservation,
 }
 
 impl UDFFlightClient {
@@ -135,24 +255,32 @@ impl UDFFlightClient {
         conn_timeout: u64,
         batch_rows: usize,
     ) -> Result<UDFFlightClient> {
+        Self::connect_with_diagnostics(func_name, endpoint, conn_timeout, batch_rows)
+            .await
+            .map_err(|failure| failure.error)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn connect_with_diagnostics(
+        func_name: &str,
+        endpoint: Arc<Endpoint>,
+        conn_timeout: u64,
+        batch_rows: usize,
+    ) -> std::result::Result<Self, UdfFlightFailure> {
         let instant = Instant::now();
 
-        let mut connector = HttpConnector::new_with_resolver(DNSService);
-        connector.enforce_http(false);
-        connector.set_nodelay(true);
-        connector.set_keepalive(Some(Duration::from_secs(UDF_TCP_KEEP_ALIVE_SEC)));
-        connector.set_connect_timeout(Some(Duration::from_secs(conn_timeout)));
-        connector.set_reuse_address(true);
-
-        let channel = endpoint
-            .connect_with_connector(connector)
+        let connection = ConnectObservation::default();
+        let channel = connection
+            .connect(&endpoint, Duration::from_secs(conn_timeout))
             .await
-            .map_err(|err| {
-                ErrorCode::UDFServerConnectError(format!(
-                    "Cannot connect to UDF Server {}: {:?}",
-                    endpoint.uri(),
-                    err
-                ))
+            .map_err(|err| UdfFlightFailure {
+                io_error_kind: find_io_error_kind(&err),
+                // The raw transport error can contain an IP, and the URI can contain credentials.
+                ..UdfFlightFailure::new(
+                    ErrorCode::UDFServerConnectError("Cannot connect to UDF Server"),
+                    UdfFailurePhase::Connect,
+                )
+                .with_connection(connection.snapshot())
             })?;
         let inner =
             FlightServiceClient::new(channel).max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
@@ -164,7 +292,12 @@ impl UDFFlightClient {
             inner,
             batch_rows,
             headers: MetadataMap::new(),
+            connection,
         })
+    }
+
+    pub fn connection_diagnostics(&self) -> UdfConnectDiagnostics {
+        self.connection.snapshot()
     }
 
     pub fn with_headers<S: AsRef<str>, H: IntoIterator<Item = (S, S)>>(
@@ -174,10 +307,11 @@ impl UDFFlightClient {
         for (key, value) in headers.into_iter() {
             let key = key.as_ref();
             let value = value.as_ref();
-            let key = MetadataKey::from_str(key)
-                .map_err(|err| ErrorCode::UDFDataError(format!("Parse key {key} error: {err}")))?;
+            let key = MetadataKey::from_str(key).map_err(|err| {
+                ErrorCode::UDFDataError(format!("Invalid UDF header name: {err}"))
+            })?;
             let value = MetadataValue::from_str(value).map_err(|err| {
-                ErrorCode::UDFDataError(format!("Parse value {value} error: {err}"))
+                ErrorCode::UDFDataError(format!("Invalid UDF header value: {err}"))
             })?;
             self.headers.insert(key, value);
         }
@@ -304,11 +438,42 @@ impl UDFFlightClient {
         args: Vec<BlockEntry>,
         return_type: &DataType,
     ) -> Result<DataBlock> {
+        self.do_exchange_with_diagnostics(name, func_name, num_rows, args, return_type)
+            .await
+            .map_err(|failure| failure.error)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_exchange_with_diagnostics(
+        &mut self,
+        name: &str,
+        func_name: &str,
+        num_rows: Option<usize>,
+        args: Vec<BlockEntry>,
+        return_type: &DataType,
+    ) -> std::result::Result<DataBlock, UdfFlightFailure> {
         let instant = Instant::now();
+
+        let input_batch = Self::prepare_exchange_input(args).map_err(|err| {
+            UdfFlightFailure::new(err, UdfFailurePhase::PrepareRequest)
+                .with_connection(self.connection_diagnostics())
+        })?;
 
         Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
         record_running_requests_external_start(name, 1);
+        let result = self.inner_do_exchange(func_name, input_batch).await;
+        record_running_requests_external_finish(name, 1);
+        record_request_external_duration(func_name, instant.elapsed());
 
+        result
+            .and_then(|batch| {
+                Self::decode_exchange_result(func_name, batch, num_rows, return_type)
+                    .map_err(|err| UdfFlightFailure::new(err, UdfFailurePhase::Decode))
+            })
+            .map_err(|failure| failure.with_connection(self.connection_diagnostics()))
+    }
+
+    fn prepare_exchange_input(args: Vec<BlockEntry>) -> Result<RecordBatch> {
         let args = args
             .into_iter()
             .map(|arg| {
@@ -332,17 +497,17 @@ impl UDFFlightClient {
 
         // at least 1 for `UDFFlightClient::batch_rows`
         let input_num_rows = args.first().map(|entry| entry.len()).unwrap_or(1);
-        let input_batch = DataBlock::new(args, input_num_rows)
+        DataBlock::new(args, input_num_rows)
             .to_record_batch_with_dataschema(&data_schema)
-            .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+            .map_err(|err| ErrorCode::from_string(format!("{err}")))
+    }
 
-        let result_batch = self.inner_do_exchange(func_name, input_batch).await;
-
-        let request_duration = instant.elapsed();
-        record_running_requests_external_finish(name, 1);
-        record_request_external_duration(func_name, request_duration);
-
-        let result_batch = result_batch?;
+    fn decode_exchange_result(
+        func_name: &str,
+        result_batch: RecordBatch,
+        num_rows: Option<usize>,
+        return_type: &DataType,
+    ) -> Result<DataBlock> {
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
         let mut result_block =
             DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
@@ -412,7 +577,7 @@ impl UDFFlightClient {
         &mut self,
         func_name: &str,
         input_batch: RecordBatch,
-    ) -> Result<RecordBatch> {
+    ) -> std::result::Result<RecordBatch, UdfFlightFailure> {
         let descriptor = FlightDescriptor::new_path(vec![func_name.to_string()]);
         let batch_rows = self.batch_rows;
         let batches = (0..input_batch.num_rows())
@@ -426,22 +591,34 @@ impl UDFFlightClient {
             .build(stream::iter(batches))
             .map(|data| data.unwrap());
         let request = self.make_request(flight_data_stream);
-        let flight_data_stream = self.inner.do_exchange(request).await?.into_inner();
+        let flight_data_stream = self
+            .inner
+            .do_exchange(request)
+            .await
+            .map_err(UdfFlightFailure::response_status)?
+            .into_inner();
         let record_batch_stream = FlightRecordBatchStream::new_from_flight_data(
             flight_data_stream.map_err(|err| err.into()),
         )
-        .map_err(|err| handle_flight_decode_error(func_name, err));
+        .map_err(|err| UdfFlightFailure::response_stream(func_name, err));
 
         let batches: Vec<RecordBatch> = record_batch_stream.try_collect().await?;
         if batches.is_empty() {
-            return Err(ErrorCode::EmptyDataFromServer(format!(
-                "Get empty data from UDF Server on UDF function {func_name}"
-            )));
+            return Err(UdfFlightFailure::new(
+                ErrorCode::EmptyDataFromServer(format!(
+                    "Get empty data from UDF Server on UDF function {func_name}"
+                )),
+                UdfFailurePhase::Decode,
+            ));
         }
 
         let schema = batches[0].schema();
-        concat_batches(&schema, batches.iter())
-            .map_err(|err| ErrorCode::UDFDataError(err.to_string()))
+        concat_batches(&schema, batches.iter()).map_err(|err| {
+            UdfFlightFailure::new(
+                ErrorCode::UDFDataError(err.to_string()),
+                UdfFailurePhase::Decode,
+            )
+        })
     }
 }
 
@@ -527,7 +704,7 @@ pub fn is_transport_error_message(message: &str) -> bool {
         .iter()
         .any(|snippet| lower.contains(snippet))
 }
-pub fn error_kind(message: &str) -> &str {
+pub fn error_kind(message: &str) -> &'static str {
     let message = message.to_ascii_lowercase();
     if message.contains("timeout") || message.contains("timedout") {
         // Error(Connect, Custom)

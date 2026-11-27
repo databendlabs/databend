@@ -42,6 +42,7 @@ futures = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
+http = { workspace = true }
 hyper-util = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
@@ -64,6 +65,7 @@ simple_hll = { workspace = true }
 smallvec = { workspace = true }
 terminal_size = { workspace = true }
 tonic = { workspace = true }
+tower = { workspace = true }
 typetag = { workspace = true }
 unicode-segmentation = { workspace = true }
 

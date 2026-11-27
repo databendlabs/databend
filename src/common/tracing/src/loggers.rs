@@ -92,6 +92,26 @@ impl Append for RollingFileWarp {
     }
 }
 
+/// Keep logforth from dumping a failed sensitive record to stderr as a fallback.
+#[derive(Debug)]
+pub(crate) struct ProtectUdfPeer<A>(pub A);
+
+impl<A: Append> Append for ProtectUdfPeer<A> {
+    fn append(&self, record: &Record, diagnostics: &[Diagnostic]) -> anyhow::Result<()> {
+        match self.0.append(record, diagnostics) {
+            Err(_) if record.target() == crate::filter::UDF_PEER_LOG_TARGET => {
+                let _ = writeln!(std::io::stderr(), "Failed to write UDF peer diagnostic");
+                Ok(())
+            }
+            result => result,
+        }
+    }
+
+    fn flush(&self) {
+        self.0.flush();
+    }
+}
+
 #[derive(Debug)]
 pub struct IdenticalLayout;
 
@@ -223,6 +243,25 @@ mod tests {
     use log::Record;
 
     use super::*;
+
+    #[test]
+    fn test_udf_peer_sink_error_does_not_trigger_record_dump() {
+        #[derive(Debug)]
+        struct FailingSink;
+
+        impl Append for FailingSink {
+            fn append(&self, _: &Record, _: &[Diagnostic]) -> anyhow::Result<()> {
+                anyhow::bail!("write failed");
+            }
+        }
+
+        let sink = ProtectUdfPeer(FailingSink);
+        let peer = Record::builder()
+            .target(crate::filter::UDF_PEER_LOG_TARGET)
+            .build();
+        assert!(sink.append(&peer, &[]).is_ok());
+        assert!(sink.append(&Record::builder().build(), &[]).is_err());
+    }
 
     // Test case structure for shared test data
     struct TestCase {

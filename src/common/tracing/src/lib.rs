@@ -46,6 +46,7 @@ pub use crate::config::StderrConfig;
 pub use crate::config::StructLogConfig;
 pub use crate::config::TracingConfig;
 pub use crate::crash_hook::set_crash_hook;
+pub use crate::filter::UDF_PEER_LOG_TARGET;
 pub use crate::init::GlobalLogger;
 pub use crate::init::init_logging;
 pub use crate::init::inject_span_to_tonic_request;

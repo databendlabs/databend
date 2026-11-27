@@ -23,3 +23,27 @@ Databend Query is a Distributed Query Engine at scale.
 - [`users`](./users/) implements user, role, and access-control support.
 - [`ee`](./ee/) contains enterprise query functionality.
 - [`ee_features`](./ee_features/) contains enterprise feature modules used by the query layer.
+
+## External Flight UDF connection diagnostics
+
+`udf_attempt_failure` records DNS, TCP, and TLS outcomes for the initial dial of
+that attempt. DNS `ok` means the resolver returned successfully, possibly from
+cache. TLS `ok` for HTTPS also means HTTP/2 ALPN was accepted; it does not mean
+the UDF received the request. `redial_started=true` means tonic started another
+dial, so do not attribute the RPC failure to the initial peer alone. The
+diagnostics do not send extra traffic. `udf_call_recovered` is emitted at INFO
+only when a retry succeeds. Match it to earlier failures using `query_id`,
+`node_id`, and `call_id`; `attempt` is the successful attempt number.
+
+The actual initial TCP peer IP (`initial_peer_ip`) is in a separate
+`udf_attempt_peer` event. Join on `query_id`, `node_id`, `call_id`, and `attempt`.
+A failed TCP dial does not have a connected peer. The peer can be a load balancer
+or proxy, not necessarily the UDF backend.
+
+Peer events are off by default. Query capture, log history, stderr, and trace
+export exclude them. Operators may append `databend::log::udf_peer=WARN` to
+`log.file.level` or `log.otlp.level` on an enabled sink **only if** its storage,
+forwarding, and access controls are restricted to authorized operators. For the
+file sink, use `json` or `text` so that structured fields are retained. Remove
+the directive after diagnosis. Neither event includes the URL path or query,
+headers, DNS answer lists, or UDF data.

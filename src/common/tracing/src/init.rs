@@ -35,9 +35,12 @@ use tokio::sync::RwLock;
 use crate::Config;
 use crate::config::LogFormat;
 use crate::config::OTLPProtocol;
+use crate::filter::ExcludeUdfPeerLog;
 use crate::filter::ThreadTrackerFilter;
+use crate::filter::UDF_PEER_LOG_TARGET;
 use crate::loggers::IdenticalLayout;
 use crate::loggers::JsonLayout;
+use crate::loggers::ProtectUdfPeer;
 use crate::loggers::TextLayout;
 use crate::loggers::new_rolling_file_appender;
 use crate::predefined_tables::table_to_target;
@@ -130,6 +133,7 @@ fn env_filter(level: &str) -> EnvFilter {
             .filter(Some("databend::log::time_series"), LevelFilter::Off)
             .filter(Some("databend::log::access"), LevelFilter::Off)
             .filter(Some("databend::log::dump_graph"), LevelFilter::Off)
+            .filter(Some(UDF_PEER_LOG_TARGET), LevelFilter::Off)
             .parse(level),
     )
 }
@@ -243,11 +247,11 @@ pub fn init_logging(
             dispatch
                 .filter(env_filter(&cfg.file.level))
                 .filter(ThreadTrackerFilter)
-                .append(match cfg.file.format {
+                .append(ProtectUdfPeer(match cfg.file.format {
                     LogFormat::Text => normal_log_file.with_layout(TextLayout::<false>),
                     LogFormat::Json => normal_log_file.with_layout(JsonLayout::<false>),
                     LogFormat::Identical => normal_log_file.with_layout(IdenticalLayout),
-                })
+                }))
         });
     }
 
@@ -257,6 +261,7 @@ pub fn init_logging(
             let stderr = logforth::append::Stderr::default();
             dispatch
                 .filter(env_filter(&cfg.stderr.level))
+                .filter(ExcludeUdfPeerLog)
                 .filter(ThreadTrackerFilter)
                 .append(match cfg.stderr.format {
                     LogFormat::Text => stderr.with_layout(TextLayout::<false>),
@@ -288,7 +293,7 @@ pub fn init_logging(
             dispatch
                 .filter(env_filter(&cfg.otlp.level))
                 .filter(ThreadTrackerFilter)
-                .append(otel)
+                .append(ProtectUdfPeer(otel))
         });
     }
 
@@ -297,6 +302,7 @@ pub fn init_logging(
         logger = logger.dispatch(|dispatch| {
             dispatch
                 .filter(env_filter(&cfg.tracing.capture_log_level))
+                .filter(ExcludeUdfPeerLog)
                 .filter(ThreadTrackerFilter)
                 .append(logforth::append::FastraceEvent::default())
         });
@@ -440,6 +446,7 @@ pub fn init_logging(
         logger = logger.dispatch(|dispatch| {
             dispatch
                 .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
+                .filter(ExcludeUdfPeerLog)
                 .filter(ThreadTrackerFilter)
                 .append(remote_log)
         });
@@ -450,6 +457,7 @@ pub fn init_logging(
     {
         logger = logger.dispatch(|dispatch| {
             dispatch
+                .filter(ExcludeUdfPeerLog)
                 .filter(ThreadTrackerFilter)
                 .append(QueryLogCollector::new())
         });
@@ -493,7 +501,9 @@ mod tests {
     use logforth::Filter;
     use logforth::filter::FilterResult;
 
+    use super::ExcludeUdfPeerLog;
     use super::ServerSpanKind;
+    use super::UDF_PEER_LOG_TARGET;
     use super::env_filter;
 
     #[derive(Clone, Default)]
@@ -537,6 +547,20 @@ mod tests {
             .build();
 
         assert_eq!(filter.enabled(&metadata), FilterResult::Reject);
+    }
+
+    #[test]
+    fn test_udf_peer_log_is_opt_in_and_excluded_from_query_logs() {
+        let metadata = Metadata::builder()
+            .target(UDF_PEER_LOG_TARGET)
+            .level(Level::Warn)
+            .build();
+        assert_eq!(env_filter("TRACE").enabled(&metadata), FilterResult::Reject);
+        assert_eq!(
+            env_filter(&format!("TRACE,{UDF_PEER_LOG_TARGET}=WARN")).enabled(&metadata),
+            FilterResult::Neutral
+        );
+        assert_eq!(ExcludeUdfPeerLog.enabled(&metadata), FilterResult::Reject);
     }
 
     #[test]
