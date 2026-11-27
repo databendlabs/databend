@@ -16,10 +16,12 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -28,6 +30,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::utils::FromData;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ListProcedureReq;
@@ -80,8 +83,18 @@ impl AsyncSystemTable for ProceduresTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        // Bodies can be large. Fill them only when the scan reads `body`, and keep
+        // the column (as empty strings) otherwise, since the block must match the schema.
+        let body_index = self.table_info.schema().index_of("body")?;
+        let read_body = match push_downs.as_ref().and_then(|p| p.projection.as_ref()) {
+            Some(Projection::Columns(columns)) if !columns.is_empty() => {
+                columns.contains(&body_index)
+            }
+            _ => true,
+        };
+
         let tenant = ctx.get_tenant();
         let user_api = UserApiProvider::instance();
         let mgr = user_api.procedure_api(&tenant);
@@ -118,7 +131,7 @@ impl AsyncSystemTable for ProceduresTable {
         let mut arguments = Vec::with_capacity(procedures.len());
         let mut comments = Vec::with_capacity(procedures.len());
         let mut created_on_s = Vec::with_capacity(procedures.len());
-        let mut bodies = Vec::with_capacity(procedures.len());
+        let mut bodies = StringColumnBuilder::with_capacity(procedures.len());
 
         for procedure in &procedures {
             names.push(procedure.name_ident.procedure_name().name.to_string());
@@ -133,7 +146,11 @@ impl AsyncSystemTable for ProceduresTable {
             comments.push(procedure.meta.comment.as_str());
 
             created_on_s.push(procedure.meta.created_on.timestamp_micros());
-            bodies.push(procedure.meta.script.as_str());
+            if read_body {
+                bodies.put_and_commit(procedure.meta.script.as_str());
+            } else {
+                bodies.put_and_commit("");
+            }
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -143,7 +160,7 @@ impl AsyncSystemTable for ProceduresTable {
             StringType::from_data(comments),
             StringType::from_data(descriptions),
             TimestampType::from_data(created_on_s),
-            StringType::from_data(bodies),
+            Column::String(bodies.build()),
         ]))
     }
 }
