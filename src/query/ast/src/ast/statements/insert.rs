@@ -80,8 +80,7 @@ pub enum InsertSource {
         format_options: FileFormatOptions,
         value: Option<Vec<Expr>>,
 
-        // '_databend_upload' => read from streaming upload handler body
-        // _ => read from stage
+        // A stage location, or a placeholder for the body of a streaming load request.
         location: String,
     },
 }
