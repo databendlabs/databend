@@ -503,10 +503,9 @@ impl HttpSessionConf {
                 session.set_current_role_checked(role).await?;
             }
         }
-        // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
-        session
-            .set_secondary_roles_checked(self.secondary_roles.clone())
-            .await?;
+        // Keep the client's list even if some roles were revoked since it was set: only the roles
+        // still available take effect, and a re-granted role takes effect again.
+        session.set_secondary_roles_unchecked(self.secondary_roles.clone());
         if let Some(state) = &self.internal {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)

@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_management::WarehouseInfo;
+use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -33,6 +34,7 @@ use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use log::warn;
 
 use crate::meta_service_error;
 use crate::sessions::SessionContext;
@@ -60,6 +62,9 @@ pub trait SessionPrivilegeManager {
     fn get_secondary_roles(&self) -> Option<Vec<String>>;
 
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
+
+    /// Replaces the authenticated user with `user`, a newer copy of the same user.
+    async fn reload_authed_user(&self, user: UserInfo) -> Result<()>;
 
     async fn set_current_role(&self, role: Option<String>) -> Result<()>;
 
@@ -99,6 +104,24 @@ pub trait SessionPrivilegeManager {
 
     // fn show_grants(&self);
     async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()>;
+}
+
+/// `roles` must be sorted by name, as `get_all_available_roles` returns them.
+fn contains_role(roles: &[RoleInfo], name: &str) -> bool {
+    debug_assert!(roles.is_sorted_by(|a, b| a.name <= b.name));
+    roles
+        .binary_search_by(|role| role.name.as_str().cmp(name))
+        .is_ok()
+}
+
+fn same_password(a: &AuthInfo, b: &AuthInfo) -> bool {
+    matches!(
+        (a, b),
+        (
+            AuthInfo::Password { hash_value: a, .. },
+            AuthInfo::Password { hash_value: b, .. },
+        ) if a == b
+    )
 }
 
 pub struct SessionPrivilegeManagerImpl<'a> {
@@ -167,6 +190,21 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         Ok(())
     }
 
+    /// The AUTH ROLE is kept. A current role no longer available falls back as on login, see
+    /// `ensure_current_role`.
+    #[async_backtrace::framed]
+    async fn reload_authed_user(&self, mut user: UserInfo) -> Result<()> {
+        let current = self.get_current_user()?;
+        // Login sets `need_change` from the password policy in memory only: keep it until the
+        // password changes, or reloading would lift MUST_CHANGE_PASSWORD and MAX_AGE_DAYS.
+        if current.auth_info.get_need_change() && same_password(&current.auth_info, &user.auth_info)
+        {
+            user.update_auth_need_change_password();
+        }
+        self.session_ctx.set_current_user(user);
+        self.ensure_current_role().await
+    }
+
     #[async_backtrace::framed]
     async fn set_current_role(&self, role_name: Option<String>) -> Result<()> {
         let role = match &role_name {
@@ -177,14 +215,26 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         Ok(())
     }
 
-    /// If secondary_roles is set, it must be ALL or NONE:
-    /// 1. ALL: all the roles granted to the current user will have effects on validate_privilege,
-    ///    `secondary_roles` will be set to None, which is default.
-    /// 2. NONE: only the current_role has effects on validate_privilege, `secondary_roles`
-    ///    will be set to Some([]).
-    /// 3. SpecifyRoles: Some([role1, role2, .. etc.]).
+    /// `None` (the default, `SET SECONDARY ROLES ALL`) enables all available roles.
+    /// `Some([])` (`NONE`) enables only the current role and its inherited roles.
+    /// A non-empty list may only name roles available to the session when it is set; roles
+    /// revoked later stay in the list but no longer take effect, see `get_all_effective_roles`.
     #[async_backtrace::framed]
     async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
+        if let Some(role_names) = &secondary_roles
+            && !role_names.is_empty()
+        {
+            let available_roles = self.get_all_available_roles().await?;
+            if let Some(role) = role_names
+                .iter()
+                .find(|name| !contains_role(&available_roles, name))
+            {
+                return Err(ErrorCode::InvalidRole(format!(
+                    "Invalid secondary role {role} for current session"
+                )));
+            }
+        }
+
         self.session_ctx.set_secondary_roles(secondary_roles);
         Ok(())
     }
@@ -227,7 +277,26 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         // if the secondary_roles is set to be non-empty, return both current_role and the secondary_roles
         // and their related roles.
         let secondary_roles = secondary_roles.unwrap_or_default();
-        role_names.extend(secondary_roles);
+        if !secondary_roles.is_empty() {
+            // The list may come from the client (HTTP session state) or predate a revoke, so
+            // only the roles still available to the session take effect. HTTP requests and,
+            // before each query, MySQL and Flight SQL sessions reload the user whose grants
+            // the available roles start from: see `Session::reload_authed_user`.
+            let available_roles = self.get_all_available_roles().await?;
+            let (available, unavailable): (Vec<_>, Vec<_>) = secondary_roles
+                .into_iter()
+                .partition(|name| contains_role(&available_roles, name));
+            if !unavailable.is_empty() {
+                warn!(
+                    "Ignored secondary roles not available to the session: user: {}, roles: {}",
+                    self.get_current_user()
+                        .map(|u| u.identity().display().to_string())
+                        .unwrap_or_else(|_| "unknown".to_string()),
+                    unavailable.join(","),
+                );
+            }
+            role_names.extend(available);
+        }
 
         // find their related roles as the final effective roles
         let role_cache = RoleCacheManager::instance();
@@ -281,11 +350,9 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             Some(auth_role) => vec![auth_role],
             None => {
                 let current_user = self.get_current_user()?;
-                let mut roles: Vec<String> = current_user.grants.roles_vec();
-                if let Some(current_role) = self.get_current_role() {
-                    roles.push(current_role.name);
-                }
-                roles
+                // Not the current role: it was available when set, but may have been revoked
+                // since, and must then fall back, see `ensure_current_role`.
+                current_user.grants.roles_vec()
             }
         };
 

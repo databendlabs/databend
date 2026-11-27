@@ -29,6 +29,7 @@ use databend_query::servers::flight::v1::actions::LegacyKillQueryRequest;
 use databend_query::servers::flight::v1::actions::flight_actions;
 use databend_query::sessions::SessionManager;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::set_meta_user;
 
 #[test]
 fn test_can_kill() {
@@ -119,9 +120,7 @@ async fn test_legacy_kill_respects_tenant() -> anyhow::Result<()> {
             let mut target = manager.create_session(SessionType::Local).await?;
             target.set_current_tenant(Tenant::new_literal(target_tenant))?;
             let target = manager.register_session(target)?;
-            target
-                .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-                .await?;
+            set_meta_user(&target, UserInfo::new_no_auth("u1", "%")).await?;
             let ctx = target.create_query_context(&BUILD_INFO).await?;
             if prefixed {
                 ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));
@@ -217,9 +216,7 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
             ("u1", "", true, Ok(false)),
         ] {
             let target = fixture.new_session_with_type(SessionType::MySQL).await?;
-            target
-                .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-                .await?;
+            set_meta_user(&target, UserInfo::new_no_auth("u1", "%")).await?;
             let target_ctx = target.create_query_context(&BUILD_INFO).await?;
             if prefixed {
                 target_ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));

@@ -128,8 +128,10 @@ impl Binder {
             query.push_str(&format!(" LIMIT {}", limit));
         }
 
-        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowTags)
-            .await
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowTags {
+            generated_table_index: None,
+        })
+        .await
     }
 
     #[async_backtrace::framed]

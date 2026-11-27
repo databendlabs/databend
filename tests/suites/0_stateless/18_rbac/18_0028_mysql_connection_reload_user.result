@@ -1,0 +1,23 @@
+== revoked secondary role
+granted: 1
+revoked: PermissionDenied 1063
+granted again: 1
+== revoked current role
+granted: 1
+revoked: PermissionDenied 1063
+current role: public
+== revoked account_admin
+granted: ok
+revoked: PermissionDenied 1063
+== password changed on the connection
+must change: NeedChangePasswordDenied 1066
+changed: ok
+after change: 1
+== disabled user
+disabled: AuthenticateFailure 5100
+enabled again: 1
+== dropped user
+dropped: UnknownUser 2201
+== user created again under the same name
+old connection: UnknownUser 2201
+new connection: 1

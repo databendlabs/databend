@@ -118,7 +118,7 @@ impl Binder {
                 qualify: None,
             };
             let (srf_expr, mut bind_context) =
-                self.bind_select(bind_context, &select_stmt, &[], None)?;
+                self.bind_select(bind_context, &select_stmt, &[], None, None)?;
 
             return self.extract_srf_table_function_columns(
                 &mut bind_context,

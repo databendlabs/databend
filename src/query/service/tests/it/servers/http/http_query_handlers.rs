@@ -2019,31 +2019,129 @@ async fn test_affect() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_session_secondary_roles() -> anyhow::Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup().await?;
+    for sql in [
+        "CREATE USER secondary_role_user IDENTIFIED BY 'test-password'",
+        "CREATE ROLE granted_role",
+        "CREATE ROLE inherited_role",
+        "GRANT ROLE inherited_role TO ROLE granted_role",
+        "GRANT ROLE granted_role TO secondary_role_user",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
 
-    let route = create_endpoint()?;
+    let request = |secondary_roles: Option<Vec<&str>>| {
+        let mut session = serde_json::json!({"role": BUILTIN_ROLE_PUBLIC});
+        if let Some(roles) = secondary_roles {
+            session["secondary_roles"] = serde_json::json!(roles);
+        }
+        TestHttpQueryRequest::new(serde_json::json!({"sql": "SELECT 1", "session": session}))
+            .with_basic_auth("secondary_role_user", "test-password")
+    };
 
-    let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
-    let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_none());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    // A valid list may include directly granted and inherited roles. NONE and ALL still work.
+    for roles in [
+        Some(vec!["granted_role", "inherited_role"]),
+        Some(vec![]),
+        None,
+    ] {
+        let expected = roles
+            .as_ref()
+            .map(|names| names.iter().copied().map(str::to_owned).collect::<Vec<_>>());
+        let (_, result) = request(roles).fetch_total().await?.last();
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.session.unwrap().secondary_roles, expected);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_session_secondary_roles_cannot_grant_ungranted_privileges() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE USER no_admin_user IDENTIFIED BY 'test-password'")
+        .await?;
+
+    // A client-supplied list must not activate a role the user was never granted. The list
+    // is kept as sent, but the role does not take effect.
+    let (_, result) = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "CREATE ROLE escalated_role",
+        "session": {"secondary_roles": [BUILTIN_ROLE_ACCOUNT_ADMIN]},
+    }))
+    .with_basic_auth("no_admin_user", "test-password")
+    .fetch_total()
+    .await?
+    .last();
+    assert_eq!(result.state, ExecuteStateKind::Failed);
+    assert_eq!(result.error.unwrap().code, ErrorCode::PERMISSION_DENIED);
     assert_eq!(
         result.session.unwrap().secondary_roles,
-        Some(vec!["role1".to_string()])
+        Some(vec![BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()])
     );
 
-    let json = serde_json::json!({"sql":  "select 1", "session": {"role": BUILTIN_ROLE_PUBLIC, "secondary_roles": Vec::<String>::new()}});
-    let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_none());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
-    assert_eq!(result.session.unwrap().secondary_roles, Some(vec![]));
+    // The statement did not run: creating the role again succeeds.
+    fixture
+        .execute_command("CREATE ROLE escalated_role")
+        .await?;
+    Ok(())
+}
 
-    let json = serde_json::json!({"sql":  "select 1", "session": {"role": BUILTIN_ROLE_PUBLIC}});
-    let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_none());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
-    assert_eq!(result.session.unwrap().secondary_roles, None);
+#[tokio::test(flavor = "current_thread")]
+async fn test_session_secondary_role_revoked_and_granted_again() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for sql in [
+        "CREATE USER revoked_role_user IDENTIFIED BY 'test-password'",
+        "CREATE ROLE revoked_role",
+        "GRANT CREATE ROLE ON *.* TO ROLE revoked_role",
+        "GRANT ROLE revoked_role TO revoked_role_user",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
 
+    // Each request replays the session from the previous response, as clients do even when
+    // the response carries an error.
+    let request = |session: serde_json::Value| {
+        TestHttpQueryRequest::new(serde_json::json!({
+            "sql": "CREATE ROLE IF NOT EXISTS revoked_role_probe",
+            "session": session,
+        }))
+        .with_basic_auth("revoked_role_user", "test-password")
+    };
+    let listed = Some(vec!["revoked_role".to_string()]);
+
+    let (_, result) = request(serde_json::json!({"secondary_roles": ["revoked_role"]}))
+        .fetch_total()
+        .await?
+        .last();
+    assert!(result.error.is_none(), "{:?}", result.error);
+    let session = result.session.unwrap();
+    assert_eq!(session.secondary_roles, listed);
+
+    fixture
+        .execute_command("REVOKE ROLE revoked_role FROM revoked_role_user")
+        .await?;
+
+    // The revoked role stays in the list but no longer grants anything.
+    let (_, result) = request(serde_json::to_value(&session)?)
+        .fetch_total()
+        .await?
+        .last();
+    assert_eq!(result.state, ExecuteStateKind::Failed);
+    assert_eq!(result.error.unwrap().code, ErrorCode::PERMISSION_DENIED);
+    let session = result.session.unwrap();
+    assert_eq!(session.secondary_roles, listed);
+
+    // Granting the role again makes the same session work without SET SECONDARY ROLES.
+    fixture
+        .execute_command("GRANT ROLE revoked_role TO revoked_role_user")
+        .await?;
+    let (_, result) = request(serde_json::to_value(&session)?)
+        .fetch_total()
+        .await?
+        .last();
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
     Ok(())
 }
 

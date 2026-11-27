@@ -19,6 +19,9 @@ use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_users::UserApiProvider;
 use futures::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
@@ -26,6 +29,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::Session;
 use crate::sessions::TableContextSettings;
 use crate::sql::Planner;
 
@@ -45,6 +49,21 @@ pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> 
     let res = execute_query(ctx, query).await?;
     res.try_collect::<Vec<DataBlock>>().await?;
     Ok(())
+}
+
+/// Stores `user` in meta-service and authenticates `session` as it. A MySQL or Flight SQL
+/// session reloads its user from meta-service before each query, see `Session::reload_authed_user`.
+pub async fn set_meta_user(session: &Session, mut user: UserInfo) -> Result<()> {
+    let user_api = UserApiProvider::instance();
+    let tenant = session.get_current_tenant();
+    // Replacing the user stands for altering it: sessions logged in as it before stay valid.
+    if let Ok(stored) = user_api.get_user(&tenant, user.identity()).await {
+        user.created_on = stored.created_on;
+    }
+    user_api
+        .create_user(&tenant, user.clone(), &CreateOption::CreateOrReplace)
+        .await?;
+    session.set_authed_user(user, None).await
 }
 
 pub async fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {

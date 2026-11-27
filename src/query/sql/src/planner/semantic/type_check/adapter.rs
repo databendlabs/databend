@@ -49,6 +49,8 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use itertools::Itertools;
 use serde_json::json;
 use serde_json::to_string;
+use sha2::Digest;
+use sha2::Sha256;
 
 use super::AuthFunction;
 use super::FullTypeCheckAdapter;
@@ -97,6 +99,29 @@ impl FullTypeCheckAdapter {
     where F: std::future::Future<Output = Result<T>> {
         let handle = (self.dependencies.async_runtime_handle)()?;
         block_on_with_handle(&handle, future)
+    }
+
+    /// Adds the value of an authorization function to the result cache key. The value is bound
+    /// into the plan, including inside policy and view bodies, but the statement text does not
+    /// show it, so without the key a cached result would be served to another user or role.
+    /// Only a digest is added: the key extras are listed in `system.query_cache`.
+    fn add_authorization_value_to_result_cache_key(&self, function: &str, value: &str) {
+        self.ctx
+            .result_cache_state()
+            .add_cache_key_extra(format!("{function}:{:x}", Sha256::digest(value)));
+    }
+
+    /// Records that a value depends on the roles enabled for the session. Granting or revoking
+    /// a role changes them without changing the statement or the tables it reads, and the plan
+    /// cache key does not hold them, so the plan is not cached. The result cache key holds the
+    /// value, so a cached result is only served to sessions that resolve the same value.
+    fn record_role_dependent_value(&self, function: &str, value: &str) -> Result<()> {
+        self.ctx
+            .get_function_context()?
+            .query_specific_values
+            .record();
+        self.add_authorization_value_to_result_cache_key(function, value);
+        Ok(())
     }
 }
 
@@ -361,19 +386,24 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     fn resolve_authorization_function(&self, function: AuthFunction) -> Result<Scalar> {
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
         match function {
-            AuthFunction::CurrentUser => Ok(Scalar::String(
-                authorization
+            // The secure plan cache key holds the user and the role, so the plan stays cacheable.
+            AuthFunction::CurrentUser => {
+                let user = authorization
                     .get_current_user()?
                     .identity()
                     .display()
-                    .to_string(),
-            )),
-            AuthFunction::CurrentRole => Ok(Scalar::String(
-                authorization
+                    .to_string();
+                self.add_authorization_value_to_result_cache_key("current_user", &user);
+                Ok(Scalar::String(user))
+            }
+            AuthFunction::CurrentRole => {
+                let role = authorization
                     .get_current_role()
                     .map(|role| role.name)
-                    .unwrap_or_default(),
-            )),
+                    .unwrap_or_default();
+                self.add_authorization_value_to_result_cache_key("current_role", &role);
+                Ok(Scalar::String(role))
+            }
             AuthFunction::CurrentSecondaryRoles => {
                 let mut roles = self
                     .block_on(authorization.get_all_effective_roles())?
@@ -387,7 +417,9 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                 } else {
                     json!({ "roles": roles_comma_separated_string, "value": "None" })
                 };
-                Ok(Scalar::String(to_string(&value)?))
+                let value = to_string(&value)?;
+                self.record_role_dependent_value("current_secondary_roles", &value)?;
+                Ok(Scalar::String(value))
             }
             AuthFunction::CurrentAvailableRoles => {
                 let mut roles = self
@@ -396,7 +428,9 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                     .map(|role| role.name)
                     .collect::<Vec<_>>();
                 roles.sort();
-                Ok(Scalar::String(to_string(&roles)?))
+                let value = to_string(&roles)?;
+                self.record_role_dependent_value("current_available_roles", &value)?;
+                Ok(Scalar::String(value))
             }
             AuthFunction::CurrentTenantId => {
                 // Resolved from the server-side session tenant (see
@@ -413,11 +447,15 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
 
     fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
-        Ok(self
+        let roles = self
             .block_on(authorization.get_all_effective_roles())?
             .into_iter()
             .map(|role| role.name)
-            .collect())
+            .collect::<Vec<_>>();
+        let mut sorted_roles = roles.iter().collect::<Vec<_>>();
+        sorted_roles.sort();
+        self.record_role_dependent_value("effective_roles", &to_string(&sorted_roles)?)?;
+        Ok(roles)
     }
 
     fn set_result_cache_uncacheable(&self) {

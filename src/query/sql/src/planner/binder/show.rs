@@ -70,7 +70,7 @@ impl Binder {
             "SELECT name FROM default.system.table_functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
-        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowTableFunctions)
             .await
     }
 

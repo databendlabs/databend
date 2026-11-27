@@ -31,6 +31,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
+use databend_query::test_kits::set_meta_user;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
@@ -55,9 +56,7 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
         ("QUERY", "query_prefixed", false),
     ] {
         let target = fixture.new_session_with_type(SessionType::MySQL).await?;
-        target
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&target, UserInfo::new_no_auth("u1", "%")).await?;
         let io_closed = Arc::new(AtomicBool::new(false));
         let on_shutdown = io_closed.clone();
         target.attach(None, move || on_shutdown.store(true, Ordering::SeqCst));
@@ -80,9 +79,7 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
         };
         let sql = format!("KILL {} '{}'", kind, id);
         let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
-        requester
-            .set_authed_user(UserInfo::new_no_auth("u2", "%"), None)
-            .await?;
+        set_meta_user(&requester, UserInfo::new_no_auth("u2", "%")).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         let error = execute_command(ctx, &sql).await.unwrap_err();
         assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
@@ -102,9 +99,7 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
                 .is_ok()
         );
 
-        requester
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&requester, UserInfo::new_no_auth("u1", "%")).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         execute_command(ctx, &sql).await?;
         assert_eq!(queue.length(), 0);
@@ -144,9 +139,7 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
         (false, "QUERY", true, false),
         (false, "QUERY", true, true),
     ] {
-        requester
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&requester, UserInfo::new_no_auth("u1", "%")).await?;
         let holder_ctx = fixture.new_query_ctx().await?;
         let holder = queue
             .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
@@ -156,8 +149,7 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
         let own = fixture
             .new_session_with_type(SessionType::HTTPStreamingLoad)
             .await?;
-        own.set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&own, UserInfo::new_no_auth("u1", "%")).await?;
         let own_ctx = own.create_query_context(&BUILD_INFO).await?;
         own_ctx.update_init_query_id(id.clone());
         let mut own_acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&own_ctx, true)?));
@@ -176,7 +168,7 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
         } else {
             UserInfo::new_no_auth("u2", "%")
         };
-        other.set_authed_user(other_user.clone(), None).await?;
+        set_meta_user(&other, other_user.clone()).await?;
         let other_ctx = other.create_query_context(&BUILD_INFO).await?;
         other_ctx.update_init_query_id(id.clone());
         let mut other_acquire =
@@ -222,7 +214,7 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
         if !foreign_tenant && by_query_id {
             // Keep both contexts alive: whichever HashMap match comes first,
             // the second caller must still find its own full username/hostname.
-            requester.set_authed_user(other_user, None).await?;
+            set_meta_user(&requester, other_user).await?;
             let ctx = requester.create_query_context(&BUILD_INFO).await?;
             let error = execute_command(ctx, &format!("KILL CONNECTION '{}'", id))
                 .await
@@ -264,15 +256,13 @@ async fn test_kill_with_super_from_role() -> anyhow::Result<()> {
         ("QUERY", "mysql"),
     ] {
         let target = fixture.new_session_with_type(SessionType::MySQL).await?;
-        target
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&target, UserInfo::new_no_auth("u1", "%")).await?;
         let target_ctx = target.create_query_context(&BUILD_INFO).await?;
 
         let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
         let mut user = UserInfo::new_no_auth("u2", "%");
         user.grants.grant_role("kill_admin".to_string());
-        requester.set_authed_user(user, None).await?;
+        set_meta_user(&requester, user).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         let id = match id_type {
             "query" => target_ctx.get_id(),
@@ -321,9 +311,7 @@ async fn test_kill_super_respects_tenant_before_queue_removal() -> anyhow::Resul
                 let mut target = manager.create_session(SessionType::Local).await?;
                 target.set_current_tenant(Tenant::new_literal("other_tenant"))?;
                 let target = manager.register_session(target)?;
-                target
-                    .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-                    .await?;
+                set_meta_user(&target, UserInfo::new_no_auth("u1", "%")).await?;
                 let target_ctx = target.create_query_context(&BUILD_INFO).await?;
                 let mut acquire =
                     Box::pin(queue.acquire(QueryEntry::create_entry(&target_ctx, true)?));
@@ -334,7 +322,7 @@ async fn test_kill_super_respects_tenant_before_queue_removal() -> anyhow::Resul
                 if role_super {
                     let mut user = UserInfo::new_no_auth("u2", "%");
                     user.grants.grant_role("kill_admin".to_string());
-                    requester.set_authed_user(user, None).await?;
+                    set_meta_user(&requester, user).await?;
                 }
                 let ctx = requester.create_query_context(&BUILD_INFO).await?;
                 let id = if by_query_id {
@@ -368,15 +356,11 @@ async fn test_kill_client_query_id_formats() -> anyhow::Result<()> {
         "p-".to_string(),
     ] {
         let target = fixture.new_session_with_type(SessionType::MySQL).await?;
-        target
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&target, UserInfo::new_no_auth("u1", "%")).await?;
         let target_ctx = target.create_query_context(&BUILD_INFO).await?;
         target_ctx.update_init_query_id(id.clone());
         let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
-        requester
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&requester, UserInfo::new_no_auth("u1", "%")).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         execute_command(ctx, &format!("KILL QUERY '{}'", id)).await?;
         let err = target_ctx
@@ -406,9 +390,7 @@ async fn test_kill_legacy_session_fallback() -> anyhow::Result<()> {
         )?),
         Some(manager.alloc_mysql_conn_id()),
     )?)?;
-    legacy
-        .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-        .await?;
+    set_meta_user(&legacy, UserInfo::new_no_auth("u1", "%")).await?;
     // Collision priority is covered separately. Here no query id matches, so
     // either KILL form must still accept an old, unprefixed session id.
     for kind in ["QUERY", "CONNECTION"] {
@@ -482,25 +464,21 @@ async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow
         )?)?;
         let query_target = fixture.new_session_with_type(SessionType::MySQL).await?;
         // Only the lower-priority match belongs to the requester initially.
-        sid_target
-            .set_authed_user(
-                UserInfo::new_no_auth(if prefixed { "u2" } else { "u1" }, "%"),
-                None,
-            )
-            .await?;
-        query_target
-            .set_authed_user(
-                UserInfo::new_no_auth(if prefixed { "u1" } else { "u2" }, "%"),
-                None,
-            )
-            .await?;
+        set_meta_user(
+            &sid_target,
+            UserInfo::new_no_auth(if prefixed { "u2" } else { "u1" }, "%"),
+        )
+        .await?;
+        set_meta_user(
+            &query_target,
+            UserInfo::new_no_auth(if prefixed { "u1" } else { "u2" }, "%"),
+        )
+        .await?;
         let sid_ctx = sid_target.create_query_context(&BUILD_INFO).await?;
         let query_ctx = query_target.create_query_context(&BUILD_INFO).await?;
         query_ctx.update_init_query_id(id.clone());
         let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
-        requester
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&requester, UserInfo::new_no_auth("u1", "%")).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         let err = execute_command(ctx, &format!("KILL QUERY '{}'", id))
             .await
@@ -521,12 +499,8 @@ async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow
                 .is_ok()
         );
 
-        sid_target
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
-        query_target
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&sid_target, UserInfo::new_no_auth("u1", "%")).await?;
+        set_meta_user(&query_target, UserInfo::new_no_auth("u1", "%")).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         execute_command(ctx, &format!("KILL QUERY '{}'", id)).await?;
         assert_eq!(
@@ -554,6 +528,8 @@ async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow
         preferred
             .get_settings()
             .set_setting("sandbox_tenant".to_string(), "other_tenant".to_string())?;
+        // The session reloads its user from its new tenant before each query.
+        set_meta_user(preferred, UserInfo::new_no_auth("u1", "%")).await?;
         let next_sid_ctx = sid_target.create_query_context(&BUILD_INFO).await?;
         let next_query_ctx = query_target.create_query_context(&BUILD_INFO).await?;
         next_query_ctx.update_init_query_id(id.clone());
@@ -576,6 +552,8 @@ async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow
         preferred
             .get_settings()
             .set_setting("sandbox_tenant".to_string(), String::new())?;
+        // The `u1` of the other tenant is another account: log in again as this tenant's.
+        set_meta_user(preferred, UserInfo::new_no_auth("u1", "%")).await?;
 
         // CONNECTION always chooses the actual sid, even if an unprefixed query
         // with the same string exists. It never disconnects the query's session.
@@ -609,9 +587,7 @@ async fn test_kill_cross_tenant_ids_are_hidden() -> anyhow::Result<()> {
         };
         foreign_ctx.update_init_query_id(id.clone());
         let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
-        requester
-            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&requester, UserInfo::new_no_auth("u1", "%")).await?;
         for kind in ["QUERY", "CONNECTION"] {
             for target in [
                 foreign.get_id(),
@@ -637,8 +613,7 @@ async fn test_kill_cross_tenant_ids_are_hidden() -> anyhow::Result<()> {
         // A client-chosen query id may exist in both tenants. Cancel only the
         // in-tenant query; another tenant must neither shadow nor receive it.
         let own = fixture.new_session_with_type(SessionType::MySQL).await?;
-        own.set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-            .await?;
+        set_meta_user(&own, UserInfo::new_no_auth("u1", "%")).await?;
         let own_ctx = own.create_query_context(&BUILD_INFO).await?;
         own_ctx.update_init_query_id(id.clone());
         let ctx = requester.create_query_context(&BUILD_INFO).await?;

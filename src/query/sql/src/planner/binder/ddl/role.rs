@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ahash::HashSet;
 use databend_common_ast::ast::SecondaryRolesOption;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::BindContext;
@@ -46,19 +44,9 @@ impl Binder {
         let plan = match option {
             SecondaryRolesOption::None => SetSecondaryRolesPlan::None,
             SecondaryRolesOption::All => SetSecondaryRolesPlan::All,
+            // Validated against the session's available roles when the interpreter applies it.
             SecondaryRolesOption::SpecifyRole(roles) => {
-                let all_roles = self
-                    .ctx
-                    .get_all_available_roles()
-                    .await?
-                    .iter()
-                    .map(|r| r.name.to_string())
-                    .collect::<HashSet<String>>();
-                if roles.iter().all(|r| all_roles.contains(r)) {
-                    SetSecondaryRolesPlan::SpecifyRole(roles.clone())
-                } else {
-                    return Err(ErrorCode::InvalidRole("object is invalid"));
-                }
+                SetSecondaryRolesPlan::SpecifyRole(roles.clone())
             }
         };
         Ok(Plan::SetSecondaryRoles(Box::new(plan)))

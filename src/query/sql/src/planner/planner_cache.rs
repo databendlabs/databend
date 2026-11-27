@@ -61,6 +61,10 @@ pub struct PlanCacheItem {
     /// Binding marked the query result cache unusable, for example because the statement calls
     /// `now()`. A plan cache hit skips binding, so the flag is kept here and applied on hit.
     pub(crate) result_cache_uncacheable: bool,
+    /// Values binding added to the result cache key, such as the value of `current_role()` in
+    /// a masking policy. A plan cache hit skips binding, so they are kept here and added on hit:
+    /// without them, a result would be cached under a key that other users and roles share.
+    pub(crate) result_cache_key_extras: Vec<String>,
 }
 
 static PLAN_CACHE: LazyLock<InMemoryLruCache<PlanCacheItem>> =
@@ -237,6 +241,11 @@ impl Planner {
         if plan_item.result_cache_uncacheable {
             self.ctx.result_cache_state().set_cacheable(false);
         }
+        for extra in &plan_item.result_cache_key_extras {
+            self.ctx
+                .result_cache_state()
+                .add_cache_key_extra(extra.clone());
+        }
         Some(plan_item.as_ref().clone())
     }
 
@@ -257,6 +266,7 @@ impl Planner {
             setting_changes: self.setting_changes(),
             variables: self.ctx.get_all_variables(),
             result_cache_uncacheable: !self.ctx.result_cache_state().cacheable(),
+            result_cache_key_extras: self.ctx.result_cache_state().cache_key_extras(),
         };
         let cache = LazyLock::force(&PLAN_CACHE);
         cache.insert(cache_ctx.cache_key, plan_item);

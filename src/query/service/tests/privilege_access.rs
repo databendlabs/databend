@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
@@ -857,9 +858,25 @@ async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::R
     )
     .await?;
 
-    // A restricted AUTH ROLE must not acquire grants from the user's other available roles.
+    // A restricted AUTH ROLE must not activate even a role granted directly to the user.
+    let restricted_session = fixture.new_session_with_type(SessionType::Dummy).await?;
+    restricted_session
+        .set_authed_user(user.clone(), Some("limited".into()))
+        .await?;
+    restricted_session
+        .set_secondary_roles_checked(Some(vec![]))
+        .await?;
+    let error = restricted_session
+        .set_secondary_roles_checked(Some(vec!["reader".into()]))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::INVALID_ROLE);
+    assert_eq!(restricted_session.get_secondary_roles(), Some(vec![]));
+
+    // A restored list (HTTP session state) is kept, but grants nothing beyond the AUTH ROLE.
+    restricted_session.set_secondary_roles_unchecked(Some(vec!["reader".into()]));
     let error = check_access(
-        user_context(&fixture, user.clone(), Some("limited".into())).await?,
+        restricted_session.create_query_context(&BUILD_INFO).await?,
         "SELECT * FROM select_access.t",
     )
     .await
@@ -870,5 +887,42 @@ async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::R
         "SELECT * FROM select_access.t",
     )
     .await?;
+    Ok(())
+}
+
+/// Flight SQL sessions authenticate once per connection and reload the user before each query,
+/// like MySQL sessions (covered by `18_0028_mysql_connection_reload_user`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_sql_session_reloads_user_before_each_query() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    setup_table(&fixture).await?;
+    for sql in [
+        "CREATE ROLE reload_reader",
+        "GRANT SELECT ON select_access.t TO ROLE reload_reader",
+        "CREATE USER reload_user IDENTIFIED BY 'password'",
+        "GRANT ROLE reload_reader TO reload_user",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let user = UserApiProvider::instance()
+        .get_user(
+            &fixture.default_tenant(),
+            UserIdentity::new("reload_user", "%"),
+        )
+        .await?;
+    let session = fixture
+        .new_session_with_type(SessionType::FlightSQL)
+        .await?;
+    session.set_authed_user(user, None).await?;
+    let select = "SELECT * FROM select_access.t";
+    check_access(session.create_query_context(&BUILD_INFO).await?, select).await?;
+
+    fixture
+        .execute_command("REVOKE ROLE reload_reader FROM reload_user")
+        .await?;
+    let error = check_access(session.create_query_context(&BUILD_INFO).await?, select)
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
     Ok(())
 }
