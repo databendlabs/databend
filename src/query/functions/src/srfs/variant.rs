@@ -46,7 +46,6 @@ use jaq_core::data::JustLut;
 use jaq_core::load::Arena;
 use jaq_core::load::File;
 use jaq_core::load::Loader;
-use jaq_core::unwrap_valr;
 use jaq_json::Val;
 use jaq_std;
 use jsonb::OwnedJsonb;
@@ -481,13 +480,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return vec![];
                     };
 
-                    let Ok(filter) = Compiler::default()
-                        .with_funs(
-                            jaq_core::funs::<JustLut<jaq_json::Val>>()
-                                .chain(jaq_std::funs::<JustLut<jaq_json::Val>>())
-                                .chain(jaq_json::funs::<JustLut<jaq_json::Val>>()),
-                        )
-                        .compile(modules)
+                    let Ok(filter) = Compiler::default().with_funs(jq_funs()).compile(modules)
                     else {
                         ctx.set_error(0, "Invalid jq filter compile error");
                         return vec![];
@@ -522,9 +515,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             let jaq_out = filter.id.run((jaq_ctx.clone(), jaq_val));
 
                                             for res in jaq_out {
-                                                match unwrap_valr(res) {
-                                                    Err(err) => {
-                                                        ctx.set_error(row, err.to_string());
+                                                match res {
+                                                    Err(exn) => {
+                                                        // `halt` must not reach `unwrap_valr`,
+                                                        // which exits the process.
+                                                        let msg = match exn.get_err() {
+                                                            Ok(err) => err.to_string(),
+                                                            Err(_) => {
+                                                                "jq filter halted".to_string()
+                                                            }
+                                                        };
+                                                        ctx.set_error(row, msg);
                                                         return null_result;
                                                     }
                                                     Ok(res) => match OwnedJsonb::try_from(&res) {
@@ -584,6 +585,18 @@ pub(crate) fn unnest_variant_array(
         }
         _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
     }
+}
+
+/// Native jq filters that read process state are not exposed to SQL.
+const JQ_DISABLED_FUNS: &[&str] = &["env"];
+
+// The only place allowed to call `jaq_std::funs`, see `clippy.toml`.
+#[allow(clippy::disallowed_methods)]
+fn jq_funs() -> impl Iterator<Item = jaq_core::native::Fun<JustLut<Val>>> {
+    jaq_core::funs::<JustLut<Val>>()
+        .chain(jaq_std::funs::<JustLut<Val>>())
+        .chain(jaq_json::funs::<JustLut<Val>>())
+        .filter(|(name, _, _)| !JQ_DISABLED_FUNS.contains(name))
 }
 
 fn unnest_variant_obj(

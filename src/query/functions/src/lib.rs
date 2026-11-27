@@ -17,14 +17,18 @@
 
 use ctor::ctor;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use unicase::Ascii;
 
 use crate::aggregates::registry::AGGR_REGISTRY;
 
 pub mod aggregates;
 mod cast_rules;
+mod casts;
 pub mod scalars;
 pub mod srfs;
+pub mod topk_count;
 
 pub fn is_builtin_function(name: &str) -> bool {
     let name = Ascii::new(name);
@@ -56,6 +60,53 @@ pub const ASYNC_FUNCTIONS: [Ascii<&str>; 4] = [
     Ascii::new("dict_get"),
     Ascii::new("read_file"),
     Ascii::new("sleep"),
+];
+
+/// The functions that convert a value to a type, with the type, except `to_decimal`, whose
+/// decimal size a constant cannot hold. `to_x(a)` of a value of type X keeps the value: `to_x`
+/// has no overload for its own type, and the SQL binder binds the call as `a`. A cast to X runs
+/// `to_x` unless it is registered with another function.
+pub const CONVERSION_FUNCTIONS: &[(&str, DataType)] = &[
+    ("to_boolean", DataType::Boolean),
+    ("to_string", DataType::String),
+    ("to_binary", DataType::Binary),
+    ("to_date", DataType::Date),
+    ("to_timestamp", DataType::Timestamp),
+    ("to_timestamp_tz", DataType::TimestampTz),
+    ("to_interval", DataType::Interval),
+    ("to_variant", DataType::Variant),
+    ("to_bitmap", DataType::Bitmap),
+    ("to_geometry", DataType::Geometry),
+    ("to_geography", DataType::Geography),
+    ("to_uint8", DataType::Number(NumberDataType::UInt8)),
+    ("to_uint16", DataType::Number(NumberDataType::UInt16)),
+    ("to_uint32", DataType::Number(NumberDataType::UInt32)),
+    ("to_uint64", DataType::Number(NumberDataType::UInt64)),
+    ("to_int8", DataType::Number(NumberDataType::Int8)),
+    ("to_int16", DataType::Number(NumberDataType::Int16)),
+    ("to_int32", DataType::Number(NumberDataType::Int32)),
+    ("to_int64", DataType::Number(NumberDataType::Int64)),
+    ("to_float32", DataType::Number(NumberDataType::Float32)),
+    ("to_float64", DataType::Number(NumberDataType::Float64)),
+];
+
+/// The try functions that take a value of their own type, with the type: the SQL binder binds
+/// `try_to_x(a)` of a value of type X as `a` of type `X NULL`. The try functions have no
+/// overload for their own type; this only keeps the results of earlier versions, which ran
+/// `try_to_x(a)` as `TRY_CAST(a AS X)` and accepted these through an implicit argument cast that
+/// they dropped. The other try functions reject a value of their own type.
+pub const TRY_CONVERSIONS_TO_OWN_TYPE: &[(&str, DataType)] = &[
+    ("try_to_string", DataType::String),
+    ("try_to_date", DataType::Date),
+    ("try_to_uint8", DataType::Number(NumberDataType::UInt8)),
+    ("try_to_uint16", DataType::Number(NumberDataType::UInt16)),
+    ("try_to_uint32", DataType::Number(NumberDataType::UInt32)),
+    ("try_to_uint64", DataType::Number(NumberDataType::UInt64)),
+    ("try_to_int8", DataType::Number(NumberDataType::Int8)),
+    ("try_to_int16", DataType::Number(NumberDataType::Int16)),
+    ("try_to_int32", DataType::Number(NumberDataType::Int32)),
+    ("try_to_int64", DataType::Number(NumberDataType::Int64)),
+    ("try_to_float32", DataType::Number(NumberDataType::Float32)),
 ];
 
 pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 5] = [
@@ -126,6 +177,7 @@ fn builtin_functions() -> FunctionRegistry {
 
     cast_rules::register(&mut registry);
     scalars::register(&mut registry);
+    casts::register(&mut registry);
     srfs::register(&mut registry);
 
     registry.check_ambiguity();

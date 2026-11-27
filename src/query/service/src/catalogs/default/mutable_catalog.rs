@@ -594,8 +594,22 @@ impl Catalog for MutableCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        Ok(self
+            .get_table_with_db_id(tenant, db_name, table_name)
+            .await?
+            .0)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_with_db_id(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<(Arc<dyn Table>, Option<u64>)> {
         let db = self.get_database(tenant, db_name).await?;
-        db.get_table(table_name).await
+        let table = db.get_table(table_name).await?;
+        Ok((table, Some(db.get_db_info().database_id.db_id)))
     }
 
     #[async_backtrace::framed]
@@ -806,11 +820,10 @@ impl Catalog for MutableCatalog {
             .collect();
 
         info!(
-            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, deduplicated_labels_len={}, update_temp_tables_len={}",
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, update_temp_tables_len={}",
             table_updates.join("; "),
             stream_updates.join("; "),
             req.copied_files.len(),
-            req.deduplicated_labels.len(),
             req.update_temp_tables.len()
         );
         let begin = Instant::now();

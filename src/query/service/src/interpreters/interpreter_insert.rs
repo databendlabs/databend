@@ -68,7 +68,6 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
 use crate::physical_plans::AggregateFinal;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DistributedInsertSelect;
@@ -412,10 +411,6 @@ impl Interpreter for InsertInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
             let table = if let Some(table_info) = &self.plan.table_info {
                 // if table_info is provided, we should instantiated table with it.
                 self.ctx
@@ -511,7 +506,6 @@ impl Interpreter for InsertInterpreter {
                             vec![],
                             self.plan.overwrite,
                             None,
-                            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                             table_meta_timestamps,
                         )?;
 
@@ -655,7 +649,6 @@ impl Interpreter for InsertInterpreter {
                         update_stream_meta,
                         self.plan.overwrite,
                         None,
-                        unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                         table_meta_timestamps,
                     )?;
 
@@ -723,7 +716,6 @@ impl Interpreter for InsertInterpreter {
                 None,
                 vec![],
                 self.plan.overwrite,
-                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 table_meta_timestamps,
             )?;
 

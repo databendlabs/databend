@@ -290,7 +290,6 @@ pub trait Table: Sync + Send {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (
@@ -620,6 +619,15 @@ pub trait ColumnStatisticsProvider: Send {
     // return count-min sketch frequency stats if any
     fn count_min_sketch(&self, _column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         None
+    }
+
+    /// Returns top-N frequency stats and the number of rows they summarize,
+    /// even when they were collected from an older snapshot of the table.
+    ///
+    /// The stats may not describe the current rows, so they are only a hint
+    /// for heuristics, never a bound for correctness.
+    fn approx_top_n(&self, column_id: ColumnId) -> Option<(ColumnTopN, u64)> {
+        self.top_n(column_id).zip(self.stats_num_rows())
     }
 }
 

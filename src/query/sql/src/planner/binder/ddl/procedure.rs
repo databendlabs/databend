@@ -391,7 +391,7 @@ fn resolve_procedure_candidate(
                 && common_super_type(
                     actual.clone(),
                     target.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                    BUILTIN_FUNCTIONS.default_cast_rules(),
                 )
                 .is_some_and(|common| common == target)
             {

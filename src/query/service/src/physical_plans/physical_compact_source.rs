@@ -295,7 +295,6 @@ impl PhysicalPlanBuilder {
                 merge_meta,
             },
             update_stream_meta: vec![],
-            deduplicated_label: None,
             recluster_info: None,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("CommitSink"),

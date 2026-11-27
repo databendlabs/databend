@@ -942,6 +942,7 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
             bucket: self.gcs_bucket,
             root: self.gcs_root,
             credential: self.credential,
+            allow_credential_chain: None,
             network_config: None,
         })
     }
@@ -1178,6 +1179,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
             account_name: self.account_name,
             account_key: self.account_key,
             root: self.azblob_root,
+            allow_credential_chain: None,
             network_config: None,
         })
     }
@@ -3172,8 +3174,9 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// Deprecated: name `ownership` in `meta_service_caches` instead. When true, it enables
-    /// [`MetaServiceCache::Ownership`] as that name does.
+    /// Deprecated, kept for backward compatibility: name `ownership` in `meta_service_caches`
+    /// instead. When true, it enables [`MetaServiceCache::Ownership`] as that name does, and the
+    /// node logs a warning at startup.
     #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
@@ -3699,6 +3702,15 @@ impl CacheConfig {
         self.meta_service_caches.contains(&cache)
             || (cache == MetaServiceCache::Ownership && self.meta_service_ownership_cache)
     }
+
+    /// The warning to log at startup when this config sets the deprecated
+    /// `meta_service_ownership_cache`.
+    pub fn deprecated_ownership_cache_warning(&self) -> Option<&'static str> {
+        self.meta_service_ownership_cache.then_some(
+            "`cache.meta_service_ownership_cache` is deprecated but still enables the ownership \
+             cache; add `ownership` to `cache.meta_service_caches` instead",
+        )
+    }
 }
 
 /// A watched copy of meta-service data, enabled by its snake_case name, such as
@@ -3775,13 +3787,13 @@ impl Default for DiskCacheKeyReloadPolicy {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct DiskCacheConfig {
-    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
-    #[clap(
-        long = "cache-disk-max-bytes",
-        value_name = "VALUE",
-        default_value = "21474836480"
-    )]
-    pub max_bytes: u64,
+    /// Max bytes of cached raw table data; 1024 or less disables it. Unset, it is sized at
+    /// start to the room the file system under `path` leaves 5 percent below `watermark_ratio`
+    /// (85% of it in use by default), the cache's own files counted in, at most 1 TiB; the
+    /// watermark is then held to 95 at most. Nodes sharing one file system each take that room:
+    /// set it for them.
+    #[clap(long = "cache-disk-max-bytes", value_name = "VALUE")]
+    pub max_bytes: Option<u64>,
 
     /// Table disk cache root path
     #[clap(
@@ -3861,9 +3873,9 @@ pub struct DiskCacheConfig {
     )]
     pub queue_wait_ms: u64,
 
-    /// Percent of the file system in use above which the disk cache evicts before it writes:
-    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
-    /// Read at start only.
+    /// Percent of the file system in use, of its space or its inodes, above which the disk cache
+    /// evicts before it writes: other files share the disk, spill files among them. 1 to 100;
+    /// 100 never evicts for it. Read at start only.
     #[clap(
         long = "cache-disk-watermark-ratio",
         id = "cache_disk_watermark_ratio",
@@ -3885,7 +3897,7 @@ pub struct DiskCacheConfig {
 impl Default for DiskCacheConfig {
     fn default() -> Self {
         Self {
-            max_bytes: 21474836480,
+            max_bytes: None,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
             meta_max_ratio: 10,

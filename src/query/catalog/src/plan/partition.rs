@@ -479,9 +479,9 @@ impl ClusterLevelLogStats {
 /// this enum is not part of persisted FUSE metadata.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReclusterTaskKind {
-    /// Establish row order. For ordinary linear FUSE tasks, the inputs are one
-    /// unordered block or a size-bounded group of small blocks. Other layouts
-    /// retain their layout-specific sorting and re-aggregation semantics.
+    /// Establish row order. Ordinary linear FUSE tasks form output blocks first
+    /// and sort each one independently. Other layouts retain their existing
+    /// sort paths.
     SortBlocks,
     /// Merge blocks already ordered by the current linear cluster key, without
     /// sorting their rows again.
@@ -527,6 +527,9 @@ pub struct RetainedBlockMeta {
 #[derive(Clone, Default)]
 pub struct ReclusterParts {
     pub tasks: Vec<ReclusterTask>,
+    /// Placement witness: indices into `tasks`, grouped by executor. Scheduling
+    /// must preserve these batches rather than reshuffling individual tasks.
+    pub task_batches: Option<Vec<Vec<usize>>>,
     pub remained_blocks: Vec<RetainedBlockMeta>,
     pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,

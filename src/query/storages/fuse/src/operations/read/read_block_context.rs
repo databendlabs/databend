@@ -86,7 +86,12 @@ impl ReadBlockContext {
             )
             .await?;
 
-        Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
+        Ok(ParquetDataSource {
+            data,
+            virtual_data: virtual_source,
+            condition: None,
+            io_skipped: false,
+        })
     }
 
     pub(crate) fn granule_groups_if_subset(

@@ -425,13 +425,10 @@ select k + 1 as x, grouping(x) as g, sum(v) from t group by grouping sets ((x), 
 3 0 70
 NULL 1 100
 
-# A same-name alias that is itself the grouping-sets item keeps winning over the input column.
-query II
+# GROUPING arguments resolve as in GROUP BY, input column first: the input column k is not a
+# grouping-sets item, even though the same-name alias is.
+statement error 1006
 select k + 1 as k, sum(v) from t group by grouping sets ((k + 1), ()) order by grouping(k), k;
-----
-2 30
-3 70
-NULL 100
 
 statement ok
 create table logs(game_id string, v int);

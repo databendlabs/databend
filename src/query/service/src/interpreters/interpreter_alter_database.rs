@@ -149,24 +149,20 @@ impl Interpreter for AlterDatabaseInterpreter {
                 let storage_params = databend_common_sql::binder::parse_storage_params_from_uri(
                     &mut uri_location,
                     "when setting database DEFAULT_STORAGE_PATH",
+                    databend_common_config::GlobalConfig::instance()
+                        .storage
+                        .allow_insecure,
                 )
                 .await
                 .map_err(|e| {
+                    if e.code() == databend_common_exception::ErrorCode::STORAGE_INSECURE {
+                        return e;
+                    }
                     databend_common_exception::ErrorCode::BadArguments(format!(
                         "Invalid storage path '{}': {}",
                         path, e
                     ))
                 })?;
-
-                if !storage_params.is_secure()
-                    && !databend_common_config::GlobalConfig::instance()
-                        .storage
-                        .allow_insecure
-                {
-                    return Err(databend_common_exception::ErrorCode::StorageInsecure(
-                        "Database default storage path points to insecure storage, which is not allowed",
-                    ));
-                }
 
                 let storage_class = match merged_options.get(DEFAULT_S3_STORAGE_CLASS) {
                     Some(value) => value

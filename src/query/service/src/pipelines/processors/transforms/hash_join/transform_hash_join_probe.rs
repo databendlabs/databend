@@ -109,7 +109,7 @@ pub struct TransformHashJoinProbe {
     // Spill related states.
     // The spiller is used to spill/restore data blocks.
     spiller: HashJoinSpiller,
-    // The next partition id to restore.
+    // The partition of the restored hash table, as sent by the build side.
     partition_id_to_restore: usize,
 
     step: Step,
@@ -260,7 +260,7 @@ impl TransformHashJoinProbe {
         // Every build round must see every probe file before its chunks can
         // be released. A closed all-pairs output can skip the remaining replay:
         // it does not update build-side state, but still joins the round barrier.
-        if self.hash_table_type == HashTableType::Restored
+        if matches!(self.hash_table_type, HashTableType::Restored(_))
             && self.join_probe_state.hash_join_state.probes_all_pairs()
             && !self.output_port.is_finished()
             && self.spiller.has_next_restore_file()
@@ -313,7 +313,10 @@ impl TransformHashJoinProbe {
         if self.is_build_finished() {
             match self.hash_table_type {
                 HashTableType::FirstRound => self.probe(),
-                HashTableType::Restored => self.next_step(Step::Async(AsyncStep::Restore)),
+                HashTableType::Restored(partition_id) => {
+                    self.partition_id_to_restore = partition_id;
+                    self.next_step(Step::Async(AsyncStep::Restore))
+                }
                 HashTableType::Empty => {
                     if self.can_fast_return() {
                         self.next_step(Step::Finish)
@@ -373,7 +376,7 @@ impl Processor for TransformHashJoinProbe {
                             self.probe_hash_table(data_block)?;
                         }
                     }
-                    HashTableType::Restored => {
+                    HashTableType::Restored(_) => {
                         if let Some(data_block) = self.restored_data_blocks.pop_front() {
                             self.probe_hash_table(data_block)?;
                         }
@@ -666,12 +669,10 @@ impl TransformHashJoinProbe {
                 .continue_build_watcher
                 .send(true)
                 .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
+            // The build side may run its next round from here on, so the
+            // partition to restore comes with the build notification instead
+            // of `HashJoinState::partition_id`.
         }
-        self.partition_id_to_restore = self
-            .join_probe_state
-            .hash_join_state
-            .partition_id
-            .load(Ordering::Acquire);
         Ok(())
     }
 

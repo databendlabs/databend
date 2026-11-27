@@ -50,7 +50,6 @@ pub struct CommitSink {
     pub table_info: TableInfo,
     pub commit_type: CommitType,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_label: Option<String>,
     pub table_meta_timestamps: TableMetaTimestamps,
 
     // Used for recluster.
@@ -96,7 +95,6 @@ impl IPhysicalPlan for CommitSink {
             table_info: self.table_info.clone(),
             commit_type: self.commit_type.clone(),
             update_stream_meta: self.update_stream_meta.clone(),
-            deduplicated_label: self.deduplicated_label.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
             recluster_info: self.recluster_info.clone(),
             expected_ttl: self.expected_ttl.clone(),
@@ -145,7 +143,6 @@ impl IPhysicalPlan for CommitSink {
                         input,
                         None,
                         prev_snapshot_id,
-                        self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                         false,
                         self.expected_ttl.clone(),
@@ -208,7 +205,6 @@ impl IPhysicalPlan for CommitSink {
                         input,
                         None,
                         None,
-                        self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                         acquire_commit_lock,
                         self.expected_ttl.clone(),

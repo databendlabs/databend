@@ -60,6 +60,7 @@ use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
@@ -149,6 +150,32 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_date_from_parts(registry);
     registry.register_context_dependent(register_timestamp_from_parts);
     registry.register_context_dependent(register_timestamp_tz_from_parts);
+}
+
+/// The casts between dates, timestamps and their numeric and string forms.
+///
+/// Known issue: a number out of the range of Date or Timestamp converts to `DATE_MIN` or
+/// `TIMESTAMP_MIN` instead of failing, for `CAST` and `TRY_CAST` alike (`clamp_date`,
+/// `clamp_timestamp`). This is the conversion policy since #16634, and is kept.
+pub fn register_casts(registry: &mut FunctionRegistry) {
+    let int64 = DataType::Number(NumberDataType::Int64);
+    for (src, dest) in [
+        (DataType::String, DataType::Date),
+        (DataType::String, DataType::Timestamp),
+        (DataType::String, DataType::TimestampTz),
+        (DataType::Date, DataType::Timestamp),
+        (DataType::Timestamp, DataType::Date),
+        (DataType::Timestamp, DataType::TimestampTz),
+        (DataType::TimestampTz, DataType::Timestamp),
+        (DataType::Date, DataType::TimestampTz),
+        (DataType::TimestampTz, DataType::Date),
+        (int64.clone(), DataType::Timestamp),
+        (int64.clone(), DataType::Date),
+        (DataType::Date, int64.clone()),
+        (DataType::Timestamp, int64.clone()),
+    ] {
+        registry.register_cast(Some(src), dest);
+    }
 }
 
 fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
@@ -1006,45 +1033,57 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
     }
 }
 
+/// The dates of the strings in `d`, or `MayThrow` when a bound does not parse. The bounds of a
+/// string domain do not prove that the strings between them parse, so a row may fail either way.
+fn string_domain_to_date_domain(
+    ctx: &FunctionContext,
+    d: &StringDomain,
+) -> FunctionDomain<DateType> {
+    // AUTO accepts epoch days as well as date strings, so string order cannot bound the dates.
+    if ctx.enable_auto_detect_datetime_format {
+        return FunctionDomain::MayThrow;
+    }
+
+    let max = d.max.clone().unwrap_or_default();
+    let mut res = Vec::with_capacity(2);
+    for (i, v) in [&d.min, &max].iter().enumerate() {
+        if i == 1 && d.max.is_none() {
+            // the max domain is unbounded
+            res.push(DATE_MAX);
+            break;
+        }
+
+        let mut extend_num = 0;
+        let mut d = string_to_date(v, &ctx.tz);
+        if d.is_err()
+            && v.len() > 10
+            && let Some(prefix) = v.get(..10)
+        {
+            d = string_to_date(prefix, &ctx.tz);
+            if i == 0 {
+                extend_num = -1;
+            } else {
+                extend_num = 1;
+            }
+        }
+
+        if d.is_err() {
+            return FunctionDomain::MayThrow;
+        }
+        let days = d.unwrap();
+        res.push(days + extend_num);
+    }
+
+    FunctionDomain::MayThrowDomain(SimpleDomain {
+        min: res[0].clamp(DATE_MIN, DATE_MAX),
+        max: res[1].clamp(DATE_MIN, DATE_MAX),
+    })
+}
+
 fn register_string_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, DateType, _>(
         "to_date",
-        |ctx, d| {
-            let max = d.max.clone().unwrap_or_default();
-            let mut res = Vec::with_capacity(2);
-            for (i, v) in [&d.min, &max].iter().enumerate() {
-                if i == 1 && d.max.is_none() {
-                    // the max domain is unbounded
-                    res.push(DATE_MAX);
-                    break;
-                }
-
-                let mut extend_num = 0;
-                let mut d = string_to_date(v, &ctx.tz);
-                if d.is_err()
-                    && v.len() > 10
-                    && let Some(prefix) = v.get(..10)
-                {
-                    d = string_to_date(prefix, &ctx.tz);
-                    if i == 0 {
-                        extend_num = -1;
-                    } else {
-                        extend_num = 1;
-                    }
-                }
-
-                if d.is_err() {
-                    return FunctionDomain::MayThrow;
-                }
-                let days = d.unwrap();
-                res.push(days + extend_num);
-            }
-
-            FunctionDomain::Domain(SimpleDomain {
-                min: res[0].clamp(DATE_MIN, DATE_MAX),
-                max: res[1].clamp(DATE_MIN, DATE_MAX),
-            })
-        },
+        string_domain_to_date_domain,
         eval_string_to_date,
     );
     registry.register_combine_nullable_1_arg::<StringType, DateType, _, _>(
@@ -1070,35 +1109,20 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _>(
         "to_date",
         |ctx, domain| {
-            if !wall_clock_is_monotonic(&ctx.tz, domain.min, domain.max) {
-                return FunctionDomain::MayThrow;
-            }
-            let (Ok(min), Ok(max)) = (
-                calc_timestamp_to_date(domain.min, &ctx.tz),
-                calc_timestamp_to_date(domain.max, &ctx.tz),
-            ) else {
-                return FunctionDomain::MayThrow;
-            };
-            FunctionDomain::Domain(SimpleDomain { min, max })
+            timestamp_domain_to_date_domain(ctx, domain)
+                .map(FunctionDomain::Domain)
+                .unwrap_or(FunctionDomain::MayThrow)
         },
         eval_timestamp_to_date,
     );
     registry.register_combine_nullable_1_arg::<TimestampType, DateType, _, _>(
         "try_to_date",
-        |ctx, domain| {
-            if !wall_clock_is_monotonic(&ctx.tz, domain.min, domain.max) {
-                return FunctionDomain::Full;
-            }
-            let (Ok(min), Ok(max)) = (
-                calc_timestamp_to_date(domain.min, &ctx.tz),
-                calc_timestamp_to_date(domain.max, &ctx.tz),
-            ) else {
-                return FunctionDomain::Full;
-            };
-            FunctionDomain::Domain(NullableDomain {
+        |ctx, domain| match timestamp_domain_to_date_domain(ctx, domain) {
+            Some(domain) => FunctionDomain::Domain(NullableDomain {
                 has_null: false,
-                value: Some(Box::new(SimpleDomain { min, max })),
-            })
+                value: Some(Box::new(domain)),
+            }),
+            None => FunctionDomain::Full,
         },
         error_to_null(eval_timestamp_to_date),
     );
@@ -1119,9 +1143,20 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
             }
         })(val, ctx)
     }
-    fn calc_timestamp_to_date(val: i64, tz: &Tz) -> Result<i32, String> {
-        timestamp_to_date_days(val, tz)
+}
+
+/// The local dates of the timestamps in `domain`, or `None` when one of them may fail.
+fn timestamp_domain_to_date_domain(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i64>,
+) -> Option<SimpleDomain<i32>> {
+    if !wall_clock_is_monotonic(&ctx.tz, domain.min, domain.max) {
+        return None;
     }
+    Some(SimpleDomain {
+        min: timestamp_to_date_days(domain.min, &ctx.tz).ok()?,
+        max: timestamp_to_date_days(domain.max, &ctx.tz).ok()?,
+    })
 }
 
 fn timestamp_to_date_days(value: i64, tz: &Tz) -> Result<i32, String> {
@@ -1177,19 +1212,22 @@ fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
     }
 }
 
+/// The dates of the numbers in `domain`: a number out of the date range becomes the minimum.
+fn int64_domain_to_date_domain(domain: &SimpleDomain<i64>) -> SimpleDomain<i32> {
+    let (mut result, overflowing) = domain.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
+    if overflowing {
+        result.min = DATE_MIN;
+        if domain.max < DATE_MIN as i64 || domain.min > DATE_MAX as i64 {
+            result.max = DATE_MIN;
+        }
+    }
+    result
+}
+
 fn register_number_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Int64Type, DateType, _>(
         "to_date",
-        |_, domain| {
-            let (mut result, overflowing) = domain.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
-            if overflowing {
-                result.min = DATE_MIN;
-                if domain.max < DATE_MIN as i64 || domain.min > DATE_MAX as i64 {
-                    result.max = DATE_MIN;
-                }
-            }
-            FunctionDomain::Domain(result)
-        },
+        |_, domain| FunctionDomain::Domain(int64_domain_to_date_domain(domain)),
         eval_number_to_date,
     );
     registry.register_combine_nullable_1_arg::<Int64Type, DateType, _, _>(

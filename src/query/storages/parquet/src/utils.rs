@@ -51,10 +51,24 @@ pub(crate) fn calc_parallelism(
     let max_threads = settings.get_max_threads()? as usize;
     let max_memory = settings.get_max_memory_usage()? as usize;
 
+    // COPY with SORTED_BY_CLUSTER_KEY reads each file in one part, but row group by row group,
+    // so a part takes about the memory of one bucket of the default split of the file.
+    let whole_file_bucket_bytes = match ctx.copy_state().get_file_sort_keys() {
+        Some(_) => Some(settings.get_parquet_rowgroup_hint_bytes()?.max(1)),
+        None => None,
+    };
     let mut sizes = vec![];
     for p in plan.parts.partitions.iter() {
         let p = ParquetPart::from_part(p)?;
-        sizes.push((p.uncompressed_size() as usize, p.compressed_size() as usize));
+        let (mut uncompressed, mut compressed) = (p.uncompressed_size(), p.compressed_size());
+        if let (Some(bucket_bytes), ParquetPart::File(file)) = (whole_file_bucket_bytes, p)
+            && file.bucket_option.is_none()
+        {
+            let buckets = compressed.div_ceil(bucket_bytes).max(1);
+            uncompressed /= buckets;
+            compressed /= buckets;
+        }
+        sizes.push((uncompressed as usize, compressed as usize));
     }
     sizes.sort_by(|a, b| b.cmp(a));
     let max_split_size = sizes[0].0;

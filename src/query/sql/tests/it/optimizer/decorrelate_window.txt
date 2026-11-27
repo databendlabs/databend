@@ -439,6 +439,7 @@ Exchange(Merge)
         │                                       ├── build keys: [cw_inner.k (#1)]
         │                                       ├── probe keys: [k (#5)]
         │                                       ├── other filters: []
+        │                                       ├── runtime filters: [#0: cw_inner.k (#1) -> k (#5)]
         │                                       ├── Exchange(Broadcast)
         │                                       │   └── Scan
         │                                       │       ├── table: default.cw_inner (#0)
@@ -541,6 +542,7 @@ Exchange(Merge)
         │                                       ├── build keys: [cw_inner.k (#1)]
         │                                       ├── probe keys: [k (#5)]
         │                                       ├── other filters: []
+        │                                       ├── runtime filters: [#0: cw_inner.k (#1) -> k (#5)]
         │                                       ├── Exchange(Broadcast)
         │                                       │   └── Scan
         │                                       │       ├── table: default.cw_inner (#0)

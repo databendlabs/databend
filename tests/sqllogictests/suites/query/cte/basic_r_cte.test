@@ -656,3 +656,16 @@ SELECT s, ind FROM x ORDER BY s, ind;
 3. 2
 32 0
 33 0
+
+# A CTE read twice is materialized through channels. Here one reader is in the seed of
+# a recursive CTE, which builds its pipeline only when the recursive CTE runs, after
+# the query pipeline.
+query III
+WITH m AS (SELECT number AS n FROM numbers(5))
+SELECT count(*), sum(x), (SELECT count(*) FROM m)
+FROM (
+    WITH RECURSIVE r AS (SELECT max(n) AS x FROM m UNION ALL SELECT x - 1 FROM r WHERE x > 0)
+    SELECT x FROM r
+) t
+----
+5 10 5

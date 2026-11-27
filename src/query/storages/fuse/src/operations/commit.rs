@@ -103,7 +103,6 @@ impl FuseTable {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
-        deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
@@ -151,7 +150,6 @@ impl FuseTable {
                 input,
                 None,
                 prev_snapshot_id,
-                deduplicated_label.clone(),
                 table_meta_timestamps,
                 false,
                 None,
@@ -207,7 +205,6 @@ impl FuseTable {
                 &[],
                 operator,
                 lvt_check,
-                None,
             )
             .await;
 
@@ -260,7 +257,6 @@ impl FuseTable {
         update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
         lvt_check: Option<TableLvtCheck>,
-        deduplicated_label: Option<String>,
     ) -> Result<()> {
         // 1. prepare table meta
         let new_table_meta =
@@ -295,13 +291,11 @@ impl FuseTable {
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
         }
 
-        // 3. let's roll
         catalog
             .update_multi_table_meta(&ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,
-                deduplicated_labels: deduplicated_label.into_iter().collect(),
                 update_temp_tables,
             })
             .await?;

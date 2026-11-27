@@ -364,9 +364,26 @@ fn test_script() {
         r#"
             LET x RESULTSET := SELECT * FROM numbers(3);
             FOR r IN x DO
-                LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+                LET v := r.number;
+                LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :v + 1);
                 RETURN y;
             END FOR;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET id := 1;
+            LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :id);
+            RETURN y;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET number := 1;
+            LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :number);
+            RETURN y;
         "#,
     );
     run_script(
@@ -442,6 +459,40 @@ fn test_script_error() {
         file,
         r#"
             LET x := (SELECT :missing);
+        "#,
+    );
+    // Nested SQL names that older versions resolved to script variables must
+    // not silently resolve to columns.
+    run_script(
+        file,
+        r#"
+            LET id := 1;
+            LET y := (SELECT number FROM numbers(3) WHERE number = id);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET number := 1;
+            LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = number);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x RESULTSET := SELECT * FROM numbers(3);
+            FOR r IN x DO
+                LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+            END FOR;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x RESULTSET := SELECT * FROM numbers(3);
+            FOR r IN x DO
+                LET y := (SELECT number FROM numbers(3) AS t WHERE t.number = r.number);
+            END FOR;
         "#,
     );
     run_script(
@@ -555,7 +606,11 @@ fn mock_client() -> MockClient {
             MockSet::unnamed(vec![vec![Literal::UInt64(1)]]),
         )
         .response_when(
-            "SELECT (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1)",
+            "SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = 0 + 1)",
+            MockSet::unnamed(vec![vec![Literal::UInt64(1)]]),
+        )
+        .response_when(
+            "SELECT (SELECT t.number FROM numbers(3) AS t WHERE t.number = 1)",
             MockSet::unnamed(vec![vec![Literal::UInt64(1)]]),
         )
         .response_when(

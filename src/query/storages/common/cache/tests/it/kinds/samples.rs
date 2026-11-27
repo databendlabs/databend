@@ -41,6 +41,7 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_cache::BlockCondition;
 use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::CachedItem;
@@ -64,6 +65,7 @@ use databend_storages_common_cache::kinds::zone_map::SegmentZoneMapChunk;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::BundleOpenSlice;
 use databend_storages_common_index::DistanceType;
+use databend_storages_common_index::FooterDirectory;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::IndexFile;
 use databend_storages_common_index::IndexMeta;
@@ -71,8 +73,11 @@ use databend_storages_common_index::InvertedIndexBundleFooter;
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
+use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::VirtualColumnFileMeta;
+use databend_storages_common_index::collect_index_open_slices;
 use databend_storages_common_index::filters::FilterBuilder;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_index::filters::Xor8Builder;
@@ -159,6 +164,12 @@ impl Sample for table::PruneResult {
     fn sample(_seed: u32) -> (PartStatistics, Partitions) {
         let partitions = Partitions::create(PartitionsShuffleKind::Seq, vec![]);
         (PartStatistics::default(), partitions)
+    }
+}
+
+impl Sample for table::Condition {
+    fn sample(seed: u32) -> BlockCondition {
+        BlockCondition::Rows((0..64 + seed % 64).collect())
     }
 }
 
@@ -269,6 +280,82 @@ impl Sample for inverted::Payload {
 impl Sample for inverted::FullPayload {
     fn sample(seed: u32) -> InvertedIndexPayloadBytes {
         InvertedIndexPayloadBytes::new(bytes(seed, 8192))
+    }
+}
+
+impl Sample for inverted::Searcher {
+    /// Charged the most its shared pin may keep, not what an opened searcher holds.
+    const ACCURACY: Accuracy = Accuracy::Unchecked;
+
+    /// A searcher of a small bundle, read from the files it was built from.
+    fn sample(_seed: u32) -> InvertedIndexSearcher {
+        use tantivy::Directory;
+        use tantivy::Index;
+        use tantivy::IndexSettings;
+        use tantivy::directory::RamDirectory;
+        use tantivy::schema::Schema;
+        use tantivy::schema::TEXT;
+
+        static BUNDLE: OnceLock<(RamDirectory, InvertedIndexBundleFooter)> = OnceLock::new();
+        let (raw, footer) = BUNDLE.get_or_init(|| {
+            let mut schema = Schema::builder();
+            let body = schema.add_text_field("body", TEXT);
+            let raw = RamDirectory::default();
+            let index =
+                Index::create(raw.clone(), schema.build(), IndexSettings::default()).unwrap();
+            let mut writer = index.writer_with_num_threads(1, 15_000_000).unwrap();
+            for row in 0..64 {
+                writer
+                    .add_document(tantivy::doc!(body => format!("alpha beta {row}")))
+                    .unwrap();
+            }
+            writer.commit().unwrap();
+            drop(writer);
+            let open_slices = collect_index_open_slices(raw.clone()).unwrap();
+            let files = index
+                .directory()
+                .list_managed_files()
+                .into_iter()
+                .filter(|path| {
+                    !matches!(path.to_str(), Some(".managed.json" | "meta.json"))
+                        && raw.exists(path).unwrap()
+                })
+                .map(|path| {
+                    let bytes = raw.atomic_read(&path).unwrap();
+                    (path, bytes)
+                })
+                .collect::<Vec<_>>();
+            let object = InvertedIndexBundleFooter::build(
+                files,
+                BTreeMap::new(),
+                open_slices,
+                raw.atomic_read(std::path::Path::new(".managed.json"))
+                    .unwrap(),
+                raw.atomic_read(std::path::Path::new("meta.json")).unwrap(),
+            )
+            .unwrap();
+            (raw, InvertedIndexBundleFooter::open(&object).unwrap())
+        });
+        let directory = FooterDirectory::new(raw.clone(), footer.clone());
+        InvertedIndexSearcher::open(directory).unwrap()
+    }
+}
+
+impl Sample for inverted::TermInfo {
+    /// Charged with its key and its cache entry, which a value alone does not allocate:
+    /// `test_term_info_is_charged_what_its_entry_takes` measures them.
+    const ACCURACY: Accuracy = Accuracy::Unchecked;
+
+    fn sample(seed: u32) -> InvertedIndexTermInfo {
+        let info = tantivy::postings::TermInfo {
+            doc_freq: seed,
+            postings_range: 0..seed as usize,
+            positions_range: 0..0,
+        };
+        InvertedIndexTermInfo {
+            info: Some(info),
+            key_len: format!("{seed}:0:616c706861").len(),
+        }
     }
 }
 

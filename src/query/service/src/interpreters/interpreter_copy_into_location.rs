@@ -25,7 +25,6 @@ use log::info;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
 use crate::physical_plans::CopyIntoLocation;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
@@ -127,11 +126,6 @@ impl Interpreter for CopyIntoLocationInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
-
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
 
             let (mut pipeline_build_result, update_stream_reqs) = self
                 .build_local_copy_into_stage_pipeline(&self.plan.from, &self.plan.info)

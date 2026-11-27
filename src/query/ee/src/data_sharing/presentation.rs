@@ -15,7 +15,7 @@
 use databend_common_expression::generate_like_pattern;
 
 pub(super) fn like_match(pattern: &str, value: &str) -> bool {
-    generate_like_pattern(pattern.as_bytes(), value.len()).compare(value.as_bytes())
+    generate_like_pattern(pattern.as_bytes()).compare(value.as_bytes())
 }
 
 #[cfg(test)]

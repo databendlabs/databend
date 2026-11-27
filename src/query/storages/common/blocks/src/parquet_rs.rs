@@ -36,7 +36,15 @@ use crate::parquet_writer::ParquetFileWriter;
 use crate::parquet_writer::SerializedParquet;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
-const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
+///
+/// Columns such as URLs often have a third of a block distinct: their dictionary is still much
+/// smaller than the plain values, and readers can keep it (see `enable_encoded_columns`).
+const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.5;
+
+/// Size limit of a dictionary page, beyond which the writer falls back to plain pages for the
+/// rest of the column chunk. The arrow-rs default (1 MiB) is reached by string columns of a
+/// few tens of thousands of distinct values per block, well below the NDV threshold.
+const DICTIONARY_PAGE_SIZE_LIMIT: usize = 16 * 1024 * 1024;
 
 /// Parquet page size hard limit (~2GB). Arrow-rs 56.2.0+ errors if exceeded.
 pub(crate) const PARQUET_PAGE_SIZE_HARD_LIMIT: usize = i32::MAX as usize - (1 << 20);
@@ -140,7 +148,8 @@ pub fn build_parquet_writer_properties(
         // Enable dictionary for all columns
         builder = builder
             .set_writer_version(WriterVersion::PARQUET_2_0)
-            .set_dictionary_enabled(true);
+            .set_dictionary_enabled(true)
+            .set_dictionary_page_size_limit(DICTIONARY_PAGE_SIZE_LIMIT);
         if let Some(cols_stats) = cols_stats {
             // Disable dictionary of columns that have high cardinality
             for (column_id, components) in table_schema_arrow_leaf_paths(table_schema) {
@@ -219,9 +228,9 @@ mod tests {
         let schema = sample_schema();
 
         let mut ndv = HashMap::new();
-        ndv.insert(column_id(&schema, "simple"), 500);
-        ndv.insert(column_id(&schema, "nested:leaf"), 50);
-        ndv.insert(column_id(&schema, "nested:arr:0"), 400);
+        ndv.insert(column_id(&schema, "simple"), 600);
+        ndv.insert(column_id(&schema, "nested:leaf"), 400);
+        ndv.insert(column_id(&schema, "nested:arr:0"), 900);
 
         let column_paths: HashMap<ColumnId, ColumnPath> = table_schema_arrow_leaf_paths(&schema)
             .into_iter()
@@ -255,6 +264,12 @@ mod tests {
             props.dictionary_enabled(&column_paths[&column_id(&schema, "no_stats")]),
             "columns without NDV stats keep the default dictionary behavior"
         );
+        for field in schema.leaf_fields() {
+            assert_eq!(
+                props.column_dictionary_page_size_limit(&column_paths[&field.column_id()]),
+                DICTIONARY_PAGE_SIZE_LIMIT
+            );
+        }
     }
 
     #[test]

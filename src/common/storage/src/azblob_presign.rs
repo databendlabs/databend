@@ -638,6 +638,7 @@ mod tests {
             account_name: String::new(),
             account_key: String::new(),
             root: root.to_string(),
+            allow_credential_chain: None,
             network_config: None,
         }
     }

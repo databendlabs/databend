@@ -875,7 +875,6 @@ pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_labels: Vec<String>,
     pub update_temp_tables: Vec<UpdateTempTableReq>,
 }
 
@@ -884,8 +883,17 @@ impl UpdateMultiTableMetaReq {
         self.update_table_metas.is_empty()
             && self.copied_files.is_empty()
             && self.update_stream_metas.is_empty()
-            && self.deduplicated_labels.is_empty()
             && self.update_temp_tables.is_empty()
+    }
+
+    /// Temporary table updates are not persistent work.
+    pub fn has_persistent_updates(&self) -> bool {
+        !self.update_table_metas.is_empty()
+            || !self.update_stream_metas.is_empty()
+            || self
+                .copied_files
+                .iter()
+                .any(|(_, req)| !req.file_info.is_empty())
     }
 }
 

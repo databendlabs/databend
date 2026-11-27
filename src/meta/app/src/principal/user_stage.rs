@@ -502,6 +502,12 @@ impl StageInfo {
         self
     }
 
+    /// Whether `name` can be used as one directory component of a stage prefix,
+    /// e.g. a user name that backs the user stage `@~`.
+    pub fn is_valid_prefix_name(name: &str) -> bool {
+        !(name.is_empty() || name == "." || name == ".." || name.contains('/'))
+    }
+
     /// Get the prefix of stage.
     ///
     /// Use this function to get the prefix of this stage in the data operator.

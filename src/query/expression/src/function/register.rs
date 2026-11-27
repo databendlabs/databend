@@ -22,6 +22,7 @@ use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::FunctionSignature;
+use crate::NullableInput;
 use crate::ScalarFunction;
 use crate::ScalarFunctionDomain;
 use crate::property::Domain;
@@ -233,6 +234,7 @@ impl FunctionRegistry {
             name
         );
 
+        let base = self.next_function_id(name);
         self.register_2_arg_core::<I1, I2, O, _, _>(name, calc_domain, func);
 
         self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _, _>(
@@ -255,6 +257,9 @@ impl FunctionRegistry {
             },
             passthrough_nullable_2_arg(func),
         );
+        self.record_nullable_input(name, base, NullableInput::PassthroughVariant {
+            variant: base + 1,
+        });
     }
 
     pub fn register_passthrough_nullable_3_arg<
@@ -298,6 +303,7 @@ impl FunctionRegistry {
             name
         );
 
+        let base = self.next_function_id(name);
         self.register_3_arg_core::<I1, I2, I3, O, _, _>(name, calc_domain, func);
 
         self.register_3_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<I3>,  NullableType<O>, _, _>(
@@ -324,6 +330,9 @@ impl FunctionRegistry {
                         },
                         passthrough_nullable_3_arg(func),
                     );
+        self.record_nullable_input(name, base, NullableInput::PassthroughVariant {
+            variant: base + 1,
+        });
     }
 
     pub fn register_passthrough_nullable_4_arg<
@@ -375,6 +384,7 @@ impl FunctionRegistry {
             name
         );
 
+        let base = self.next_function_id(name);
         self.register_4_arg_core::<I1, I2, I3, I4, O, _, _>(name, calc_domain, func);
 
         self.register_4_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<I3>, NullableType<I4>,  NullableType<O>, _, _>(
@@ -401,6 +411,9 @@ impl FunctionRegistry {
                         },
                         passthrough_nullable_4_arg(func),
                     );
+        self.record_nullable_input(name, base, NullableInput::PassthroughVariant {
+            variant: base + 1,
+        });
     }
 
     pub fn register_combine_nullable_1_arg<I1: ArgType, O: ArgType, F, G>(
@@ -432,6 +445,7 @@ impl FunctionRegistry {
             name
         );
 
+        let base = self.next_function_id(name);
         self.register_1_arg_core::<I1, NullableType<O>, _, _>(name, calc_domain, func);
 
         self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _, _>(
@@ -454,6 +468,9 @@ impl FunctionRegistry {
             },
             combine_nullable_1_arg(func),
         );
+        self.record_nullable_input(name, base, NullableInput::CombineVariant {
+            variant: base + 1,
+        });
     }
 
     pub fn register_combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
@@ -485,6 +502,7 @@ impl FunctionRegistry {
             name
         );
 
+        let base = self.next_function_id(name);
         self.register_2_arg_core::<I1, I2, NullableType<O>, _, _>(name, calc_domain, func);
 
         self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _, _>(
@@ -507,6 +525,9 @@ impl FunctionRegistry {
             },
             combine_nullable_2_arg(func),
         );
+        self.record_nullable_input(name, base, NullableInput::CombineVariant {
+            variant: base + 1,
+        });
     }
 
     pub fn register_0_arg_core<O: ArgType, G>(

@@ -1,0 +1,109 @@
+# Less common key types grouped and joined on a composite key. A tuple key, or
+# several keys that include a STRING, are hashed through the serialized-key path
+# (HashMethodSerializer), which writes each row's key bytes into one buffer.
+# Geography and Geometry have no `eq`, so the join compares the tuple (k, k2).
+# The key column is nullable but holds no NULLs: a NULL field inside a tuple
+# key is not what these cases check.
+#
+# The same file is rerun on the legacy join path.
+# run-with-settings: enable_experimental_new_join=0
+
+## GEOGRAPHY NULL with STRING, composite key
+statement ok
+CREATE OR REPLACE TABLE tm_geography_composite(k GEOGRAPHY NULL, k2 STRING NOT NULL)
+
+statement ok
+INSERT INTO tm_geography_composite SELECT to_geography('POINT(' || to_string((number % 6)) || ' 0)'), to_string(number % 6) FROM numbers(60)
+
+query II
+SELECT count(*), sum(c) FROM (SELECT k, k2, count(*) c FROM tm_geography_composite GROUP BY k, k2)
+----
+6 60
+
+query I
+SELECT count(*) FROM tm_geography_composite a JOIN tm_geography_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+query I
+SELECT count(*) FROM tm_geography_composite a LEFT JOIN tm_geography_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+statement ok
+DROP TABLE tm_geography_composite
+
+## GEOMETRY NULL with STRING, composite key
+statement ok
+CREATE OR REPLACE TABLE tm_geometry_composite(k GEOMETRY NULL, k2 STRING NOT NULL)
+
+statement ok
+INSERT INTO tm_geometry_composite SELECT to_geometry('POINT(' || to_string((number % 6)) || ' 0)'), to_string(number % 6) FROM numbers(60)
+
+query II
+SELECT count(*), sum(c) FROM (SELECT k, k2, count(*) c FROM tm_geometry_composite GROUP BY k, k2)
+----
+6 60
+
+query I
+SELECT count(*) FROM tm_geometry_composite a JOIN tm_geometry_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+query I
+SELECT count(*) FROM tm_geometry_composite a LEFT JOIN tm_geometry_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+statement ok
+DROP TABLE tm_geometry_composite
+
+## BITMAP NULL with STRING, composite key
+statement ok
+CREATE OR REPLACE TABLE tm_bitmap_composite(k BITMAP NULL, k2 STRING NOT NULL)
+
+statement ok
+INSERT INTO tm_bitmap_composite SELECT to_bitmap(to_string((number % 6))), to_string(number % 6) FROM numbers(60)
+
+query II
+SELECT count(*), sum(c) FROM (SELECT k, k2, count(*) c FROM tm_bitmap_composite GROUP BY k, k2)
+----
+6 60
+
+query I
+SELECT count(*) FROM tm_bitmap_composite a JOIN tm_bitmap_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+query I
+SELECT count(*) FROM tm_bitmap_composite a LEFT JOIN tm_bitmap_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+statement ok
+DROP TABLE tm_bitmap_composite
+
+## TIMESTAMP_TZ NULL with STRING, composite key
+statement ok
+CREATE OR REPLACE TABLE tm_timestamp_tz_composite(k TIMESTAMP_TZ NULL, k2 STRING NOT NULL)
+
+statement ok
+INSERT INTO tm_timestamp_tz_composite SELECT to_timestamp_tz(to_timestamp((number % 6)::INT64)), to_string(number % 6) FROM numbers(60)
+
+query II
+SELECT count(*), sum(c) FROM (SELECT k, k2, count(*) c FROM tm_timestamp_tz_composite GROUP BY k, k2)
+----
+6 60
+
+query I
+SELECT count(*) FROM tm_timestamp_tz_composite a JOIN tm_timestamp_tz_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+query I
+SELECT count(*) FROM tm_timestamp_tz_composite a LEFT JOIN tm_timestamp_tz_composite b ON (a.k, a.k2) = (b.k, b.k2)
+----
+600
+
+statement ok
+DROP TABLE tm_timestamp_tz_composite

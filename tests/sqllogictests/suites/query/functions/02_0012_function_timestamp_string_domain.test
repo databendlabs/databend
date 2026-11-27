@@ -59,4 +59,32 @@ SELECT CAST(NULL AS TIMESTAMP), TRY_CAST('invalid' AS TIMESTAMP);
 NULL NULL
 
 statement ok
+TRUNCATE TABLE timestamp_string_domain;
+
+# With AUTO parsing, '2021' sorts between the ISO endpoints but represents 2021 epoch days.
+statement ok
+SET enable_auto_detect_datetime_format = 1;
+
+statement ok
+INSERT INTO timestamp_string_domain VALUES ('2020-01-01'), ('2021'), ('2022-01-01');
+
+query T
+SELECT a FROM timestamp_string_domain WHERE CAST(a AS DATE) < '2000-01-01'::DATE;
+----
+2021
+
+query T
+SELECT a FROM timestamp_string_domain WHERE TRY_CAST(a AS DATE) < '2000-01-01'::DATE;
+----
+2021
+
+query T
+SELECT a FROM timestamp_string_domain WHERE to_date(a) < '2000-01-01'::DATE;
+----
+2021
+
+statement ok
+UNSET enable_auto_detect_datetime_format;
+
+statement ok
 DROP TABLE timestamp_string_domain;

@@ -57,6 +57,10 @@ pub type MonotonicityCheck = fn(&FunctionContext, &[Domain]) -> Option<usize>;
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
+    /// The result for a row also depends on the other rows of the input block, e.g. on the
+    /// preceding rows. Removing input rows before the function is evaluated can change its
+    /// result for the rows that remain, so a filter must not be moved below it.
+    pub depends_on_other_rows: bool,
     /// Pure, row-local scalar functions that may be evaluated once per dictionary entry.
     /// Reducing the number of calls, or evaluating unreferenced entries, must have no side
     /// effects. Errors in unreferenced entries are ignored; referenced errors report
@@ -85,6 +89,11 @@ impl FunctionProperty {
         self
     }
 
+    pub fn depends_on_other_rows(mut self) -> Self {
+        self.depends_on_other_rows = true;
+        self
+    }
+
     pub fn monotonicity(mut self) -> Self {
         self.monotonicity = true;
         self
@@ -110,6 +119,7 @@ impl Default for FunctionProperty {
     fn default() -> Self {
         FunctionProperty {
             non_deterministic: false,
+            depends_on_other_rows: false,
             dictionary_eval: false,
             monotonicity: false,
             monotonicity_by_type: vec![],
@@ -129,8 +139,18 @@ pub enum FunctionKind {
 /// evaluation of the function if possible.
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum FunctionDomain<T: AccessType> {
-    /// The function may return error.
+    /// The function may return error, and the value of a row that does not can be any valid
+    /// value the type can represent.
     MayThrow,
+    /// The function may return error, and the value of a row that does not is in the domain.
+    ///
+    /// A call counts it as `MayThrow`: a row that fails is an error, so the call has no domain.
+    /// The domain is used by a cast step under `TRY_CAST`, and by `error_to_null`, where a failed
+    /// row is NULL. Only the number casts and `to_date(String)` return it. Other functions that
+    /// compute a domain but may fail still return `MayThrow`, e.g. the decimal casts, and the
+    /// nullable variants of `register_passthrough_nullable_2_arg` and wider lose it through
+    /// `normalize`; neither is changed for now.
+    MayThrowDomain(T::Domain),
     /// The function must not return error, and the return value can be
     /// any valid value the type can represent.
     Full,
@@ -166,6 +186,7 @@ impl<T: AccessType> FunctionDomain<T> {
     pub fn map<U: AccessType>(self, f: impl Fn(T::Domain) -> U::Domain) -> FunctionDomain<U> {
         match self {
             FunctionDomain::MayThrow => FunctionDomain::MayThrow,
+            FunctionDomain::MayThrowDomain(domain) => FunctionDomain::MayThrowDomain(f(domain)),
             FunctionDomain::Full => FunctionDomain::Full,
             FunctionDomain::Domain(domain) => FunctionDomain::Domain(f(domain)),
         }
@@ -178,7 +199,7 @@ impl<T: ArgType> FunctionDomain<T> {
     /// Return `None` if the function may return error.
     pub fn normalize(self) -> Option<T::Domain> {
         match self {
-            FunctionDomain::MayThrow => None,
+            FunctionDomain::MayThrow | FunctionDomain::MayThrowDomain(_) => None,
             FunctionDomain::Full => Some(T::full_domain()),
             FunctionDomain::Domain(domain) => Some(domain),
         }

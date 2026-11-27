@@ -25,6 +25,7 @@ mod exception_backtrace;
 mod exception_code;
 mod exception_flight;
 mod exception_into;
+mod redact;
 
 pub use context::ErrorFrame;
 pub use context::ResultExt;
@@ -40,4 +41,5 @@ pub use exception_backtrace::StackTrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 pub use exception_backtrace::set_backtrace;
 pub use exception_into::SerializedError;
+pub use redact::redact_url_secrets;
 pub use span::merge_span;

@@ -24,7 +24,6 @@ use once_cell::sync::OnceCell;
 use crate::elf::ElfFile;
 use crate::elf::dwarf::Dwarf;
 use crate::elf::library_loader::LibraryLoader;
-use crate::elf::library_symbol::Symbol;
 use crate::exception_backtrace::PhysicalAddr;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
@@ -40,25 +39,20 @@ pub struct Library {
 
 impl Library {
     pub fn create(name: String, data: *const u8, size: usize) -> Library {
-        let build_id = unsafe {
-            let data = std::slice::from_raw_parts(data, size);
-            match ElfFile::parse(data) {
-                Err(_) => None,
-                Ok(elf_file) => match elf_file.build_id() {
-                    Ok(None) | Err(_) => None,
-                    Ok(Some(build)) => Some(Arc::new(build.to_vec())),
-                },
-            }
-        };
+        let library_data = unsafe { std::slice::from_raw_parts(data, size) };
+        let elf = ElfFile::parse(library_data).ok().map(Arc::new);
+        let build_id = elf
+            .as_ref()
+            .and_then(|elf| elf.build_id().ok().flatten())
+            .map(|id| Arc::new(id.to_vec()));
 
         Library {
             name,
             build_id,
-            elf: None,
+            elf,
             address_end: 0,
             address_begin: 0,
-            // Leak memory
-            library_data: unsafe { std::slice::from_raw_parts(data, size) },
+            library_data,
         }
     }
     pub fn sort_begin_address(&self, other: &Self) -> Ordering {
@@ -88,7 +82,6 @@ impl Debug for Library {
 
 // #[derive(Debug)]
 pub struct LibraryManager {
-    symbols: Vec<Symbol>,
     libraries: Vec<Library>,
     executable_build_id: Option<Arc<Vec<u8>>>,
 }
@@ -97,7 +90,6 @@ impl Debug for LibraryManager {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LibraryManager")
             .field("libraries", &self.libraries)
-            .field("symbols", &self.symbols.len())
             .finish()
     }
 }
@@ -207,7 +199,7 @@ impl LibraryManager {
                 }
             };
 
-            if !only_address {
+            if !only_address && let Some(adjusted_addr) = addr.checked_sub(1) {
                 let dwarf = match library.elf.as_ref() {
                     None => &None,
                     Some(elf) => match dwarf_cache.get(&library.name) {
@@ -219,24 +211,23 @@ impl LibraryManager {
                     },
                 };
 
-                if let Some(dwarf) = dwarf {
-                    let adjusted_addr = (addr - 1) as u64;
-
-                    if let Ok(locations) = dwarf.find_frames(adjusted_addr) {
-                        for location in locations {
-                            f(ResolvedStackFrame {
-                                virtual_address: 0,
-                                physical_address: addr,
-                                symbol: location.symbol.unwrap_or("<unknown>".to_string()),
-                                inlined: location.is_inlined,
-                                file: location.file,
-                                line: location.line,
-                                column: location.column,
-                            })?;
-                        }
-
-                        continue;
+                if let Some(dwarf) = dwarf
+                    && let Ok(locations) = dwarf.find_frames(adjusted_addr as u64)
+                    && !locations.is_empty()
+                {
+                    for location in locations {
+                        f(ResolvedStackFrame {
+                            virtual_address: 0,
+                            physical_address: addr,
+                            symbol: location.symbol.unwrap_or("<unknown>".to_string()),
+                            inlined: location.is_inlined,
+                            file: location.file,
+                            line: location.line,
+                            column: location.column,
+                        })?;
                     }
+
+                    continue;
                 }
             }
 
@@ -260,9 +251,8 @@ impl LibraryManager {
 
     pub fn create() -> Arc<LibraryManager> {
         let loader = LibraryLoader::load();
-        let (libraries, symbols, build_id) = loader.finalize();
+        let (libraries, build_id) = loader.finalize();
         Arc::new(LibraryManager {
-            symbols,
             libraries,
             executable_build_id: build_id.map(Arc::new),
         })
@@ -270,5 +260,42 @@ impl LibraryManager {
 
     pub fn instance() -> Arc<LibraryManager> {
         INSTANCE.get_or_init(LibraryManager::create).clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_frames_preserves_unresolved_addresses() {
+        let manager = LibraryManager::instance();
+        let build_id = manager.executable_build_id().unwrap();
+        let library = manager.find_library_by_build_id(&build_id).unwrap();
+        // An offset outside any compilation unit is a successful but empty lookup.
+        let uncovered = usize::MAX;
+        if let Some(dwarf) = library.elf.clone().and_then(Dwarf::create) {
+            assert!(
+                dwarf
+                    .find_frames((uncovered - 1) as u64)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+
+        for physical_addr in [uncovered, 0] {
+            let frame = StackFrame::PhysicalAddr(PhysicalAddr {
+                physical_addr,
+                library_build_id: Some(build_id.clone()),
+            });
+            let mut resolved = Vec::new();
+            manager
+                .resolve_frames(&[frame], false, |frame| {
+                    resolved.push((frame.physical_address, frame.symbol));
+                    Ok::<_, std::convert::Infallible>(())
+                })
+                .unwrap();
+            assert_eq!(resolved, [(physical_addr, "<unknown>".to_string())]);
+        }
     }
 }

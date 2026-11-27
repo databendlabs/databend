@@ -28,7 +28,6 @@ use tantivy::query::Query;
 use tantivy::query::QueryClone;
 use tantivy::query::QueryParser;
 use tantivy::query_grammar::parse_query_lenient;
-use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::create_index_schema;
 use crate::io::create_tokenizer_manager;
@@ -57,7 +56,6 @@ use crate::io::resolve_inverted_index_user_dictionary_blocking;
 //
 pub struct PreparedInvertedIndexQuery {
     pub query: Box<dyn Query>,
-    pub tokenizer_manager: TokenizerManager,
     pub warmup: InvertedIndexWarmupInfo,
 }
 
@@ -92,18 +90,12 @@ impl InvertedIndexPruner {
             let has_score = inverted_index_info.has_score;
             let index_name = inverted_index_info.index_name.clone();
             let index_version = inverted_index_info.index_version.clone();
-            let reader = InvertedIndexReader::create(
-                dal,
-                cache_policy,
-                has_score,
-                prepared.tokenizer_manager,
-                prepared.warmup,
-            )
-            .with_top_k(
-                push_down
-                    .as_ref()
-                    .and_then(PushDownInfo::inverted_index_top_k),
-            );
+            let reader = InvertedIndexReader::create(dal, cache_policy, has_score, prepared.warmup)
+                .with_top_k(
+                    push_down
+                        .as_ref()
+                        .and_then(PushDownInfo::inverted_index_top_k),
+                );
 
             let match_required = push_down
                 .as_ref()
@@ -210,7 +202,7 @@ pub fn create_inverted_index_query(
     let mut query_parser = QueryParser::new(
         index_schema.clone(),
         query_fields.clone(),
-        tokenizer_manager.clone(),
+        tokenizer_manager,
     );
 
     // set optional boost value for the field
@@ -260,9 +252,5 @@ pub fn create_inverted_index_query(
         &query_fields,
         fuzziness,
     )?;
-    Ok(PreparedInvertedIndexQuery {
-        query,
-        tokenizer_manager,
-        warmup,
-    })
+    Ok(PreparedInvertedIndexQuery { query, warmup })
 }

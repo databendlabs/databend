@@ -101,7 +101,6 @@ pub struct TxnBuffer {
     lvt_check: HashMap<u64, TableLvtCheck>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
-    deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
     // These must be discarded with the buffer on rollback or failure as well.
@@ -192,8 +191,6 @@ impl TxnBuffer {
         }
 
         self.update_stream_metas(&req.update_stream_metas);
-
-        self.deduplicated_labels.extend(req.deduplicated_labels);
 
         for req in req.update_temp_tables {
             let (db_name, table_name) = Self::parse_db_tbl_name(&req.desc);
@@ -513,12 +510,6 @@ impl TxnManager {
                 .values()
                 .cloned()
                 .collect(),
-            deduplicated_labels: self
-                .txn_buffer
-                .deduplicated_labels
-                .iter()
-                .cloned()
-                .collect(),
             update_temp_tables: self
                 .txn_buffer
                 .mutated_temp_tables
@@ -531,10 +522,6 @@ impl TxnManager {
                 })
                 .collect(),
         }
-    }
-
-    pub fn contains_deduplicated_label(&self, label: &str) -> bool {
-        self.txn_buffer.deduplicated_labels.contains(label)
     }
 
     pub fn get_table_copied_file_info(

@@ -77,7 +77,83 @@ description: A lambda UDF whose body is pure SQL is inlined, so it must remain u
 sql: SELECT array_transform([a], x -> sql_add_one(x)) FROM t
 status: ok
 EvalScalar
-├── scalars: [array_transform(array(t.a (#0)), ["x"] -> x (#2) + 1) AS (#2)]
+├── scalars: [array_transform(array(t.a (#0)), ["x"] -> x + 1) AS (#2)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== sql_udf_with_subquery_inside_sql_lambda_body_is_rejected ===
+description: The body of a SQL UDF called in a lambda body is a part of it, so a subquery in it is rejected like one in the lambda body, instead of leaking an internal column id.
+sql: SELECT array_transform([a], x -> sql_add_subquery(x)) FROM t
+status: error
+code: 1065
+message: subqueries can not be used in lambda function
+
+=== sql_udf_with_long_in_list_inside_sql_lambda_body_keeps_the_list ===
+description: A long IN list in the body of a SQL UDF called in a lambda body is kept, as in the lambda body, rather than turned into a subquery.
+sql: SETTINGS (inlist_to_join_threshold = 2) SELECT array_transform([a], x -> sql_in_list(x)) FROM t
+status: ok
+EvalScalar
+├── scalars: [array_transform(array(t.a (#0)), ["x"] -> ((x = 1 OR x = 2) OR x = 3)) AS (#2)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== aggregating_sql_udf_argument_captured_by_body_lambda_is_rejected ===
+description: An aggregating SQL UDF is expanded with its arguments as written: `a` substituted for `x` in the body lambda `a -> x` would be bound to the lambda parameter, not to the column, so the call is rejected.
+sql: SELECT a, sql_capture(a) FROM t GROUP BY a
+status: error
+code: 1065
+message: the argument of SQL UDF parameter x refers to a, which a lambda parameter of the same name in the body of the UDF shadows; rename the column or the lambda parameter
+
+=== aggregating_sql_udf_argument_with_other_name_is_substituted_in_body_lambda ===
+description: An argument whose names no lambda parameter of the body shadows is substituted in the lambda body, as a capture of the column.
+sql: SELECT b, sql_capture(b) FROM t GROUP BY b
+status: ok
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sql_capture(plus(sum(b) (#2), get(array_transform(t.b (#1), [0], ["a"] -> t.b (#1)), 1))) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.b (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregating_sql_udf_argument_binding_its_own_lambda_name_is_substituted ===
+description: A name that a lambda of the argument binds is not free in the argument, so the lambda parameter of the body does not shadow it.
+sql: SELECT b, sql_capture(array_sum(array_transform([b], a -> a + 1))) FROM t GROUP BY b
+status: ok
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sql_capture(plus(sum(array_sum(array_transform([b], a -> a + 1))) (#3), get(array_transform(t.b (#1), [0], ["a"] -> array_sum(array_transform(array(t.b (#1)), ["a"] -> a + 1))), 1))) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(sum_arg_0 (#2)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.b (#1) AS (#1), array_sum(array_transform(array(t.b (#1)), ["a"] -> a + 1)) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== scalar_sql_udf_argument_is_not_captured_by_body_lambda ===
+description: A scalar SQL UDF binds its arguments before its body, so a lambda parameter of the body cannot shadow a column of the argument.
+sql: SELECT sql_scalar_capture(a) FROM t
+status: ok
+EvalScalar
+├── scalars: [sql_scalar_capture(get(array_transform(t.a (#0), [0], ["a"] -> x (#0)), 1)) AS (#2)]
 └── Scan
     ├── table: default.t (#0)
     ├── filters: []

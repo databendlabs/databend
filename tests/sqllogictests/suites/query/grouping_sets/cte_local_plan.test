@@ -1,0 +1,144 @@
+# Materialized CTEs in plans that run on one node. A plan without an exchange runs
+# only on the local node, so the producer of each CTE must stay on that node with
+# its readers: a producer that also runs on other executors fills channels that
+# nobody reads there. The grouping-sets UNION rewrites read the scanned table
+# through such CTEs. Run with the default cascading UNION rewrite, the plain UNION
+# rewrite, the cascading rewrite without the hierarchical rule, and native
+# expansion, which gives the expected results.
+# run-with-settings: enable_cascading_grouping_sets=0
+# run-with-settings: optimizer_skip_list=HierarchicalGroupingSetsToUnion
+# run-with-settings: grouping_sets_to_union=0
+
+statement ok
+CREATE OR REPLACE DATABASE grouping_sets_cte_local_plan
+
+statement ok
+USE grouping_sets_cte_local_plan
+
+# Fuse pruning is distributed when the table has more segments than the cluster
+# has nodes, so eight inserts give the table eight segments.
+statement ok
+CREATE TABLE t(p INT NOT NULL, a INT NOT NULL, b INT NULL, v INT NOT NULL)
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 0 AND number < 125
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 125 AND number < 250
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 250 AND number < 375
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 375 AND number < 500
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 500 AND number < 625
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 625 AND number < 750
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 750 AND number < 875
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 875 AND number < 1000
+
+statement ok
+SET max_block_size = 4
+
+statement ok
+CREATE TABLE d(p INT NOT NULL, name STRING NOT NULL)
+
+statement ok
+INSERT INTO d SELECT number, concat('n', number::STRING) FROM numbers(40)
+
+# The rewrite reads the CTE twice, and the second read keeps only the keys.
+query II
+WITH x AS (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a))
+SELECT count(*), sum(x.s) FROM x LEFT JOIN (SELECT p, a FROM x) y ON x.p = y.p
+----
+644 4995000
+
+# Grouping sets over grouping sets, and over a correlated subquery.
+query III
+SELECT count(*), sum(c), sum(s2)
+FROM (
+    SELECT a, count(*) AS c, sum(s) AS s2
+    FROM (SELECT a, sum(v) AS s FROM t GROUP BY ROLLUP(a)) x
+    GROUP BY ROLLUP(a)
+) y
+----
+5 8 1998000
+
+query II
+SELECT count(*), sum(c)
+FROM (
+    SELECT p, a, count(*) AS c
+    FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+    GROUP BY CUBE(p, a)
+) y
+----
+210 656
+
+query II
+SELECT count(*), sum(n)
+FROM (
+    SELECT p,
+        (SELECT count(*) FROM (SELECT a, sum(v) AS s FROM t u WHERE u.p >= t.p GROUP BY ROLLUP(a)) z) AS n
+    FROM t GROUP BY p
+) w
+----
+40 160
+
+# MERGE reads its source through a join with the target.
+statement ok
+CREATE TABLE merged(p INT NULL, a INT NULL, s BIGINT NULL)
+
+statement ok
+INSERT INTO merged SELECT p, a, 0 FROM t WHERE v < 100
+
+statement ok
+MERGE INTO merged USING (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+ON merged.p = x.p AND merged.a = x.a
+WHEN MATCHED THEN UPDATE SET merged.s = x.s
+WHEN NOT MATCHED THEN INSERT (p, a, s) VALUES (x.p, x.a, x.s)
+
+query III
+SELECT count(*), count(p), sum(s) FROM merged
+----
+164 160 1998000
+
+# A full join on a non-equal condition runs on one node, and so does the
+# whole query.
+query IIII
+SELECT count(*), count(p), count(a), sum(c)
+FROM (SELECT t.p, t.a, count(*) AS c FROM t FULL JOIN d ON t.p < d.p AND t.a = 0 GROUP BY CUBE(t.p, t.a)) x
+----
+167 160 123 28756
+
+# A scalar subquery whose alias is referenced again, over a CTE it reads twice.
+query II
+SELECT (
+    WITH m AS (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a))
+    SELECT count(*) FROM m m1 JOIN m m2 ON m1.p = m2.p AND m1.a = m2.a
+) AS c1, c1 + 1
+----
+120 121
+
+statement ok
+UNSET max_block_size
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE grouping_sets_cte_local_plan

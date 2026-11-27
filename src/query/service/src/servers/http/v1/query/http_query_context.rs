@@ -32,12 +32,12 @@ use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
+use crate::servers::http::v1::query::CredentialBinding;
 use crate::servers::http::v1::query::HttpQuery;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContextSettings;
 
 #[derive(Clone)]
 pub struct HttpQueryContext {
@@ -46,12 +46,15 @@ pub struct HttpQueryContext {
     pub(crate) authenticated_tenant: Tenant,
     /// Bound during HTTP authentication, before the context reaches a handler.
     pub(crate) authenticated_query: Option<Arc<HttpQuery>>,
+    /// Set for submissions only; retained by the created query.
+    pub(crate) credential_binding: Option<CredentialBinding>,
+    /// Authorized by a credential binding instead of ordinary authentication.
+    pub(crate) authorized_by_binding: bool,
     pub credential: Credential,
     pub query_id: String,
     pub is_query_id_from_client: bool,
     pub node_id: String,
     pub expected_node_id: Option<String>,
-    pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
     pub trace_parent: Option<String>,
     pub opentelemetry_baggage: Option<Vec<(String, String)>>,
@@ -85,10 +88,6 @@ impl HttpQueryContext {
         result.extend([
             ("query_id".to_string(), self.query_id.clone()),
             ("node_id".to_string(), self.node_id.clone()),
-            (
-                "deduplicate_label".to_string(),
-                self.deduplicate_label.clone().unwrap_or_default(),
-            ),
             (
                 "user_agent".to_string(),
                 self.user_agent.clone().unwrap_or_default(),
@@ -174,7 +173,7 @@ impl HttpQueryContext {
     pub async fn try_refresh_worksheet_session(&self) -> databend_common_exception::Result<()> {
         // A query capability must not extend session/temporary-table lifetimes
         // or introduce Meta accesses on the follow-up authentication path.
-        if matches!(&self.credential, Credential::QueryToken { .. }) {
+        if matches!(&self.credential, Credential::QueryToken { .. }) || self.authorized_by_binding {
             return Ok(());
         }
         if let Some(client_session) = self.client_session.as_ref() {
@@ -245,14 +244,6 @@ impl HttpQueryContext {
 
         let ctx = session.create_query_context(self.version).await?;
 
-        // Deduplicate label is used on the DML queries which may be retried by the client.
-        // It can be used to avoid the duplicated execution of the DML queries.
-        let deduplicate_label = &self.deduplicate_label;
-        if let Some(label) = deduplicate_label {
-            unsafe {
-                ctx.get_settings().set_deduplicate_label(label.clone())?;
-            }
-        }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }

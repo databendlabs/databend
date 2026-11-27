@@ -59,6 +59,7 @@ use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
+use databend_storages_common_cache::CacheManager;
 use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
@@ -879,7 +880,7 @@ impl ClusterDiscovery {
                 "data_cache_in_memory_bytes": cfg.cache.data_cache_in_memory_bytes,
                 "table_data_cache_population_queue_size": cfg.cache.table_data_cache_population_queue_size,
                 "table_data_deserialized_data_bytes": cfg.cache.table_data_deserialized_data_bytes,
-                "disk_cache_max_bytes": cfg.cache.disk_cache_config.max_bytes,
+                "disk_cache_max_bytes": CacheManager::instance().disk().map_or(0, |disk| disk.max_bytes()),
                 "disk_cache_sync_data": cfg.cache.disk_cache_config.sync_data
             },
             "memory_management": {

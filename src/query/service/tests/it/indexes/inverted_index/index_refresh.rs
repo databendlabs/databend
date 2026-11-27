@@ -229,7 +229,6 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
             dal.clone(),
             CachePolicy::DEFAULT,
             has_score,
-            prepared.tokenizer_manager,
             prepared.warmup,
         );
 

@@ -40,11 +40,13 @@ impl HashMethod for HashMethodSerializer {
         group_columns: ProjectedBlock,
         num_rows: usize,
     ) -> Result<KeysState> {
-        // The serialize_size is equal to the number of bytes required by serialization.
+        // Capacity hint only: encoded columns can underestimate the decoded size.
+        // Constants are expanded by the serializer and need not be sized here.
         let serialize_size = group_columns
             .iter()
-            .map(|entry| entry.as_column().unwrap().serialize_size())
-            .sum();
+            .filter_map(|entry| entry.as_column())
+            .map(Column::serialize_size)
+            .fold(0, usize::saturating_add);
         Ok(KeysState::Column(Column::Binary(serialize_group_columns(
             group_columns,
             num_rows,

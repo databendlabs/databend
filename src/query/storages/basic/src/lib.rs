@@ -42,6 +42,7 @@ pub use recursive_cte_memory_table::RecursiveCteMemoryTable;
 pub use result_cache::{
     ResultCacheMetaManager, ResultCacheReader, ResultScan, WriteResultCacheSink,
     gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
+    is_result_cache_meta_key,
 };
 // View storage exports
 pub use view::view_table;

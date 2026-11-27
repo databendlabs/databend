@@ -289,7 +289,7 @@ async fn test_select_access_path_counts() -> anyhow::Result<()> {
     for (user, expected, allowed) in cases {
         let ctx = user_context(&fixture, user, None).await?;
         // Trace only authorization, not initial binding. ID conversion must reuse the bound
-        // table and perform exactly one get_database; ownership must never resolve names again.
+        // table and the database id read with it; nothing resolves names again.
         let (plan, _) = Planner::new(ctx.clone())
             .plan_sql("SELECT * FROM select_access.t")
             .await?;
@@ -327,7 +327,7 @@ async fn test_select_access_path_counts() -> anyhow::Result<()> {
                     && span.name.split("::").any(|part| part == "get_database")
             })
             .count();
-        assert_eq!(database_reads, expected[1]);
+        assert_eq!(database_reads, 0);
     }
 
     // A role-loading failure is not an unmatched grant. It must stop at NameGrant, even
@@ -360,6 +360,35 @@ async fn test_select_access_path_counts() -> anyhow::Result<()> {
     assert_eq!(paths.len(), 2, "{paths:?}");
     assert!(paths.contains(&"Access.SelectTable"));
     assert!(paths.contains(&"Access.NameGrant"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_table_checks_destination_database_by_name() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (db_id, _) = setup_table(&fixture).await?;
+    let mut user = UserInfo::new_no_auth("creator", "%");
+    user.grants.grant_privileges(
+        &GrantObject::DatabaseById("default".into(), db_id),
+        UserPrivilegeType::Create.into(),
+    );
+    let ctx = user_context(&fixture, user, None).await?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql("CREATE TABLE select_access.dst LIKE select_access.t")
+        .await?;
+    assert_eq!(
+        ctx.get_resolved_database_id("default", "select_access"),
+        Some(db_id)
+    );
+
+    // Binding found the source database. Authorizing the destination still needs a name lookup.
+    let spans = reported_spans();
+    let trace = SpanContext::random();
+    InterpreterFactory::get(ctx, &plan)
+        .in_span(Span::root("create_access_test", trace))
+        .await?;
+    fastrace::flush();
+    assert_eq!(count_spans(&spans.lock(), trace, "get_database"), 1);
     Ok(())
 }
 
@@ -660,12 +689,12 @@ async fn test_multi_table_select_access_counts() -> anyhow::Result<()> {
     // Expected counts of: SelectTable, get_database, OwnershipPrefetch, mget_ownerships,
     // get_ownership, TableOwnership, DatabaseOwnership.
     for (user, sql, expected, denied_table) in [
-        (database_owner, all_tables, [3, 1, 1, 1, 0, 3, 3], None),
-        (grants_only, all_tables, [3, 1, 0, 0, 0, 0, 0], None),
-        (mixed, t2_and_t3, [2, 1, 1, 1, 0, 1, 0], None),
+        (database_owner, all_tables, [3, 0, 1, 1, 0, 3, 3], None),
+        (grants_only, all_tables, [3, 0, 0, 0, 0, 0, 0], None),
+        (mixed, t2_and_t3, [2, 0, 1, 1, 0, 1, 0], None),
         // Ownership is checked after every grant check, then in plan order, so `t` is the
         // first denial and `t2` is never checked.
-        (partial, all_tables, [3, 1, 1, 1, 0, 1, 1], Some("t")),
+        (partial, all_tables, [3, 0, 1, 1, 0, 1, 1], Some("t")),
     ] {
         let name = user.name.clone();
         let ctx = user_context(&fixture, user, None).await?;

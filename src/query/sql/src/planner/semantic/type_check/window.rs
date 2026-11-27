@@ -77,6 +77,20 @@ pub(super) struct CoreWindowFrame {
     end_bound: CoreWindowFrameBound,
 }
 
+impl CoreWindowFrame {
+    /// The offset expressions of the bounds.
+    pub(super) fn exprs(&self) -> impl Iterator<Item = CoreExprId> + '_ {
+        [&self.start_bound, &self.end_bound]
+            .into_iter()
+            .filter_map(|bound| match bound {
+                CoreWindowFrameBound::CurrentRow => None,
+                CoreWindowFrameBound::Preceding(expr) | CoreWindowFrameBound::Following(expr) => {
+                    *expr
+                }
+            })
+    }
+}
+
 pub(super) enum CoreWindowFrameBound {
     CurrentRow,
     Preceding(Option<CoreExprId>),
@@ -132,16 +146,6 @@ impl<'a> CoreExprArena<'a> {
             order_by,
             window,
         })))
-    }
-
-    pub(super) fn ensure_window_not_in_lambda(&self, span: Span, has_window: bool) -> Result<()> {
-        if self.in_lambda_function && has_window {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-        Ok(())
     }
 
     pub(super) fn ensure_window_function_call(
@@ -258,7 +262,8 @@ where A: TypeCheckAdapter
         display_name: &str,
         window: &CoreWindow<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let aggregate_arena = CoreExprArena::new(self.func_ctx.week_start as u64);
+        let aggregate_arena =
+            CoreExprArena::new(self.func_ctx.week_start as u64, self.name_resolution_ctx);
         let params = SmallVec::new();
         let args = SmallVec::new();
         let order_by = SmallVec::new();
@@ -355,7 +360,10 @@ where A: TypeCheckAdapter
         window: &CoreWindow<'_>,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if self.bind_context.expr_context == ExprContext::InSetReturningFunction {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction { .. }
+        ) {
             return Err(ErrorCode::SemanticError(
                 "window functions cannot be used as set-returning function arguments".to_string(),
             )
@@ -397,13 +405,15 @@ where A: TypeCheckAdapter
                     .clone();
                 let mut named_arena = self.core_expr_arena();
                 let named_spec = named_arena.lower_window_spec(&spec)?;
-                return self.resolve_window_spec(
-                    &named_arena,
-                    span,
-                    display_name,
-                    &named_spec,
-                    func,
-                );
+                return self.with_own_grouping_key_memo(|type_checker| {
+                    type_checker.resolve_window_spec(
+                        &named_arena,
+                        span,
+                        display_name,
+                        &named_spec,
+                        func,
+                    )
+                });
             }
         };
         self.resolve_window_spec(arena, span, display_name, spec, func)

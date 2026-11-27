@@ -153,6 +153,85 @@ mod if_selection {
     }
 }
 
+#[divan::bench_group(sample_count = 30)]
+mod string_compare {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression_test_support as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use divan::counter::ItemsCount;
+
+    const ROWS: usize = 65_536;
+
+    /// `short`: inlined strings (<= 12 bytes) sharing a 4-byte prefix.
+    /// `url`: long strings of varying length sharing a long prefix, like a URL column.
+    /// `distinct`: long strings whose first 4 bytes mostly differ.
+    fn value(shape: &str, row: usize) -> String {
+        match shape {
+            "short" => format!("id_{}", row % 1000),
+            "url" => format!("https://www.example.com/{}{row}", "p/".repeat(row % 16)),
+            "distinct" => format!(
+                "{:08x}_with_a_long_suffix",
+                (row as u32).wrapping_mul(2_654_435_761)
+            ),
+            _ => unreachable!(),
+        }
+    }
+
+    fn bench_expr(bencher: divan::Bencher, shape: &str, sql: &str) {
+        let raw_expr = parser::parse_raw_expr(
+            sql,
+            &[("s", DataType::String), ("t", DataType::String)],
+            &BUILTIN_FUNCTIONS,
+        );
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let s = (0..ROWS).map(|row| value(shape, row)).collect::<Vec<_>>();
+        // Every other row of `t` equals `s`; the others hold a different string of the shape.
+        let t = (0..ROWS)
+            .map(|row| value(shape, if row % 2 == 0 { row } else { row + 1 }))
+            .collect::<Vec<_>>();
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::Column(StringType::from_data(s)),
+                BlockEntry::Column(StringType::from_data(t)),
+            ],
+            ROWS,
+        );
+        let func_ctx = FunctionContext::default();
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench(|| evaluator.run(&expr).unwrap());
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn eq_scalar(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, shape, &format!("s = '{}'", value(shape, 777)));
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn lt_scalar(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, shape, &format!("s < '{}'", value(shape, 777)));
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn eq_column(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, shape, "s = t");
+    }
+
+    #[divan::bench(args = ["short", "url", "distinct"])]
+    fn lt_column(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, shape, "s < t");
+    }
+}
+
 // bench            fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                       │               │               │               │         │
 //    ├─ check                    │               │               │               │         │

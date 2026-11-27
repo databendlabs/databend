@@ -73,11 +73,16 @@ impl ColumnEncoding {
 
     /// Converts the Arrow array read from Parquet into the narrowest in-memory form: the
     /// encoded column, or the regular column if no encoding makes the block smaller.
+    ///
+    /// A Parquet dictionary is kept as is. Without `build`, nothing else is encoded: building a
+    /// frame of reference or a dictionary goes over every row, which only pays when the encoded
+    /// column is cached and read again.
     pub fn encode(
         self,
         array: ArrayRef,
         data_type: &DataType,
         max_ndv_ratio: u64,
+        build: bool,
     ) -> Result<Column> {
         let inner_type = data_type.remove_nullable();
         if let Some(dict) = array.as_any().downcast_ref::<DictionaryArray<UInt32Type>>()
@@ -114,6 +119,9 @@ impl ColumnEncoding {
         }
 
         let column = Column::from_arrow_rs(array, data_type)?;
+        if !build {
+            return Ok(column);
+        }
         Ok(match column {
             Column::Nullable(column) => {
                 let (column, validity) = column.destructure();
@@ -186,7 +194,9 @@ mod tests {
         max_ndv_ratio: u64,
     ) -> Column {
         let plain = Column::from_arrow_rs(array.clone(), data_type).unwrap();
-        let column = encoding.encode(array, data_type, max_ndv_ratio).unwrap();
+        let column = encoding
+            .encode(array, data_type, max_ndv_ratio, true)
+            .unwrap();
         let decoded = BlockEntry::Column(column.clone()).decoded_value();
         // The inner value of a NULL row is unspecified (encoded rows use an in-bounds
         // dictionary key), so compare logical values rather than placeholder bytes.
@@ -424,5 +434,28 @@ mod tests {
         let for_column = as_for(&column);
         assert_eq!(for_column.base(), 9_000_000);
         assert_eq!(for_column.deltas().byte_width(), 2);
+    }
+    #[test]
+    fn test_encode_without_build_keeps_only_parquet_dictionaries() {
+        // A Parquet dictionary is still kept.
+        let values = StringArray::from(vec!["A", "N", "R"]);
+        let keys = UInt32Array::from((0..1000).map(|i| i % 3).collect::<Vec<u32>>());
+        let array = DictionaryArray::<UInt32Type>::try_new(keys, Arc::new(values)).unwrap();
+        let column = ColumnEncoding::Dictionary
+            .encode(Arc::new(array), &DataType::String, 100, false)
+            .unwrap();
+        assert_eq!(as_dict(&column).values.len(), 3);
+
+        // Nothing is built from regular columns, though it would be smaller.
+        let array = StringArray::from((0..1000).map(|i| ["x", "y"][i % 2]).collect::<Vec<_>>());
+        let column = ColumnEncoding::Dictionary
+            .encode(Arc::new(array), &DataType::String, 100, false)
+            .unwrap();
+        assert!(matches!(column, Column::String(_)));
+        let array = Int64Array::from_iter_values((0..1000).map(|i| 1_000_000 + i % 200));
+        let column = ColumnEncoding::FrameOfReference
+            .encode(Arc::new(array), &int64(), 100, false)
+            .unwrap();
+        assert!(matches!(column, Column::Number(_)));
     }
 }

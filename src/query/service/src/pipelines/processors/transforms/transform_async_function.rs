@@ -25,6 +25,8 @@ use std::time::Duration;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
@@ -54,6 +56,7 @@ use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_sql::binder::parse_stage_location;
 use databend_common_sql::binder::parse_stage_name;
+use databend_common_sql::binder::validate_stage_path_traversal_policy;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
@@ -312,7 +315,13 @@ impl ReadFileContext {
                 path
             )));
         }
+        Self::validate_path_traversal(path)?;
         Ok(path.to_string())
+    }
+
+    fn validate_path_traversal(path: &str) -> Result<()> {
+        let policy = GlobalConfig::instance().storage.stage_path_traversal_policy;
+        validate_stage_path_traversal_policy(policy, path, false)
     }
 
     async fn stage_info_for(&mut self, ctx: &QueryContext, stage_name: &str) -> Result<StageInfo> {
@@ -334,17 +343,19 @@ impl ReadFileContext {
             stage_info.allow_credential_chain = true;
         }
 
-        let visibility_checker = self.visibility_checker(ctx).await?;
-        if !(stage_info.is_temporary
-            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-            || stage_info.stage_type == StageType::User
-                && stage_info.stage_name == ctx.get_current_user()?.name)
-        {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied: privilege READ is required on stage {} for user {}",
-                stage_info.stage_name.clone(),
-                ctx.get_current_user()?.identity().display(),
-            )));
+        if ctx.should_check_stage_privilege(&stage_info.stage_name)? {
+            let visibility_checker = self.visibility_checker(ctx).await?;
+            if !(stage_info.is_temporary
+                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                || stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == ctx.get_current_user()?.name)
+            {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
         }
 
         self.stage_infos
@@ -373,6 +384,7 @@ impl ReadFileContext {
                 location
             )));
         }
+        Self::validate_path_traversal(&path)?;
 
         let stage_info = self.stage_info_for(ctx, &stage_name).await?;
         let operator = self.operator_for_stage(&stage_info)?;
@@ -874,13 +886,14 @@ impl NextValFetcher for SequenceNextValFetcher {
 
         // Calculate batch size - take the larger of count or step_size
         let req = GetSequenceNextValueReq {
-            ident: self.sequence_ident,
+            ident: self.sequence_ident.clone(),
             count: batch_size,
         };
 
         let resp = catalog
             .get_sequence_next_value(req, &visibility_checker)
             .await?;
+        ctx.record_sequence_access(self.sequence_ident.name());
         Ok(NextValFetchResult {
             start: resp.start,
             batch_size,
@@ -901,7 +914,7 @@ impl SequenceNextValFetcher {
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
     ) -> Result<(GetSequenceReply, Option<Arc<GrantObjectVisibilityChecker>>)> {
-        let visibility_checker = Some(ctx.get_visibility_checker(false, Object::Sequence).await?);
+        let visibility_checker = ctx.sequence_usage_checker().await?;
 
         let req = GetSequenceReq {
             ident: self.sequence_ident.clone(),

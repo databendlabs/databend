@@ -18,7 +18,9 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -35,6 +37,10 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::IndexType;
 
+use super::condition_cache;
+use super::condition_cache::CachedCondition;
+use super::condition_cache::ConditionKeys;
+use super::parquet_data_source::BlockSource;
 use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
 use crate::FuseBlockPartInfo;
@@ -64,24 +70,42 @@ pub struct ReadDataTransform {
     read_block_context: Arc<ReadBlockContext>,
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
+    index_score: Option<InternalColumnType>,
     context: Arc<dyn TableContext>,
     runtime_scan_filters: RuntimeScanFilters,
     record_partitions: bool,
+    /// The key of the prewhere filter in the condition cache, if it is cached.
+    condition_keys: Option<ConditionKeys>,
+    /// Whether the scan outputs columns (or virtual columns), besides the internal ones.
+    outputs_columns: bool,
 }
 
 impl ReadDataTransform {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         scan_id: IndexType,
+        index_score: Option<InternalColumnType>,
         ctx: Arc<dyn TableContext>,
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
         record_partitions: bool,
+        prewhere_info: Option<&PrewhereInfo>,
+        outputs_columns: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
+        let condition_keys = match prewhere_info {
+            Some(prewhere_info) if ctx.get_settings().get_enable_condition_cache()? => {
+                condition_cache::condition_keys(
+                    prewhere_info,
+                    &block_reader.original_schema,
+                    &func_ctx,
+                )
+            }
+            _ => None,
+        };
         let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
         Ok(ProcessorPtr::create(Box::new(Self {
             input,
@@ -95,9 +119,12 @@ impl ReadDataTransform {
             read_block_context,
             table_schema,
             scan_id,
+            index_score,
             context: ctx,
             runtime_scan_filters,
             record_partitions,
+            condition_keys,
+            outputs_columns,
         })))
     }
 
@@ -150,36 +177,93 @@ impl ReadDataTransform {
                 continue;
             };
 
-            self.pending_output
-                .push_back(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                    vec![part],
-                    vec![ParquetDataSource::Granule(groups)],
-                )));
+            // A granule read decodes only some rows of the block, so it neither uses nor
+            // records the condition entry of the block.
+            let block = match self.block_shortcut(&part, part_info) {
+                BlockShortcut::Skip => continue,
+                BlockShortcut::Output(block) => block,
+                BlockShortcut::Read(_) => {
+                    DataBlock::empty_with_meta(DataSourceWithMeta::create(vec![part], vec![
+                        BlockSource::Granule(groups),
+                    ]))
+                }
+            };
+            self.pending_output.push_back(block);
         }
         Ok(())
+    }
+
+    /// How a partition that survived pruning is output without reading it, if it can be.
+    fn block_shortcut(&self, part: &PartInfoPtr, part_info: &FuseBlockPartInfo) -> BlockShortcut {
+        // The index matches are every row this zero-column scan outputs, with
+        // their scores: no Parquet read. `index_score` excludes prewhere, so this
+        // never competes with the condition cache below.
+        if let Some(key) = &self.index_score
+            && let Some(matches) = part_info.covering_matches(key)
+            && !self.context.has_bloom_runtime_filters(self.scan_id)
+        {
+            let offsets = matches.rows.iter().map(|&row| u64::from(row)).collect();
+            return BlockShortcut::Output(DataBlock::empty_with_meta(DataSourceWithMeta::create(
+                vec![part.clone()],
+                vec![BlockSource::IndexRows(offsets)],
+            )));
+        }
+
+        // A block where the prewhere filter selected no row before is not read, nor one
+        // where it knows the rows when the scan outputs no column.
+        let condition = self
+            .condition_keys
+            .as_ref()
+            .and_then(|keys| condition_cache::lookup_condition(keys, part_info));
+        if let Some(condition) = &condition {
+            if condition.selects_nothing() {
+                return BlockShortcut::Skip;
+            }
+            if !self.outputs_columns && condition.is_exact() {
+                return BlockShortcut::Output(DataBlock::empty_with_meta(
+                    DataSourceWithMeta::create(vec![part.clone()], vec![BlockSource::Parquet(
+                        ParquetDataSource::skipped(condition.clone()),
+                    )]),
+                ));
+            }
+        }
+        BlockShortcut::Read(condition)
     }
 
     /// Read the next remaining partition that survives runtime pruning, or `None` once the
     /// current batch is exhausted.
     async fn read_next_remaining_part(&mut self) -> Result<Option<DataBlock>> {
-        let expr_runtime_pruner = match self.expr_runtime_pruner.as_ref() {
-            Some(pruner) => pruner,
-            None => self
-                .expr_runtime_pruner
-                .insert(self.create_runtime_pruners()?),
-        };
+        if self.expr_runtime_pruner.is_none() {
+            self.expr_runtime_pruner = Some(self.create_runtime_pruners()?);
+        }
 
         'parts: while let Some(part) = self.remaining_parts.pop_front() {
             let part_info = FuseBlockPartInfo::from_part(&part)?;
             let stats = Self::scan_statistics(part_info);
             if self.runtime_scan_filters.should_prune(stats)
-                || expr_runtime_pruner.prune(&part).await?
+                || self
+                    .expr_runtime_pruner
+                    .as_ref()
+                    .unwrap()
+                    .prune(&part)
+                    .await?
             {
                 continue;
             }
+            let condition = match self.block_shortcut(&part, part_info) {
+                BlockShortcut::Skip => continue,
+                BlockShortcut::Output(block) => return Ok(Some(block)),
+                BlockShortcut::Read(condition) => condition,
+            };
 
-            let source = match self.read_block_context.granule_groups(&part, None)? {
-                Some(groups) => ParquetDataSource::Granule(groups),
+            let mut source = match self.read_block_context.granule_groups(&part, None)? {
+                // The groups bound the rows decoded at a time. A granule read neither uses
+                // nor records the condition entry of the block.
+                Some(groups) => {
+                    return Ok(Some(DataBlock::empty_with_meta(
+                        DataSourceWithMeta::create(vec![part], vec![BlockSource::Granule(groups)]),
+                    )));
+                }
                 None if self.runtime_scan_filters.is_empty() => {
                     self.read_block_context.read_full_data(part.clone()).await?
                 }
@@ -203,8 +287,9 @@ impl ReadDataTransform {
                 }
             };
 
+            source.condition = condition;
             return Ok(Some(DataBlock::empty_with_meta(
-                DataSourceWithMeta::create(vec![part], vec![source]),
+                DataSourceWithMeta::create(vec![part], vec![BlockSource::Parquet(source)]),
             )));
         }
 
@@ -283,4 +368,14 @@ impl Processor for ReadDataTransform {
         self.async_output = self.read_next_remaining_part().await?;
         Ok(())
     }
+}
+
+/// See [`ReadDataTransform::block_shortcut`].
+enum BlockShortcut {
+    /// The block has no row to output.
+    Skip,
+    /// The output of the block, without reading it.
+    Output(DataBlock),
+    /// The block is read, with its condition cache entry, if any.
+    Read(Option<CachedCondition>),
 }

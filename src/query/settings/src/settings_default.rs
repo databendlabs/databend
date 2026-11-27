@@ -515,6 +515,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_heavy_hitter_aggregate", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Optimizes a local GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT using bounded heavy-hitter counting: proven exact counts return after one pass, otherwise only candidate keys or, failing that, every row is aggregated. 0 disables it, 1 applies cost heuristics, 2 skips the cost heuristics.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=2)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -636,7 +643,7 @@ impl DefaultSettings {
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
-                    desc: "Selectivity threshold (percentage) for bloom join runtime filters. Bloom filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    desc: "Initial bloom join runtime-filter threshold (percentage). Enable bloom if build rows are below this percentage of either known build-table rows or a single trusted probe target's table rows. Missing or zero denominators do not qualify. Default 10 means 10%; low-yield bloom may later be disabled by runtime sampling.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
@@ -924,13 +931,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("deduplicate_label", DefaultSettingValue {
-                    value: UserSettingValue::String("".to_owned()),
-                    desc: "Sql duplicate label for deduplication.",
-                    mode: SettingMode::Write,
-                    scope: SettingScope::Both,
-                    range: None,
-                }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for the 'COPY INTO'.",
@@ -1136,13 +1136,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_recluster_task_selection_v2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_parquet_page_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet page index",
@@ -1216,7 +1209,7 @@ impl DefaultSettings {
                 }),
                 ("enable_encoded_columns", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Experimental. Fuse scans keep columns in compact encoded forms (frame of reference for integers, Date, Timestamp and Decimal; dictionary, reusing the Parquet dictionary for String) in memory and in the column array cache. Intended for use with the deserialized column cache (config `cache.table_data_deserialized_data_bytes` or `cache.table_data_deserialized_memory_ratio`): without it, every scan encodes the columns again and may be slower.",
+                    desc: "Experimental. Fuse scans keep columns in compact encoded forms (frame of reference for integers, Date, Timestamp and Decimal; dictionary, reusing the Parquet dictionary for String) in memory and in the column array cache. Intended for use with the deserialized column cache; without it, only the Parquet dictionaries of String columns are kept, as building the other encodings for a single use costs more than it saves.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1247,6 +1240,27 @@ impl DefaultSettings {
                     desc: "experiment setting enable row access policy(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_RBAC_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable stage and UDF privilege checks and object visibility filters.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Connection object privilege checks. At 0, retain legacy SUPER management and skip named Connection usage checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Sequence object privilege checks. At 0, retain legacy SUPER management, list all sequences and skip nextval checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_expand_roles", DefaultSettingValue {
@@ -1672,6 +1686,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Session,
                     range: None,
+                }),
+                ("enable_condition_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable to cache the granules of a block where a prewhere filter selects rows",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_prune_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

@@ -39,6 +39,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::span::merge_span;
 use databend_common_ast::visit::VisitControl;
 use databend_common_ast::visit::VisitorMut;
 use databend_common_ast::visit::WalkMut;
@@ -861,6 +862,46 @@ impl Compiler {
         Ok(())
     }
 
+    /// Reject names in nested SQL that older versions resolved to script
+    /// variables, so they cannot silently change meaning now that nested SQL
+    /// follows SQL name resolution.
+    fn check_nested_sql_column_ref(&self, expr: &Expr) -> Result<()> {
+        let Expr::ColumnRef {
+            span,
+            column:
+                ColumnRef {
+                    database: None,
+                    table,
+                    column: ColumnID::Name(column),
+                },
+        } = expr
+        else {
+            return Ok(());
+        };
+
+        match table {
+            None if matches!(self.lookup_ref(column), Ok(RefItem::Var(_))) => {
+                let name = self.normalize_ident(column);
+                Err(ErrorCode::ScriptSemanticError(format!(
+                    "`{name}` is ambiguous in a subquery: use `:{name}` for the \
+                     script variable, or qualify the column with its table name"
+                ))
+                .set_span(*span))
+            }
+            Some(iter) if matches!(self.lookup_ref(iter), Ok(RefItem::Iter(_))) => {
+                let span = merge_span(*span, column.span);
+                let iter = self.normalize_ident(iter);
+                let column = self.normalize_ident(column);
+                Err(ErrorCode::ScriptSemanticError(format!(
+                    "`{iter}.{column}` is ambiguous in a subquery: assign `{iter}.{column}` \
+                     to a variable and use it as `:var`, or use a table alias other than `{iter}`"
+                ))
+                .set_span(span))
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn compile_sql_statement(
         &self,
         span: Span,
@@ -1083,6 +1124,7 @@ impl Compiler {
                 if self.query_depth > 0 {
                     // Nested SQL uses the same quoting rules as RESULTSET/RETURN TABLE:
                     // bare names stay SQL names, `:var` is a script variable.
+                    self.compiler.check_nested_sql_column_ref(expr)?;
                     self.compiler.rewrite_sql_hole_expr(expr)?;
                     return Ok(VisitControl::Continue);
                 }

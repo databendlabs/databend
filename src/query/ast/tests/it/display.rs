@@ -86,7 +86,7 @@ fn test_rewrite_statement_display_escapes_string_literals() {
         r#"SHOW TABLES LIKE 'a''b%';"#,
         r#"LIST @test_stage PATTERN = 'a''b.*';"#,
         r#"REMOVE @test_stage PATTERN = 'a''b.*';"#,
-        r#"CALL admin$tenant_quota('a''b');"#,
+        r#"CALL system$fuse_snapshot('default', 'a''b');"#,
     ] {
         test_stmt_display(sql);
     }

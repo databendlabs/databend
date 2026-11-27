@@ -15,8 +15,6 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_expression::Scalar;
@@ -78,7 +76,7 @@ pub trait ColumnStatsOps {
     fn update_column(&mut self, column: &Column);
     fn update_column_streaming(&mut self, column: &Column);
     fn update_scalar(&mut self, scalar: &ScalarRef, num_rows: usize, data_type: &DataType);
-    fn finalize(self) -> Result<ColumnStatistics>;
+    fn finalize(self) -> ColumnStatistics;
 }
 
 impl<T, A> ColumnStatsOps for GenericColumnStatisticsBuilder<T, A>
@@ -100,7 +98,7 @@ where
         GenericColumnStatisticsBuilder::update_scalar(self, scalar, num_rows, data_type);
     }
 
-    fn finalize(self) -> Result<ColumnStatistics> {
+    fn finalize(self) -> ColumnStatistics {
         GenericColumnStatisticsBuilder::finalize(self)
     }
 }
@@ -381,7 +379,7 @@ where
         self.add(val.clone(), val);
     }
 
-    fn finalize(self) -> Result<ColumnStatistics> {
+    fn finalize(self) -> ColumnStatistics {
         let raw_min = if let Some(v) = self.min {
             let v = A::value_to_scalar(v);
             T::upcast_scalar_with_type(v, &self.data_type)
@@ -394,25 +392,19 @@ where
         } else {
             Scalar::Null
         };
-        let (min, max) =
-            trim_column_min_max(raw_min, raw_max, self.string_col_len).ok_or_else(|| {
-                ErrorCode::Internal(
-                    "Unable to trim string: retained prefix is at the end of the Unicode range"
-                        .to_string(),
-                )
-            })?;
+        let (min, max) = trim_column_min_max(raw_min, raw_max, self.string_col_len);
 
         let streaming_size = match self.streaming_fragments {
             0 => 0,
             1 => self.streaming_single_size,
             _ => self.streaming_payload_size + self.streaming_nullable_rows.div_ceil(8),
         };
-        Ok(ColumnStatistics::new(
+        ColumnStatistics::new(
             min,
             max,
             self.null_count as u64,
             (self.in_memory_size + streaming_size) as u64,
             None,
-        ))
+        )
     }
 }

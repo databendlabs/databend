@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
@@ -205,6 +206,7 @@ impl SubqueryDecorrelatorOptimizer {
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: vec![],
         };
 
         // Rewrite plan to semi-join.
@@ -321,6 +323,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -382,6 +385,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -468,6 +472,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 }
                 .into();
                 Ok((
@@ -550,37 +555,56 @@ impl SubqueryDecorrelatorOptimizer {
         &self,
         filter: &Filter,
         correlated_columns: &ColumnSet,
-    ) -> Result<(bool, DerivedColumnScope)> {
+    ) -> Result<(bool, DerivedColumnScope, ColumnSet)> {
         let mut derived_columns = DerivedColumnScope::default();
-        let can_reuse_inner_columns = filter.predicates.iter().all(|predicate| {
-            if predicate
-                .used_columns()
-                .iter()
-                .all(|column| !correlated_columns.contains(column))
-            {
-                return true;
-            }
-            if let ScalarExpr::FunctionCall(func) = predicate
-                && func.func_name == "eq"
-                && let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
-                    (&func.arguments[0], &func.arguments[1])
-            {
-                if correlated_columns.contains(&left.column.index)
-                    && !correlated_columns.contains(&right.column.index)
+        let mut aliases = ColumnSet::new();
+        // Visit every predicate, even after reuse is ruled out, to retain all
+        // candidate aliases for the caller's materialization safety check.
+        let can_reuse_inner_columns = filter
+            .predicates
+            .iter()
+            .map(|predicate| {
+                if predicate
+                    .used_columns()
+                    .iter()
+                    .all(|column| !correlated_columns.contains(column))
                 {
-                    derived_columns.record(left.column.index, right.column.index);
+                    return true;
                 }
-                if !correlated_columns.contains(&left.column.index)
-                    && correlated_columns.contains(&right.column.index)
+                if let ScalarExpr::FunctionCall(func) = predicate
+                    && func.func_name == "eq"
+                    && let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
+                        (&func.arguments[0], &func.arguments[1])
                 {
-                    derived_columns.record(right.column.index, left.column.index);
+                    let (outer, inner) = match (
+                        correlated_columns.contains(&left.column.index),
+                        correlated_columns.contains(&right.column.index),
+                    ) {
+                        (true, false) => (left, right),
+                        (false, true) => (right, left),
+                        _ => return true,
+                    };
+                    // The inner column stands for the outer one in the subquery,
+                    // cast to the outer type where they differ; that cast must not
+                    // fail on inner rows that match no outer row.
+                    let (outer_type, inner_type) =
+                        (&*outer.column.data_type, &*inner.column.data_type);
+                    // Alias safety is independent of whether its type permits reuse.
+                    // Keep every candidate, including multiple aliases of one outer
+                    // column, for the caller's materialization safety check.
+                    aliases.insert(inner.column.index);
+                    let reusable = inner_type.remove_nullable() == outer_type.remove_nullable()
+                        || classify_conversion(inner_type, outer_type).is_lossless_injective();
+                    if reusable {
+                        derived_columns.record(outer.column.index, inner.column.index);
+                    }
+                    reusable
+                } else {
+                    false
                 }
-                true
-            } else {
-                false
-            }
-        });
-        Ok((!can_reuse_inner_columns, derived_columns))
+            })
+            .fold(true, |can_reuse, reusable| can_reuse & reusable);
+        Ok((!can_reuse_inner_columns, derived_columns, aliases))
     }
 
     // Try folding the subquery into a constant value expression,
@@ -819,7 +843,7 @@ impl SubqueryDecorrelatorOptimizer {
                             let common_type = common_super_type(
                                 value_type.clone(),
                                 expr_type.clone(),
-                                &BUILTIN_FUNCTIONS.default_cast_rules,
+                                BUILTIN_FUNCTIONS.default_cast_rules(),
                             )
                             .ok_or_else(|| {
                                 ErrorCode::IllegalDataType(format!(

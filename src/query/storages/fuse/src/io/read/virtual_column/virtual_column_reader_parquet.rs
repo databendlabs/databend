@@ -26,6 +26,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -225,6 +226,7 @@ impl VirtualColumnReader {
     pub fn deserialize_virtual_columns(
         &self,
         mut data_block: DataBlock,
+        source_schema: &DataSchema,
         virtual_data: Option<VirtualBlockReadResult>,
         row_selection: Option<RowSelection>,
     ) -> Result<DataBlock> {
@@ -298,9 +300,7 @@ impl VirtualColumnReader {
                 continue;
             }
 
-            let src_index = self
-                .source_schema
-                .index_of(&virtual_column_field.source_name)?;
+            let src_index = source_schema.index_of(&virtual_column_field.source_name)?;
             let source = data_block.get_by_offset(src_index);
             let src_arg = (source.value(), source.data_type());
             let path_arg = (

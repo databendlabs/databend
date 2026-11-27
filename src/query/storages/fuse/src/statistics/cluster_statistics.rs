@@ -245,6 +245,15 @@ impl ClusterStatsGenerator {
         }
     }
 
+    /// Stable name of the resolved clustering layout for diagnostics.
+    pub fn layout_name(&self) -> &'static str {
+        match &self.layout {
+            ClusterStatsLayout::Linear => "linear",
+            ClusterStatsLayout::Hilbert => "hilbert",
+            ClusterStatsLayout::Vector(_) => "vector",
+        }
+    }
+
     pub fn is_linear(&self) -> bool {
         matches!(self.layout, ClusterStatsLayout::Linear)
     }

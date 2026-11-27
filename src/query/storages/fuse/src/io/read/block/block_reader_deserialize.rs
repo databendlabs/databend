@@ -52,7 +52,7 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         match storage_format {
             FuseStorageFormat::Parquet => {
-                self.deserialize_parquet_files(num_rows, files, column_chunks, None)
+                self.deserialize_parquet_files(num_rows, files, column_chunks, None, None)
             }
             FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
         }

@@ -40,6 +40,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
+use databend_common_storages_basic::is_result_cache_meta_key;
 use databend_common_users::UserApiProvider;
 use derive_visitor::DriveMut;
 
@@ -337,18 +338,23 @@ impl Binder {
                 .set_span(*span));
         }
         let kv_store = UserApiProvider::instance().get_meta_store_client();
-        let meta_key = self.ctx.get_result_cache_key(&query_id);
-        if meta_key.is_none() {
+        // The key can come from session state that the client sends back, so
+        // only a result cache key of the current tenant is read.
+        let tenant = self.ctx.get_tenant();
+        let meta_key = self
+            .ctx
+            .get_result_cache_key(&query_id)
+            .filter(|key| is_result_cache_meta_key(tenant.tenant_name(), key));
+        let Some(meta_key) = meta_key else {
             return Err(ErrorCode::EmptyData(format!(
                 "`RESULT_SCAN` failed: No cache key found in current session for query ID '{}'.",
                 query_id
             ))
             .set_span(*span));
-        }
+        };
 
         databend_common_base::runtime::block_on(async move {
             let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
-            let meta_key = meta_key.unwrap();
             let location = match result_cache_mgr.get(meta_key.clone()).await? {
                 Some(value) => value.location,
                 None => {

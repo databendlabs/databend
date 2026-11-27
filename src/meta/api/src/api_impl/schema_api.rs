@@ -14,7 +14,6 @@
 
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::time::Duration;
 
 use ConditionResult::Eq;
 use chrono::DateTime;
@@ -400,14 +399,6 @@ pub async fn get_db_by_id_or_err(
         // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
         db_meta.unwrap(),
     ))
-}
-
-pub fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
-    TxnOp::put_with_ttl(
-        deduplicated_label,
-        1_i8.to_le_bytes().to_vec(),
-        Some(Duration::from_secs(86400)),
-    )
 }
 
 #[tonic::async_trait]

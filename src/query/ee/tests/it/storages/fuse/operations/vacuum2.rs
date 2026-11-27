@@ -1917,6 +1917,7 @@ async fn test_vacuum2_rejects_transaction_whose_blocks_were_collected() -> anyho
             commit_error.code(),
             ErrorCode::STORAGE_NOT_FOUND
                 | ErrorCode::TABLE_VERSION_MISMATCHED
+                | ErrorCode::SNAPSHOT_TIMESTAMP_CONFLICT
                 | ErrorCode::UNRESOLVABLE_CONFLICT
         ),
         "unexpected transaction rejection after vacuum collected its blocks: {commit_error}"

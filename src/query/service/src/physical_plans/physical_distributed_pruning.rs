@@ -30,7 +30,11 @@ pub fn optimize_distributed_fuse_pruning(
     plan: &PhysicalPlan,
     eligible_scan_ids: &HashSet<usize>,
 ) -> PhysicalPlan {
-    if eligible_scan_ids.is_empty() {
+    // A plan without exchanges runs only on the local node. Injecting the metadata exchange
+    // under a materialized CTE would make it distributed: the CTE producer then runs on all
+    // executors while its consumers stay in the local root fragment, so the producers on the
+    // other executors read rows that nobody consumes and block on their full channels.
+    if eligible_scan_ids.is_empty() || !plan.is_distributed_plan() {
         return plan.clone();
     }
 
@@ -139,5 +143,41 @@ mod tests {
         let metadata_exchange = Exchange::from_physical_plan(&block_read.input).unwrap();
         assert_eq!(metadata_exchange.kind, FragmentKind::Normal);
         assert!(FusePrune::check_physical_plan(&metadata_exchange.input));
+    }
+
+    fn materialized_cte(input: PhysicalPlan) -> PhysicalPlan {
+        PhysicalPlan::new(MaterializedCTE {
+            plan_id: 0,
+            stat_info: None,
+            input,
+            cte_name: "cte".to_string(),
+            cte_output_columns: None,
+            ref_count: 1,
+            channel_size: None,
+            meta: PhysicalPlanMeta::new("MaterializedCTE"),
+        })
+    }
+
+    #[test]
+    fn keeps_local_plan_with_materialized_cte_local() {
+        let eligible = HashSet::from([1]);
+
+        let local = optimize_distributed_fuse_pruning(&materialized_cte(table_scan(1)), &eligible);
+        let cte = MaterializedCTE::from_physical_plan(&local).unwrap();
+        assert!(TableScan::check_physical_plan(&cte.input));
+        assert!(!local.is_distributed_plan());
+
+        let distributed = PhysicalPlan::new(Exchange {
+            meta: PhysicalPlanMeta::new("Exchange"),
+            input: materialized_cte(table_scan(1)),
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            ignore_exchange: false,
+            allow_adjust_parallelism: true,
+        });
+        let distributed = optimize_distributed_fuse_pruning(&distributed, &eligible);
+        let outer_exchange = Exchange::from_physical_plan(&distributed).unwrap();
+        let cte = MaterializedCTE::from_physical_plan(&outer_exchange.input).unwrap();
+        assert!(FuseBlockRead::check_physical_plan(&cte.input));
     }
 }

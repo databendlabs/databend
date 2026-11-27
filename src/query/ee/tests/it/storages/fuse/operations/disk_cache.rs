@@ -64,7 +64,7 @@ async fn setup(dir: &TempDir) -> Result<TestFixture> {
     let cache = &mut setup.config_mut().cache;
     cache.data_cache_storage = CacheStorageTypeInnerConfig::Disk;
     cache.disk_cache_config.path = dir.path().to_str().unwrap().to_string();
-    cache.disk_cache_config.max_bytes = 1 << 30;
+    cache.disk_cache_config.max_bytes = Some(1 << 30);
     // The capacities below are options of the legacy memory backend.
     cache.shared_memory_enabled = false;
     cache.table_meta_snapshot_count = 0;

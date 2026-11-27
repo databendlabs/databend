@@ -20,6 +20,7 @@ mod directory;
 mod merge;
 mod output_directory;
 mod search_pin;
+mod searcher;
 
 pub use bundle::BundleExternalFiles;
 pub use bundle::BundleFileRanges;
@@ -76,6 +77,10 @@ pub use merge::scan_source_costs;
 pub use output_directory::INVERTED_INDEX_STREAM_THRESHOLD;
 pub use output_directory::InvertedIndexOutputDirectory;
 pub use search_pin::SearchPinDirectory;
+pub use search_pin::with_search_scope;
+pub use searcher::FieldPostings;
+pub use searcher::InvertedIndexSearcher;
+pub use searcher::InvertedIndexTermInfo;
 
 macro_rules! read_only_directory {
     () => {

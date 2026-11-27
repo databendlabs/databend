@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateStagePlan;
+use databend_common_storage::ensure_valid_stage_prefix_name;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -72,6 +73,9 @@ impl Interpreter for CreateUserStageInterpreter {
                 return Err(ErrorCode::StagePermissionDenied(
                     "user stage is not allowed to be created",
                 ));
+            }
+            if user_stage.stage_type != StageType::External {
+                ensure_valid_stage_prefix_name(&user_stage.stage_name)?;
             }
 
             let tenant = &plan.tenant;

@@ -1,0 +1,603 @@
+====================================================================================================
+Casts between strings and numbers, booleans and binary
+
+Each case runs as CAST. TRY_CAST follows a case only when CAST fails at runtime, to show which rows
+become NULL. Where CAST succeeds, TRY_CAST is checked to return the same values and is not listed;
+where CAST fails type checking, TRY_CAST is checked to fail it too.
+====================================================================================================
+
+
+----------------------------------------------------------------------------------------------------
+Numbers and strings
+
+A string parses as a number, and fails when it is not a number of the type or does not fit. A number
+renders as text.
+----------------------------------------------------------------------------------------------------
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('foo' AS UINT64)
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('foo')` in expr `CAST('foo' AS UInt64)`
+
+
+
+ast            : TRY_CAST('foo' AS UINT64)
+raw expr       : TRY_CAST('foo' AS UInt64)
+checked expr   : TRY_CAST<String>("foo" AS UInt64 NULL)
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('1foo' AS INT32)
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('1foo')` in expr `CAST('1foo' AS Int32)`
+
+
+
+ast            : TRY_CAST('1foo' AS INT32)
+raw expr       : TRY_CAST('1foo' AS Int32)
+checked expr   : TRY_CAST<String>("1foo" AS Int32 NULL)
+optimized expr : NULL
+output type    : Int32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('-1' AS UINT64)
+  | ^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('-1')` in expr `CAST('-1' AS UInt64)`
+
+
+
+ast            : TRY_CAST('-1' AS UINT64)
+raw expr       : TRY_CAST('-1' AS UInt64)
+checked expr   : TRY_CAST<String>("-1" AS UInt64 NULL)
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('256' AS UINT8)
+  | ^^^^^^^^^^^^^^^^^^^^ number too large to fit in target type while evaluating function `to_uint8('256')` in expr `CAST('256' AS UInt8)`
+
+
+
+ast            : TRY_CAST('256' AS UINT8)
+raw expr       : TRY_CAST('256' AS UInt8)
+checked expr   : TRY_CAST<String>("256" AS UInt8 NULL)
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST('1' AS UINT64)
+raw expr       : CAST('1' AS UInt64)
+checked expr   : CAST<String>("1" AS UInt64)
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : CAST(str AS INT64)
+raw expr       : CAST(str::String AS Int64)
+checked expr   : CAST<String>(str AS Int64)
+evaluation:
++--------+--------------------------------+----------------------+
+|        | str                            | Output               |
++--------+--------------------------------+----------------------+
+| Type   | String                         | Int64                |
+| Domain | {"-1"..="9223372036854775807"} | Unknown              |
+| Row 0  | '-9223372036854775808'         | -9223372036854775808 |
+| Row 1  | '-1'                           | -1                   |
+| Row 2  | '0'                            | 0                    |
+| Row 3  | '1'                            | 1                    |
+| Row 4  | '9223372036854775807'          | 9223372036854775807  |
++--------+--------------------------------+----------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------+
+| Column | Data                                                                      |
++--------+---------------------------------------------------------------------------+
+| str    | Column(StringColumn[-9223372036854775808, -1, 0, 1, 9223372036854775807]) |
+| Output | Int64([-9223372036854775808, -1, 0, 1, 9223372036854775807])              |
++--------+---------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(str AS INT64)
+  | ^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Int64`, during run expr: `CAST(str AS Int64)`
+
+
+
+ast            : TRY_CAST(str AS INT64)
+raw expr       : TRY_CAST(str::String NULL AS Int64)
+checked expr   : TRY_CAST<String NULL>(str AS Int64 NULL)
+evaluation:
++--------+------------------------+-------------------------------------------------------+
+|        | str                    | Output                                                |
++--------+------------------------+-------------------------------------------------------+
+| Type   | String NULL            | Int64 NULL                                            |
+| Domain | {"0"..="foo"} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Row 0  | 'foo'                  | NULL                                                  |
+| Row 1  | NULL                   | NULL                                                  |
+| Row 2  | '0'                    | 0                                                     |
+| Row 3  | NULL                   | NULL                                                  |
++--------+------------------------+-------------------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------+
+| Column | Data                                                                                    |
++--------+-----------------------------------------------------------------------------------------+
+| str    | Column(NullableColumn { column: StringColumn[foo, foo, 0, 0], validity: [0b____0101] }) |
+| Output | NullableColumn { column: Int64([0, 0, 0, 0]), validity: [0b____0100] }                  |
++--------+-----------------------------------------------------------------------------------------+
+
+
+ast            : CAST(num AS STRING)
+raw expr       : CAST(num::Int64 AS String)
+checked expr   : CAST<Int64>(num AS String)
+evaluation:
++--------+----------------------------------------------+------------------------+
+|        | num                                          | Output                 |
++--------+----------------------------------------------+------------------------+
+| Type   | Int64                                        | String                 |
+| Domain | {-9223372036854775808..=9223372036854775807} | {""..}                 |
+| Row 0  | -9223372036854775808                         | '-9223372036854775808' |
+| Row 1  | -1                                           | '-1'                   |
+| Row 2  | 0                                            | '0'                    |
+| Row 3  | 1                                            | '1'                    |
+| Row 4  | 9223372036854775807                          | '9223372036854775807'  |
++--------+----------------------------------------------+------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------+
+| Column | Data                                                                 |
++--------+----------------------------------------------------------------------+
+| num    | Column(Int64([-9223372036854775808, -1, 0, 1, 9223372036854775807])) |
+| Output | StringColumn[-9223372036854775808, -1, 0, 1, 9223372036854775807]    |
++--------+----------------------------------------------------------------------+
+
+
+ast            : CAST(num AS STRING)
+raw expr       : CAST(num::UInt64 AS String)
+checked expr   : CAST<UInt64>(num AS String)
+evaluation:
++--------+----------------------------+------------------------+
+|        | num                        | Output                 |
++--------+----------------------------+------------------------+
+| Type   | UInt64                     | String                 |
+| Domain | {0..=18446744073709551615} | {""..}                 |
+| Row 0  | 0                          | '0'                    |
+| Row 1  | 1                          | '1'                    |
+| Row 2  | 18446744073709551615       | '18446744073709551615' |
++--------+----------------------------+------------------------+
+evaluation (internal):
++--------+----------------------------------------------+
+| Column | Data                                         |
++--------+----------------------------------------------+
+| num    | Column(UInt64([0, 1, 18446744073709551615])) |
+| Output | StringColumn[0, 1, 18446744073709551615]     |
++--------+----------------------------------------------+
+
+
+ast            : CAST(CAST('3.40282347e38' AS FLOAT64) AS STRING)
+raw expr       : CAST(CAST('3.40282347e38' AS Float64) AS String)
+checked expr   : CAST<Float64>(CAST<String>("3.40282347e38" AS Float64) AS String)
+optimized expr : "3.40282347e38"
+output type    : String
+output domain  : {"3.40282347e38"..="3.40282347e38"}
+output         : '3.40282347e38'
+
+
+ast            : CAST(num AS STRING)
+raw expr       : CAST(num::Float64 AS String)
+checked expr   : CAST<Float64>(num AS String)
+optimized expr : "3.40282347e38"
+evaluation:
++--------+-------------------------------------------------------------------------------------+-------------------------------------+
+|        | num                                                                                 | Output                              |
++--------+-------------------------------------------------------------------------------------+-------------------------------------+
+| Type   | Float64                                                                             | String                              |
+| Domain | {340282347000000000000000000000000000000..=340282347000000000000000000000000000000} | {"3.40282347e38"..="3.40282347e38"} |
+| Row 0  | 340282347000000000000000000000000000000                                             | '3.40282347e38'                     |
++--------+-------------------------------------------------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------+
+| Column | Data                                                       |
++--------+------------------------------------------------------------+
+| num    | Column(Float64([340282347000000000000000000000000000000])) |
+| Output | StringColumn[3.40282347e38]                                |
++--------+------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+Booleans and strings
+
+`true` and `false` in any letter case, `1` and `0` parse as booleans; other strings, such as `t`,
+fail. A boolean renders as `true` or `false`.
+----------------------------------------------------------------------------------------------------
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('t' AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('t')` in expr `CAST('t' AS Boolean)`
+
+
+
+ast            : TRY_CAST('t' AS BOOLEAN)
+raw expr       : TRY_CAST('t' AS Boolean)
+checked expr   : TRY_CAST<String>("t" AS Boolean NULL)
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('f' AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('f')` in expr `CAST('f' AS Boolean)`
+
+
+
+ast            : TRY_CAST('f' AS BOOLEAN)
+raw expr       : TRY_CAST('f' AS Boolean)
+checked expr   : TRY_CAST<String>("f" AS Boolean NULL)
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST('0' AS BOOLEAN)
+raw expr       : CAST('0' AS Boolean)
+checked expr   : CAST<String>("0" AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST('1' AS BOOLEAN)
+raw expr       : CAST('1' AS Boolean)
+checked expr   : CAST<String>("1" AS Boolean)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : CAST('true' AS BOOLEAN)
+raw expr       : CAST('true' AS Boolean)
+checked expr   : CAST<String>("true" AS Boolean)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : CAST('false' AS BOOLEAN)
+raw expr       : CAST('false' AS Boolean)
+checked expr   : CAST<String>("false" AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST('TRUE' AS BOOLEAN)
+raw expr       : CAST('TRUE' AS Boolean)
+checked expr   : CAST<String>("TRUE" AS Boolean)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : CAST('FaLse' AS BOOLEAN)
+raw expr       : CAST('FaLse' AS Boolean)
+checked expr   : CAST<String>("FaLse" AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST(bool AS STRING)
+raw expr       : CAST(bool::Boolean AS String)
+checked expr   : CAST<Boolean>(bool AS String)
+evaluation:
++--------+---------------+---------+
+|        | bool          | Output  |
++--------+---------------+---------+
+| Type   | Boolean       | String  |
+| Domain | {FALSE, TRUE} | {""..}  |
+| Row 0  | false         | 'false' |
+| Row 1  | true          | 'true'  |
++--------+---------------+---------+
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| bool   | Column(Boolean([0b______10])) |
+| Output | StringColumn[false, true]     |
++--------+-------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+Binary and strings
+
+A string converts to its UTF-8 bytes, and the bytes convert back to the same string.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST('Abc' AS BINARY)
+raw expr       : CAST('Abc' AS Binary)
+checked expr   : CAST<String>("Abc" AS Binary)
+optimized expr : 416263
+output type    : Binary
+output domain  : Undefined
+output         : 416263
+
+
+ast            : CAST('Dobrý den' AS BINARY)
+raw expr       : CAST('Dobrý den' AS Binary)
+checked expr   : CAST<String>("Dobrý den" AS Binary)
+optimized expr : 446F6272C3BD2064656E
+output type    : Binary
+output domain  : Undefined
+output         : 446F6272C3BD2064656E
+
+
+ast            : CAST('ß😀山' AS BINARY)
+raw expr       : CAST('ß😀山' AS Binary)
+checked expr   : CAST<String>("ß😀山" AS Binary)
+optimized expr : C39FF09F9880E5B1B1
+output type    : Binary
+output domain  : Undefined
+output         : C39FF09F9880E5B1B1
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS BINARY)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: `CAST(NULL AS Binary)`
+
+
+
+ast            : TRY_CAST(NULL AS BINARY)
+raw expr       : TRY_CAST(NULL AS Binary)
+checked expr   : TRY_CAST<NULL>(NULL AS Binary NULL)
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(NULL AS BINARY NULL)
+raw expr       : CAST(NULL AS Binary NULL)
+checked expr   : CAST<NULL>(NULL AS Binary NULL)
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(a AS BINARY)
+raw expr       : CAST(a::String AS Binary)
+checked expr   : CAST<String>(a AS Binary)
+evaluation:
++--------+-------------------+----------------------+
+|        | a                 | Output               |
++--------+-------------------+----------------------+
+| Type   | String            | Binary               |
+| Domain | {"Abc"..="ß😀山"} | Undefined            |
+| Row 0  | 'Abc'             | 416263               |
+| Row 1  | 'Dobrý den'       | 446F6272C3BD2064656E |
+| Row 2  | 'ß😀山'           | C39FF09F9880E5B1B1   |
++--------+-------------------+----------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[Abc, Dobrý den, ß😀山])                      |
+| Output | Binary([0x416263, 0x446f6272c3bd2064656e, 0xc39ff09f9880e5b1b1]) |
++--------+------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS BINARY)
+  | ^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: `CAST(a AS Binary)`
+
+
+
+ast            : TRY_CAST(a AS BINARY)
+raw expr       : TRY_CAST(a::String NULL AS Binary)
+checked expr   : TRY_CAST<String NULL>(a AS Binary NULL)
+evaluation:
++--------+--------------------------------+----------------------+
+|        | a                              | Output               |
++--------+--------------------------------+----------------------+
+| Type   | String NULL                    | Binary NULL          |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                          | 416263               |
+| Row 1  | 'Dobrý den'                    | 446F6272C3BD2064656E |
+| Row 2  | NULL                           | NULL                 |
++--------+--------------------------------+----------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                |
++--------+---------------------------------------------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: StringColumn[Abc, Dobrý den, ß😀山], validity: [0b_____011] })                      |
+| Output | NullableColumn { column: Binary([0x416263, 0x446f6272c3bd2064656e, 0xc39ff09f9880e5b1b1]), validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(a AS BINARY NULL)
+raw expr       : CAST(a::String NULL AS Binary NULL)
+checked expr   : CAST<String NULL>(a AS Binary NULL)
+evaluation:
++--------+--------------------------------+----------------------+
+|        | a                              | Output               |
++--------+--------------------------------+----------------------+
+| Type   | String NULL                    | Binary NULL          |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                          | 416263               |
+| Row 1  | 'Dobrý den'                    | 446F6272C3BD2064656E |
+| Row 2  | NULL                           | NULL                 |
++--------+--------------------------------+----------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                |
++--------+---------------------------------------------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: StringColumn[Abc, Dobrý den, ß😀山], validity: [0b_____011] })                      |
+| Output | NullableColumn { column: Binary([0x416263, 0x446f6272c3bd2064656e, 0xc39ff09f9880e5b1b1]), validity: [0b_____011] } |
++--------+---------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(CAST('Abc' AS BINARY) AS STRING)
+raw expr       : CAST(CAST('Abc' AS Binary) AS String)
+checked expr   : CAST<Binary>(CAST<String>("Abc" AS Binary) AS String)
+optimized expr : "Abc"
+output type    : String
+output domain  : {"Abc"..="Abc"}
+output         : 'Abc'
+
+
+ast            : CAST(CAST('Dobrý den' AS BINARY) AS STRING)
+raw expr       : CAST(CAST('Dobrý den' AS Binary) AS String)
+checked expr   : CAST<Binary>(CAST<String>("Dobrý den" AS Binary) AS String)
+optimized expr : "Dobrý den"
+output type    : String
+output domain  : {"Dobrý den"..="Dobrý den"}
+output         : 'Dobrý den'
+
+
+ast            : CAST(CAST('ß😀山' AS BINARY) AS STRING)
+raw expr       : CAST(CAST('ß😀山' AS Binary) AS String)
+checked expr   : CAST<Binary>(CAST<String>("ß😀山" AS Binary) AS String)
+optimized expr : "ß😀山"
+output type    : String
+output domain  : {"ß😀山"..="ß😀山"}
+output         : 'ß😀山'
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | CAST(CAST(NULL AS BINARY) AS STRING)
+  |      ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: `CAST(CAST(NULL AS Binary) AS String)`
+
+
+
+ast            : TRY_CAST(TRY_CAST(NULL AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST(NULL AS Binary) AS String)
+checked expr   : TRY_CAST<Binary NULL>(TRY_CAST<NULL>(NULL AS Binary NULL) AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(CAST(NULL AS BINARY NULL) AS STRING NULL)
+raw expr       : CAST(CAST(NULL AS Binary NULL) AS String NULL)
+checked expr   : CAST<Binary NULL>(CAST<NULL>(NULL AS Binary NULL) AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(CAST(a AS BINARY) AS STRING)
+raw expr       : CAST(CAST(a::String AS Binary) AS String)
+checked expr   : CAST<Binary>(CAST<String>(a AS Binary) AS String)
+evaluation:
++--------+-------------------+-------------+
+|        | a                 | Output      |
++--------+-------------------+-------------+
+| Type   | String            | String      |
+| Domain | {"Abc"..="ß😀山"} | Unknown     |
+| Row 0  | 'Abc'             | 'Abc'       |
+| Row 1  | 'Dobrý den'       | 'Dobrý den' |
+| Row 2  | 'ß😀山'           | 'ß😀山'     |
++--------+-------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------+
+| Column | Data                                        |
++--------+---------------------------------------------+
+| a      | Column(StringColumn[Abc, Dobrý den, ß😀山]) |
+| Output | StringColumn[Abc, Dobrý den, ß😀山]         |
++--------+---------------------------------------------+
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | CAST(CAST(a AS BINARY) AS STRING)
+  |      ^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: `CAST(CAST(a AS Binary) AS String)`
+
+
+
+ast            : TRY_CAST(TRY_CAST(a AS BINARY) AS STRING)
+raw expr       : TRY_CAST(TRY_CAST(a::String NULL AS Binary) AS String)
+checked expr   : TRY_CAST<Binary NULL>(TRY_CAST<String NULL>(a AS Binary NULL) AS String NULL)
+evaluation:
++--------+--------------------------------+-----------------+
+|        | a                              | Output          |
++--------+--------------------------------+-----------------+
+| Type   | String NULL                    | String NULL     |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'                          | 'Abc'           |
+| Row 1  | 'Dobrý den'                    | 'Dobrý den'     |
+| Row 2  | NULL                           | NULL            |
++--------+--------------------------------+-----------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                           |
++--------+------------------------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: StringColumn[Abc, Dobrý den, ß😀山], validity: [0b_____011] }) |
+| Output | NullableColumn { column: StringColumn[Abc, Dobrý den, ß😀山], validity: [0b_____011] }         |
++--------+------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(CAST(a AS BINARY NULL) AS STRING NULL)
+raw expr       : CAST(CAST(a::String NULL AS Binary NULL) AS String NULL)
+checked expr   : CAST<Binary NULL>(CAST<String NULL>(a AS Binary NULL) AS String NULL)
+evaluation:
++--------+--------------------------------+-------------+
+|        | a                              | Output      |
++--------+--------------------------------+-------------+
+| Type   | String NULL                    | String NULL |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Unknown     |
+| Row 0  | 'Abc'                          | 'Abc'       |
+| Row 1  | 'Dobrý den'                    | 'Dobrý den' |
+| Row 2  | NULL                           | NULL        |
++--------+--------------------------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                           |
++--------+------------------------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: StringColumn[Abc, Dobrý den, ß😀山], validity: [0b_____011] }) |
+| Output | NullableColumn { column: StringColumn[Abc, Dobrý den, ß😀山], validity: [0b_____011] }         |
++--------+------------------------------------------------------------------------------------------------+
+
+
