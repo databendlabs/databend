@@ -94,6 +94,11 @@ impl Rule for RulePushDownFilterWindow {
         let (window_plan, allowed, rejected) =
             if matches!(window_expr.plan(), RelOperator::WindowGroup(_)) {
                 let window_group: WindowGroup = window_expr.plan().clone().try_into()?;
+                // A filter moved below the group would also remove the rows that its
+                // scalar items, such as `running_difference(v)`, read.
+                if window_group.depends_on_other_rows() {
+                    return Ok(());
+                }
                 let mut allowed = window_group_partition_by_columns(&window_group)?;
                 // WindowGroup evaluates its scalar inputs internally. A reused
                 // partition expression can reference a column that does not yet

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::ops::Not;
 
@@ -30,20 +29,24 @@ use crate::BlockEntry;
 use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionEval;
+use crate::FunctionID;
 use crate::FunctionRegistry;
 use crate::LikePattern;
 use crate::RemoteExpr;
 use crate::ScalarRef;
 use crate::SelectOp;
 use crate::block::DataBlock;
+use crate::cast_plan::CastCall;
+use crate::cast_plan::CastPlan;
+use crate::cast_plan::CastStep;
+use crate::cast_plan::resolve_cast_plan;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
 use crate::kernels::has_nested_decimal;
 use crate::kernels::select_if_then_else;
-use crate::type_check::check_cast_function;
 use crate::type_check::format_function_argument_mismatch_hint;
-use crate::type_check::resolve_cast_function;
+use crate::types::BinaryColumn;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
@@ -56,12 +59,10 @@ use crate::types::ReturnType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
-use crate::types::VectorDataType;
 use crate::types::VectorScalar;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::utils::filter_helper::FilterHelpers;
 use crate::utils::json_path_transform::PathStep;
 use crate::utils::json_path_transform::replace_at_locations;
@@ -110,15 +111,82 @@ impl<'a> EvaluateOptions<'a> {
     }
 }
 
+/// `bitmap` with the rows that `validity` marks as NULL unset.
+fn and_validity(bitmap: Bitmap, validity: Option<&Bitmap>) -> Bitmap {
+    match validity {
+        Some(validity) => &bitmap & validity,
+        None => bitmap,
+    }
+}
+
 /// Merge a source error set into a target error set, keeping the union of
 /// error rows and the first error message. Error sets travel upward through
 /// nested calls while suppression is active, so both sibling arguments and
 /// parent calls must accumulate instead of overwrite.
 ///
 /// A length-1 source bitmap comes from a scalar subexpression (evaluated in
-/// a one-row block, e.g. a constant cast in `run_simple_cast`); a scalar
+/// a one-row block); a scalar
 /// error applies to every row, so it is broadcast to `num_rows` instead of
 /// marking only row 0.
+/// Rows that failed in either bitmap; an unset bit is a failed row.
+fn and_failures(left: Option<Bitmap>, right: Option<Bitmap>) -> Option<Bitmap> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(&left & &right),
+        (left, right) => left.or(right),
+    }
+}
+
+/// `validity` without the rows that `failed` unsets. A failed scalar fails every row.
+fn exclude_failures(validity: Option<Bitmap>, failed: Option<&Bitmap>) -> Option<Bitmap> {
+    let Some(failed) = failed else {
+        return validity;
+    };
+    match validity {
+        Some(validity) if failed.len() == 1 && validity.len() != 1 => {
+            if failed.get_bit(0) {
+                Some(validity)
+            } else {
+                Some(Bitmap::new_constant(false, validity.len()))
+            }
+        }
+        Some(validity) => Some(&validity & failed),
+        None => Some(failed.clone()),
+    }
+}
+
+/// A scalar function call whose arguments are evaluated.
+struct EvaluatedCall<'a> {
+    span: Span,
+    id: &'a FunctionID,
+    function: &'a Function,
+    generics: &'a [DataType],
+    args: Vec<Value<AnyType>>,
+    /// The rows that the call runs for, of which the rows in `validity` are active.
+    num_rows: usize,
+    validity: Option<Bitmap>,
+    /// Whether the call runs once per entry of a dictionary argument.
+    dictionary_eval: bool,
+}
+
+/// The validity of the single row of `value` that a scalar became, when `is_scalar`: every active
+/// row of `validity` uses the scalar, so it is active when any of them is.
+fn scalar_row_validity(validity: Option<Bitmap>, is_scalar: bool) -> Option<Bitmap> {
+    match validity {
+        Some(validity) if is_scalar => Some(Bitmap::new_constant(validity.true_count() > 0, 1)),
+        validity => validity,
+    }
+}
+
+/// The rows, given by `offsets`, that have a failed nested value.
+fn row_failures(offsets: &[u64], failed: Option<Bitmap>) -> Option<Bitmap> {
+    let failed = failed?;
+    let rows = offsets
+        .windows(2)
+        .map(|row| (row[0]..row[1]).all(|idx| failed.get_bit(idx as usize)))
+        .collect::<Bitmap>();
+    (rows.null_count() > 0).then_some(rows)
+}
+
 fn merge_eval_errors(
     target: &mut Option<(MutableBitmap, String)>,
     source: Option<(MutableBitmap, String)>,
@@ -293,19 +361,16 @@ impl<'a> Evaluator<'a> {
                 let keep_encoded =
                     keep_encoded && src_type.remove_nullable() == dest_type.remove_nullable();
                 let value = self.partial_run(inner, validity.clone(), options, keep_encoded)?;
-                if *is_try {
-                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
-                } else {
-                    self.run_cast(
-                        *span,
-                        src_type,
-                        dest_type,
-                        value,
-                        validity,
-                        &|| expr.sql_display(),
-                        options,
-                    )?
-                }
+                self.run_cast(
+                    *span,
+                    *is_try,
+                    src_type,
+                    dest_type,
+                    value,
+                    validity,
+                    &|| expr.sql_display(),
+                    options,
+                )?
             }
             Expr::FunctionCall(FunctionCall {
                 function,
@@ -389,33 +454,94 @@ impl<'a> Evaluator<'a> {
     }
 
     /// `<column> <op> <constant>` over an encoded column, or `<column> <op> <column>` over two
-    /// frame of reference encoded columns, evaluated without decoding (on the deltas / once per
-    /// dictionary value). `None` if the arguments do not have this form.
+    /// frame of reference encoded columns or two string columns of which at least one is
+    /// dictionary encoded, evaluated without decoding (on the deltas / once per dictionary
+    /// value / by the dictionary value of each row). `None` if the arguments do not have this
+    /// form or a column is nullable.
     pub fn try_compare_encoded(&self, op: &SelectOp, args: &[Expr]) -> Option<Bitmap> {
-        let encoded = |id: usize| match self.data_block.get_by_offset(id) {
-            BlockEntry::Column(Column::Encoded(encoded)) => Some(encoded),
+        self.compare_encoded(op, args, None, false)
+    }
+
+    /// [`Self::try_compare_encoded`] for a filter, which also takes nullable columns: their
+    /// validity applies after the comparison and NULL selects as false. With `rows`, the result
+    /// is only correct at `rows`, see [`DictColumn::compare_scalar`].
+    pub fn try_select_compare_encoded(
+        &self,
+        op: &SelectOp,
+        args: &[Expr],
+        rows: Option<&[u32]>,
+    ) -> Option<Bitmap> {
+        self.compare_encoded(op, args, rows, true)
+    }
+
+    fn compare_encoded(
+        &self,
+        op: &SelectOp,
+        args: &[Expr],
+        rows: Option<&[u32]>,
+        nullable: bool,
+    ) -> Option<Bitmap> {
+        // The column of `id` and, if it is nullable, its validity.
+        let column = |id: usize| match self.data_block.get_by_offset(id) {
+            BlockEntry::Column(Column::Nullable(column)) if nullable => {
+                Some((column.column(), Some(column.validity())))
+            }
+            BlockEntry::Column(Column::Nullable(_)) => None,
+            BlockEntry::Column(column) => Some((column, None)),
+            BlockEntry::Const(..) => None,
+        };
+        // A column, or for a filter also a column cast to the nullable of its type, which only
+        // wraps it.
+        let column_id = |expr: &Expr| match expr {
+            Expr::ColumnRef(ColumnRef { id, .. }) => Some(*id),
+            Expr::Cast(Cast {
+                is_try: false,
+                expr,
+                dest_type,
+                ..
+            }) if nullable => match expr.as_ref() {
+                Expr::ColumnRef(ColumnRef { id, data_type, .. })
+                    if dest_type.is_nullable() && dest_type.remove_nullable() == *data_type =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            },
             _ => None,
         };
-        let (id, scalar, op) = match args {
-            [
-                Expr::ColumnRef(ColumnRef { id, .. }),
-                Expr::Constant(Constant { scalar, .. }),
-            ] => (*id, scalar, op.clone()),
-            [
-                Expr::Constant(Constant { scalar, .. }),
-                Expr::ColumnRef(ColumnRef { id, .. }),
-            ] => (*id, scalar, op.reverse()),
-            // `<column> <op> <column>`, both frame of reference encoded.
-            [
-                Expr::ColumnRef(ColumnRef { id: lhs, .. }),
-                Expr::ColumnRef(ColumnRef { id: rhs, .. }),
-            ] => {
-                let rhs = encoded(*rhs)?.as_for()?;
-                return encoded(*lhs)?.as_for()?.compare_for(op, rhs);
+        let [lhs, rhs] = args else {
+            return None;
+        };
+        let (id, scalar, op) = match (column_id(lhs), column_id(rhs), lhs, rhs) {
+            (Some(lhs), Some(rhs), _, _) => {
+                let (lhs, lhs_validity) = column(lhs)?;
+                let (rhs, rhs_validity) = column(rhs)?;
+                let bitmap = match (lhs, rhs) {
+                    (Column::Encoded(lhs), Column::Encoded(rhs))
+                        if lhs.as_for().is_some() && rhs.as_for().is_some() =>
+                    {
+                        lhs.as_for()?.compare_for(op, rhs.as_for()?)?
+                    }
+                    (lhs, rhs) => DictColumn::compare_string_columns(op, lhs, rhs, rows)?,
+                };
+                return Some(and_validity(
+                    and_validity(bitmap, lhs_validity),
+                    rhs_validity,
+                ));
+            }
+            (Some(id), None, _, Expr::Constant(Constant { scalar, .. })) => {
+                (id, scalar, op.clone())
+            }
+            (None, Some(id), Expr::Constant(Constant { scalar, .. }), _) => {
+                (id, scalar, op.reverse())
             }
             _ => return None,
         };
-        encoded(id)?.compare_scalar(&op, scalar)
+        let (Column::Encoded(encoded), validity) = column(id)? else {
+            return None;
+        };
+        let bitmap = encoded.compare_scalar(&op, scalar, rows)?;
+        Some(and_validity(bitmap, validity))
     }
 
     /// Evaluates a filter's LIKE over a dictionary encoded string column without decoding.
@@ -506,25 +632,8 @@ impl<'a> Evaluator<'a> {
             return Ok(Value::Column(Column::Boolean(bitmap)));
         }
 
-        let accepts_encoded_args = function
-            .eval
-            .as_scalar()
-            .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
-        let dictionary_eval = !accepts_encoded_args
-            && validity.is_none()
-            && options.selection.is_none()
-            && !options.suppress_error
-            && !function.signature.return_type.is_nullable_or_null()
-            && function
-                .signature
-                .args_type
-                .iter()
-                .all(|ty| !ty.is_nullable_or_null())
-            && self
-                .fn_registry
-                .properties
-                .get(&function.signature.name)
-                .is_some_and(|property| property.dictionary_eval && !property.non_deterministic);
+        let (accepts_encoded_args, dictionary_eval) =
+            self.encoded_args_policy(function, validity.as_ref(), options);
         let mut args_value = Vec::with_capacity(args.len());
         for expr in args {
             match self.partial_run(
@@ -544,7 +653,100 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
-        let mut args = args_value;
+        let errors = if child_suppress_error {
+            child_option.errors.take()
+        } else {
+            None
+        };
+        // Non-boundary calls are transparent to suppression: errors from
+        // nested evaluations keep bubbling up so a boundary function
+        // (is_not_error) observes errors from its whole subtree, not only
+        // from its direct children.
+        let nested_errors = if child_suppress_error {
+            None
+        } else {
+            child_option.errors.take()
+        };
+        self.call_evaluated(
+            EvaluatedCall {
+                span: *span,
+                id,
+                function,
+                generics,
+                args: args_value,
+                num_rows: self.data_block.num_rows(),
+                validity,
+                dictionary_eval,
+            },
+            errors,
+            nested_errors,
+            expr_display,
+            options,
+        )
+    }
+
+    /// Whether a call of `function` for the rows in `validity` takes encoded arguments, and
+    /// whether it runs once per entry of a dictionary argument.
+    fn encoded_args_policy(
+        &self,
+        function: &Function,
+        validity: Option<&Bitmap>,
+        options: &EvaluateOptions,
+    ) -> (bool, bool) {
+        let accepts_encoded_args = function
+            .eval
+            .as_scalar()
+            .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
+        let dictionary_eval = !accepts_encoded_args
+            && validity.is_none()
+            && options.selection.is_none()
+            && !options.suppress_error
+            && !function.signature.return_type.is_nullable_or_null()
+            && function
+                .signature
+                .args_type
+                .iter()
+                .all(|ty| !ty.is_nullable_or_null())
+            && self
+                .fn_registry
+                .properties
+                .get(&function.signature.name)
+                .is_some_and(|property| property.dictionary_eval && !property.non_deterministic);
+        (accepts_encoded_args, dictionary_eval)
+    }
+
+    /// Calls a scalar function on its evaluated arguments. `errors` are the errors that the
+    /// call starts with, and `nested_errors` those of evaluating the arguments, which bubble up
+    /// through the call.
+    fn call_evaluated(
+        &self,
+        call: EvaluatedCall,
+        errors: Option<(MutableBitmap, String)>,
+        nested_errors: Option<(MutableBitmap, String)>,
+        expr_display: &impl Fn() -> String,
+        options: &mut EvaluateOptions,
+    ) -> Result<Value<AnyType>> {
+        let EvaluatedCall {
+            span,
+            id,
+            function,
+            generics,
+            mut args,
+            num_rows,
+            validity,
+            dictionary_eval,
+        } = call;
+        let accepts_encoded_args = function
+            .eval
+            .as_scalar()
+            .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
+        if !accepts_encoded_args && !dictionary_eval {
+            for arg in &mut args {
+                if arg.is_encoded() {
+                    *arg = std::mem::replace(arg, Value::Scalar(Scalar::Null)).decode_owned();
+                }
+            }
+        }
 
         assert!(
             args.iter()
@@ -555,11 +757,6 @@ impl<'a> Evaluator<'a> {
                 .all_equal()
         );
 
-        let errors = if child_suppress_error {
-            child_option.errors.take()
-        } else {
-            None
-        };
         // A call whose arguments are all scalars is evaluated once, and an
         // error it records applies to every row the call runs for. Strip the
         // validity mask during eval so the error is always recorded — a
@@ -588,7 +785,7 @@ impl<'a> Evaluator<'a> {
             generics,
             num_rows: dictionary
                 .as_ref()
-                .map_or(self.data_block.num_rows(), |(index, _)| args[*index].len()),
+                .map_or(num_rows, |(index, _)| args[*index].len()),
             validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
@@ -603,9 +800,9 @@ impl<'a> Evaluator<'a> {
             if let Some((valids, message)) = ctx.errors.take()
                 && keys.iter().any(|key| !valids.get(key as usize))
             {
-                return Err(ErrorCode::BadArguments(message).set_span(*span));
+                return Err(ErrorCode::BadArguments(message).set_span(span));
             }
-            ctx.num_rows = self.data_block.num_rows();
+            ctx.num_rows = num_rows;
             if let Value::Column(values) = result {
                 let dict = DictColumn::new(keys, values);
                 // Consumers read dictionary columns through encoded views, which only some
@@ -622,20 +819,14 @@ impl<'a> Evaluator<'a> {
             expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
         }
 
-        // Non-boundary calls are transparent to suppression: errors from
-        // nested evaluations keep bubbling up so a boundary function
-        // (is_not_error) observes errors from its whole subtree, not only
-        // from its direct children.
-        if !child_suppress_error {
-            merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
-        }
+        merge_eval_errors(&mut ctx.errors, nested_errors, ctx.num_rows);
 
         if options.suppress_error {
             // inject errors into options, parent will handle it
             merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
         } else {
             EvalContext::render_error(
-                *span,
+                span,
                 &ctx.errors,
                 id.params(),
                 args.as_slice(),
@@ -678,9 +869,12 @@ impl<'a> Evaluator<'a> {
         err.add_message_back(format!("\n\nhint: {hint}"))
     }
 
+    /// Runs `CAST` or, with `is_try`, `TRY_CAST` of `value` from `src_type` to `dest_type`.
+    #[allow(clippy::too_many_arguments)]
     pub fn run_cast(
         &self,
         span: Span,
+        is_try: bool,
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
@@ -688,985 +882,604 @@ impl<'a> Evaluator<'a> {
         expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
-        if src_type == dest_type {
-            return Ok(value);
-        }
-        if src_type.matches_physical_type(dest_type) {
-            return Ok(value);
-        }
+        let plan = self.cast_plan(span, src_type, dest_type)?;
+        let (value, failed) =
+            self.run_cast_plan(span, &plan, value, validity, is_try, expr_display, options)?;
+        // A failed row of `TRY_CAST` is NULL by now, as its destination is nullable.
+        debug_assert!(failed.is_none());
+        Ok(value)
+    }
 
-        if let Some(call) =
-            resolve_cast_function(span, false, src_type, dest_type, self.fn_registry)
-        {
-            let new_value =
-                self.run_simple_cast(src_type, value, call, validity, expr_display, options)?;
-            return Ok(new_value);
-        }
+    fn cast_plan(&self, span: Span, src_type: &DataType, dest_type: &DataType) -> Result<CastPlan> {
+        resolve_cast_plan(src_type, dest_type, self.fn_registry).ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "unable to cast type `{src_type}` to type `{dest_type}`"
+            ))
+            .set_span(span)
+        })
+    }
 
-        let result = match (src_type, dest_type) {
-            (DataType::Null, DataType::Nullable(_)) => match value {
-                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Column(Column::Null { len }) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
-                    }
-                    Ok(Value::Column(builder.build()))
-                }
-                _ => unreachable!(),
-            },
-            (
-                DataType::Nullable(deref!(DataType::Variant)) | DataType::Variant,
-                DataType::Nullable(deref!(DataType::Boolean))
-                | DataType::Nullable(deref!(DataType::Number(_)))
-                | DataType::Nullable(deref!(DataType::Decimal(_)))
-                | DataType::Nullable(deref!(DataType::String))
-                | DataType::Nullable(deref!(DataType::Binary))
-                | DataType::Nullable(deref!(DataType::Date))
-                | DataType::Nullable(deref!(DataType::Timestamp))
-                | DataType::Nullable(deref!(DataType::TimestampTz))
-                | DataType::Nullable(deref!(DataType::Interval)),
-            ) => {
-                // allow cast variant to nullable types.
-                let inner_dest_ty = dest_type.remove_nullable_ref();
-                let cast_fn = if inner_dest_ty.is_decimal() {
-                    "to_decimal".to_owned()
-                } else {
-                    format!("to_{}", inner_dest_ty.to_string().to_lowercase())
-                };
-                if let Some(call) =
-                    check_cast_function(span, src_type, dest_type, &cast_fn, self.fn_registry)
-                {
-                    let new_value = self.run_simple_cast(
-                        src_type,
-                        value,
-                        call,
-                        validity,
-                        expr_display,
-                        options,
-                    )?;
-                    Ok(new_value)
-                } else {
-                    Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to type `{dest_type}`"
-                    ))
-                    .set_span(span))
-                }
-            }
-            (
-                DataType::Nullable(deref!(DataType::Variant)) | DataType::Variant,
-                DataType::Boolean
-                | DataType::Number(_)
-                | DataType::Decimal(_)
-                | DataType::String
-                | DataType::Binary
-                | DataType::Date
-                | DataType::Timestamp
-                | DataType::TimestampTz
-                | DataType::Interval,
-            ) => {
-                // allow cast variant to not null types.
-                let cast_fn = if dest_type.is_decimal() {
-                    "to_decimal".to_owned()
-                } else {
-                    format!("to_{}", dest_type.to_string().to_lowercase())
-                };
-                if let Some(call) = check_cast_function(
+    /// Runs a cast plan. Rows outside `validity` are not converted.
+    ///
+    /// A row that fails is an error for `CAST`. For `TRY_CAST` (`is_try`), it is unset in the
+    /// returned bitmap, and becomes NULL at the nearest step with a nullable destination.
+    #[allow(clippy::too_many_arguments)]
+    fn run_cast_plan(
+        &self,
+        span: Span,
+        plan: &CastPlan,
+        value: Value<AnyType>,
+        validity: Option<Bitmap>,
+        is_try: bool,
+        expr_display: &impl Fn() -> String,
+        options: &mut EvaluateOptions,
+    ) -> Result<(Value<AnyType>, Option<Bitmap>)> {
+        let dest_type = &plan.dest_type;
+        macro_rules! run {
+            ($plan:expr, $value:expr, $validity:expr) => {
+                self.run_cast_plan(
                     span,
-                    src_type,
-                    &dest_type.wrap_nullable(),
-                    &cast_fn,
-                    self.fn_registry,
-                ) {
-                    let new_value = self.run_simple_cast(
-                        src_type,
-                        value,
-                        call,
-                        validity,
-                        expr_display,
-                        options,
-                    )?;
-                    let (new_value, has_null) = new_value.remove_nullable();
-                    if has_null {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "unable to cast type `{src_type}` to type `{dest_type}`, result has null values"
-                        ))
-                        .set_span(span));
-                    }
-                    Ok(new_value)
-                } else {
-                    Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to type `{dest_type}`"
-                    ))
-                    .set_span(span))
-                }
-            }
-            (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Scalar(_) => self.run_cast(
-                    span,
-                    inner_src_ty,
-                    inner_dest_ty,
-                    value,
-                    validity,
+                    $plan,
+                    $value,
+                    $validity,
+                    is_try,
                     expr_display,
                     options,
-                ),
+                )
+            };
+        }
+
+        let (value, failed) = match &plan.step {
+            CastStep::Identity => (value, None),
+            CastStep::Null if is_try && !dest_type.is_nullable_or_null() => {
+                let len = match &value {
+                    Value::Scalar(_) => 1,
+                    Value::Column(column) => column.len(),
+                };
+                let value = Self::cast_null(
+                    span,
+                    dest_type,
+                    value,
+                    Some(Bitmap::new_constant(false, len)),
+                )?;
+                (value, Some(Bitmap::new_constant(false, len)))
+            }
+            CastStep::Null => (Self::cast_null(span, dest_type, value, validity)?, None),
+            CastStep::Function { call, .. } => self.run_cast_function(
+                span,
+                plan,
+                call,
+                plan.rejects_null(),
+                value,
+                validity,
+                is_try,
+                expr_display,
+                options,
+            )?,
+            CastStep::Chain(steps) => {
+                let mut value = value;
+                let mut validity = validity;
+                let mut failed = None;
+                for step in steps {
+                    let (new_value, step_failed) = run!(step, value, validity.clone())?;
+                    value = new_value;
+                    // A row that failed has no value for the next steps to convert.
+                    validity = exclude_failures(validity, step_failed.as_ref());
+                    failed = and_failures(failed, step_failed);
+                }
+                (value, failed)
+            }
+            CastStep::Nullable(inner) => match value {
+                Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), None),
+                Value::Scalar(_) => run!(inner, value, validity)?,
                 Value::Column(Column::Nullable(col)) => {
-                    let (inner_column, column_validity) = col.destructure();
+                    let (column, column_validity) = col.destructure();
                     let validity = validity
                         .map(|validity| &validity & &column_validity)
                         .unwrap_or(column_validity);
-                    let column = self
-                        .run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(inner_column),
-                            Some(validity.clone()),
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Column(column.wrap_nullable(Some(validity))))
+                    let (column, failed) =
+                        run!(inner, Value::Column(column), Some(validity.clone()))?;
+                    let column = column.into_column().unwrap();
+                    (Value::Column(column.wrap_nullable(Some(validity))), failed)
                 }
                 other => unreachable!("source: {}", other),
             },
-            (DataType::Nullable(inner_src_ty), _) => match value {
+            CastStep::FromNullable(inner) => match value {
                 Value::Scalar(Scalar::Null) => {
                     let has_valid = validity
                         .map(|validity| validity.null_count() < validity.len())
                         .unwrap_or(true);
-                    if has_valid {
-                        Err(ErrorCode::BadArguments(format!(
+                    if has_valid && !is_try {
+                        return Err(ErrorCode::BadArguments(format!(
                             "unable to cast type `NULL` to type `{dest_type}`"
                         ))
-                        .set_span(span))
-                    } else {
-                        Ok(Value::Scalar(Scalar::default_value(dest_type)))
+                        .set_span(span));
                     }
+                    let failed = (has_valid && is_try).then(|| Bitmap::new_constant(false, 1));
+                    (Value::Scalar(Scalar::default_value(dest_type)), failed)
                 }
-                Value::Scalar(_) => self.run_cast(
-                    span,
-                    inner_src_ty,
-                    dest_type,
-                    value,
-                    validity,
-                    expr_display,
-                    options,
-                ),
+                Value::Scalar(_) => run!(inner, value, validity)?,
                 Value::Column(Column::Nullable(col)) => {
-                    let (inner_column, column_validity) = col.destructure();
+                    let (column, column_validity) = col.destructure();
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
                             (validity & &column_validity).null_count() > validity.null_count()
                         })
                         .unwrap_or_else(|| column_validity.null_count() > 0);
-                    if has_valid_nulls {
-                        return Err(ErrorCode::Internal(format!(
-                            "unable to cast `NULL` to type `{dest_type}`"
+                    if has_valid_nulls && !is_try {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "unable to cast type `NULL` to type `{dest_type}`"
                         ))
                         .set_span(span));
                     }
-                    let column = self
-                        .run_cast(
-                            span,
-                            inner_src_ty,
-                            dest_type,
-                            Value::Column(inner_column),
-                            validity,
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Column(column))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            (_, DataType::Nullable(inner_dest_ty)) => match value {
-                Value::Scalar(scalar) => self.run_cast(
-                    span,
-                    src_type,
-                    inner_dest_ty,
-                    Value::Scalar(scalar),
-                    validity,
-                    expr_display,
-                    options,
-                ),
-                Value::Column(col) => {
-                    let column = self
-                        .run_cast(
-                            span,
-                            src_type,
-                            inner_dest_ty,
-                            Value::Column(col),
-                            validity,
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-
-                    Ok(Value::Column(column.wrap_nullable(None)))
-                }
-            },
-            (DataType::AggregateState(state), _) => self.run_cast(
-                span,
-                state.physical_type(),
-                dest_type,
-                value,
-                validity,
-                expr_display,
-                options,
-            ),
-
-            (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::EmptyArray) => {
-                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
-                    Ok(Value::Scalar(Scalar::Array(new_column)))
-                }
-                Value::Column(Column::EmptyArray { len }) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
-                    }
-                    Ok(Value::Column(builder.build()))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::Array(array)) => {
-                    let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
+                    // A NULL has no value to convert.
+                    let validity = Some(match validity {
+                        Some(validity) => &validity & &column_validity,
+                        None => column_validity.clone(),
                     });
-                    let new_array = self
-                        .run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(array),
-                            validity,
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Scalar(Scalar::Array(new_array)))
+                    let (column, failed) = run!(inner, Value::Column(column), validity)?;
+                    let failed = if has_valid_nulls {
+                        and_failures(failed, Some(column_validity))
+                    } else {
+                        failed
+                    };
+                    (column, failed)
                 }
-                Value::Column(Column::Array(col)) => {
-                    let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                        for (index, offsets) in col.offsets().windows(2).enumerate() {
-                            inner_validity.extend_constant(
-                                (offsets[1] - offsets[0]) as usize,
-                                validity.get_bit(index),
-                            );
+                other => unreachable!("source: {}", other),
+            },
+            CastStep::ToNullable(inner) => {
+                let (value, failed) = run!(inner, value, validity)?;
+                let value = match value {
+                    Value::Scalar(scalar) => Value::Scalar(scalar),
+                    Value::Column(column) => Value::Column(column.wrap_nullable(None)),
+                };
+                (value, failed)
+            }
+            CastStep::Empty => {
+                let inner_type = match dest_type {
+                    DataType::Array(inner) | DataType::Map(inner) => inner,
+                    _ => unreachable!("destination: {}", dest_type),
+                };
+                let value = match value {
+                    Value::Scalar(_) => {
+                        let column = ColumnBuilder::with_capacity(inner_type, 0).build();
+                        match dest_type {
+                            DataType::Array(_) => Value::Scalar(Scalar::Array(column)),
+                            _ => Value::Scalar(Scalar::Map(column)),
                         }
-                        inner_validity.into()
-                    });
-                    let new_col = self
-                        .run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(col.underlying_column()),
-                            validity,
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Column(Column::Array(Box::new(ArrayColumn::new(
-                        new_col,
-                        col.underlying_offsets(),
-                    )))))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            (DataType::Variant, DataType::Array(inner_dest_ty)) => {
-                let empty_vec = vec![];
-                let mut temp_array: jsonb::Value;
+                    }
+                    Value::Column(column) => Value::Column(
+                        ColumnBuilder::repeat_default(dest_type, column.len()).build(),
+                    ),
+                };
+                (value, None)
+            }
+            CastStep::Elements(inner) => {
+                let is_map = matches!(dest_type, DataType::Map(_));
                 match value {
-                    Value::Scalar(Scalar::Variant(x)) => {
-                        let array = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
-                            temp_array = jsonb::from_slice(&x).map_err(|e| {
-                                ErrorCode::BadArguments(format!(
-                                    "Expect to be valid json, got err: {e:?}"
-                                ))
-                            })?;
-                            temp_array.as_array().unwrap_or(&empty_vec)
+                    Value::Scalar(Scalar::Array(values) | Scalar::Map(values)) => {
+                        let len = values.len();
+                        let validity = validity.map(|validity| {
+                            Bitmap::new_constant(validity.null_count() != validity.len(), len)
+                        });
+                        let (values, failed) = run!(inner, Value::Column(values), validity)?;
+                        let values = values.into_column().unwrap();
+                        let value = if is_map {
+                            Scalar::Map(values)
                         } else {
-                            &empty_vec
+                            Scalar::Array(values)
                         };
-                        let validity = None;
-                        let column = Column::Variant(VariantType::create_column_from_variants(
-                            array.as_slice(),
-                        ));
-                        let new_array = self
-                            .run_cast(
-                                span,
-                                &DataType::Variant,
-                                inner_dest_ty,
-                                Value::Column(column),
-                                validity,
-                                expr_display,
-                                options,
-                            )?
-                            .into_column()
-                            .unwrap();
-                        Ok(Value::Scalar(Scalar::Array(new_array)))
+                        (Value::Scalar(value), row_failures(&[0, len as u64], failed))
                     }
-                    Value::Column(Column::Variant(col)) => {
-                        let mut offsets = Vec::with_capacity(col.len() + 1);
-                        offsets.push(0);
-                        let mut builder = VariantType::create_builder(col.len(), &[]);
-                        for (idx, x) in col.iter().enumerate() {
-                            let array = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true)
-                            {
-                                temp_array = jsonb::from_slice(x).map_err(|e| {
-                                    ErrorCode::BadArguments(format!(
-                                        "Expect to be valid json, got err: {e:?}"
-                                    ))
-                                })?;
-                                temp_array.as_array().unwrap_or(&empty_vec)
-                            } else {
-                                &empty_vec
-                            };
-                            for v in array.iter() {
-                                v.write_to_vec(&mut builder.data);
-                                builder.commit_row();
+                    Value::Column(Column::Array(col) | Column::Map(col)) => {
+                        let validity = validity.map(|validity| {
+                            let offsets = col.offsets();
+                            let len = offsets[offsets.len() - 1] - offsets[0];
+                            let mut inner_validity = MutableBitmap::with_capacity(len as usize);
+                            for (index, row) in offsets.windows(2).enumerate() {
+                                inner_validity.extend_constant(
+                                    (row[1] - row[0]) as usize,
+                                    validity.get_bit(index),
+                                );
                             }
-                            offsets.push(builder.len() as u64);
-                        }
-                        let value_col = Column::Variant(builder.build());
-
-                        let new_col = self
-                            .run_cast(
-                                span,
-                                &DataType::Variant,
-                                inner_dest_ty,
-                                Value::Column(value_col),
-                                None,
-                                expr_display,
-                                options,
-                            )?
-                            .into_column()
-                            .unwrap();
-
-                        Ok(Value::Column(Column::Array(Box::new(ArrayColumn::new(
-                            new_col,
-                            offsets.into(),
-                        )))))
-                    }
-                    other => unreachable!("source: {}", other),
-                }
-            }
-            (DataType::Variant, DataType::Map(deref!(DataType::Tuple(fields_dest_ty))))
-                if fields_dest_ty.len() == 2 && fields_dest_ty[0] == DataType::String =>
-            {
-                let empty_obj = BTreeMap::new();
-                let mut temp_obj: jsonb::Value;
-                match value {
-                    Value::Scalar(Scalar::Variant(x)) => {
-                        let obj = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
-                            temp_obj = jsonb::from_slice(&x).map_err(|e| {
-                                ErrorCode::BadArguments(format!(
-                                    "Expect to be valid json, got err: {e:?}"
-                                ))
-                            })?;
-                            temp_obj.as_object().unwrap_or(&empty_obj)
+                            inner_validity.into()
+                        });
+                        let (values, failed) =
+                            run!(inner, Value::Column(col.underlying_column()), validity)?;
+                        // The underlying values start at 0, unlike the offsets of a slice.
+                        let offsets = col.underlying_offsets();
+                        let failed = row_failures(&offsets, failed);
+                        let col =
+                            Box::new(ArrayColumn::new(values.into_column().unwrap(), offsets));
+                        let col = if is_map {
+                            Column::Map(col)
                         } else {
-                            &empty_obj
+                            Column::Array(col)
                         };
-                        let validity = None;
-
-                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len());
-                        for k in obj.keys() {
-                            key_builder.put_and_commit(k.as_str());
-                        }
-                        let key_column = Column::String(key_builder.build());
-
-                        let values: Vec<_> = obj.values().cloned().collect();
-                        let value_column = Column::Variant(
-                            VariantType::create_column_from_variants(values.as_slice()),
-                        );
-
-                        let new_value_column = self
-                            .run_cast(
-                                span,
-                                &DataType::Variant,
-                                &fields_dest_ty[1],
-                                Value::Column(value_column),
-                                validity,
-                                expr_display,
-                                options,
-                            )?
-                            .into_column()
-                            .unwrap();
-                        Ok(Value::Scalar(Scalar::Map(Column::Tuple(vec![
-                            key_column,
-                            new_value_column,
-                        ]))))
-                    }
-                    Value::Column(Column::Variant(col)) => {
-                        let mut offsets = Vec::with_capacity(col.len() + 1);
-                        offsets.push(0);
-                        let mut key_builder = StringType::create_builder(col.len(), &[]);
-                        let mut value_builder = VariantType::create_builder(col.len(), &[]);
-
-                        for (idx, x) in col.iter().enumerate() {
-                            let obj = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true) {
-                                temp_obj = jsonb::from_slice(x).map_err(|e| {
-                                    ErrorCode::BadArguments(format!(
-                                        "Expect to be valid json, got err: {e:?}"
-                                    ))
-                                })?;
-                                temp_obj.as_object().unwrap_or(&empty_obj)
-                            } else {
-                                &empty_obj
-                            };
-
-                            for (k, v) in obj.iter() {
-                                key_builder.put_and_commit(k.as_str());
-                                v.write_to_vec(&mut value_builder.data);
-                                value_builder.commit_row();
-                            }
-                            offsets.push(key_builder.len() as u64);
-                        }
-
-                        let key_col = Column::String(key_builder.build());
-                        let value_col = Column::Variant(value_builder.build());
-
-                        let new_value_col = self
-                            .run_cast(
-                                span,
-                                &DataType::Variant,
-                                &fields_dest_ty[1],
-                                Value::Column(value_col),
-                                None,
-                                expr_display,
-                                options,
-                            )?
-                            .into_column()
-                            .unwrap();
-
-                        let kv_col = Column::Tuple(vec![key_col, new_value_col]);
-                        Ok(Value::Column(Column::Map(Box::new(ArrayColumn::new(
-                            kv_col,
-                            offsets.into(),
-                        )))))
+                        (Value::Column(col), failed)
                     }
                     other => unreachable!("source: {}", other),
                 }
             }
-            (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::EmptyMap) => {
-                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
-                    Ok(Value::Scalar(Scalar::Map(new_column)))
-                }
-                Value::Column(Column::EmptyMap { len }) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
+            CastStep::Tuple(fields_plan) => match value {
+                Value::Scalar(Scalar::Tuple(fields)) => {
+                    let mut new_fields = Vec::with_capacity(fields.len());
+                    let mut failed = None;
+                    for (field, field_plan) in fields.into_iter().zip(fields_plan) {
+                        let (field, field_failed) =
+                            run!(field_plan, Value::Scalar(field), validity.clone())?;
+                        new_fields.push(field.into_scalar().unwrap());
+                        failed = and_failures(failed, field_failed);
                     }
-                    Ok(Value::Column(builder.build()))
+                    (Value::Scalar(Scalar::Tuple(new_fields)), failed)
+                }
+                Value::Column(Column::Tuple(fields)) => {
+                    let mut new_fields = Vec::with_capacity(fields.len());
+                    let mut failed = None;
+                    for (field, field_plan) in fields.into_iter().zip(fields_plan) {
+                        let (field, field_failed) =
+                            run!(field_plan, Value::Column(field), validity.clone())?;
+                        new_fields.push(field.into_column().unwrap());
+                        failed = and_failures(failed, field_failed);
+                    }
+                    (Value::Column(Column::Tuple(new_fields)), failed)
                 }
                 other => unreachable!("source: {}", other),
             },
-            (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::Map(array)) => {
-                    let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
-                    });
-                    let new_array = self
-                        .run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(array),
-                            validity,
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Scalar(Scalar::Map(new_array)))
-                }
-                Value::Column(Column::Map(col)) => {
-                    let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                        for (index, offsets) in col.offsets().windows(2).enumerate() {
-                            inner_validity.extend_constant(
-                                (offsets[1] - offsets[0]) as usize,
-                                validity.get_bit(index),
-                            );
-                        }
-                        inner_validity.into()
-                    });
-                    let new_col = self
-                        .run_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(col.underlying_column()),
-                            validity,
-                            expr_display,
-                            options,
-                        )?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Column(Column::Map(Box::new(ArrayColumn::new(
-                        new_col,
-                        col.underlying_offsets(),
-                    )))))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                match value {
-                    Value::Scalar(Scalar::Tuple(fields)) => {
-                        let new_fields = fields
-                            .into_iter()
-                            .zip(fields_src_ty.iter())
-                            .zip(fields_dest_ty.iter())
-                            .map(|((field, src_ty), dest_ty)| {
-                                self.run_cast(
-                                    span,
-                                    src_ty,
-                                    dest_ty,
-                                    Value::Scalar(field),
-                                    validity.clone(),
-                                    expr_display,
-                                    options,
-                                )
-                                .map(|val| val.into_scalar().unwrap())
-                            })
-                            .collect::<Result<Vec<_>>>()?;
-                        Ok(Value::Scalar(Scalar::Tuple(new_fields)))
-                    }
-                    Value::Column(Column::Tuple(fields)) => {
-                        let new_fields = fields
-                            .into_iter()
-                            .zip(fields_src_ty.iter())
-                            .zip(fields_dest_ty.iter())
-                            .map(|((field, src_ty), dest_ty)| {
-                                self.run_cast(
-                                    span,
-                                    src_ty,
-                                    dest_ty,
-                                    Value::Column(field),
-                                    validity.clone(),
-                                    expr_display,
-                                    options,
-                                )
-                                .map(|val| val.into_column().unwrap())
-                            })
-                            .collect::<Result<_>>()?;
-                        Ok(Value::Column(Column::Tuple(new_fields)))
-                    }
-                    other => unreachable!("source: {}", other),
-                }
+            CastStep::VariantToArray(inner) => {
+                let (col, is_scalar) = Self::variant_column(value);
+                let validity = scalar_row_validity(validity, is_scalar);
+                let (elements, offsets, invalid_rows) =
+                    Self::variant_array_elements(&col, validity.as_ref(), is_try)?;
+                let (values, failed) = run!(inner, Value::Column(elements), None)?;
+                let failed = and_failures(invalid_rows, row_failures(&offsets, failed));
+                let col = Column::Array(Box::new(ArrayColumn::new(
+                    values.into_column().unwrap(),
+                    offsets.into(),
+                )));
+                (Self::nested_value(col, is_scalar), failed)
             }
-            (DataType::String, DataType::Vector(inner_dest_ty)) => {
-                if matches!(inner_dest_ty, VectorDataType::Int8(_)) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
-                    ))
-                    .set_span(span));
-                }
-
-                let dimension = inner_dest_ty.dimension() as usize;
-                match value {
-                    Value::Scalar(Scalar::String(val)) => {
-                        if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
-                            Ok(Value::Scalar(Scalar::Vector(
-                                Self::cast_string_to_vector_scalar(span, &val, dimension)?,
-                            )))
-                        } else {
-                            Ok(Value::Scalar(Scalar::default_value(dest_type)))
-                        }
-                    }
-                    Value::Column(Column::String(col)) => {
-                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                        for (idx, val) in col.iter().enumerate() {
-                            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
-                                builder.push_default();
-                                continue;
-                            }
-                            let vector = Self::cast_string_to_vector_scalar(span, val, dimension)?;
-                            builder.push(ScalarRef::Vector(vector.as_ref()));
-                        }
-                        Ok(Value::Column(builder.build()))
-                    }
-                    other => unreachable!("source: {}", other),
-                }
+            CastStep::VariantToMap(inner) => {
+                let (col, is_scalar) = Self::variant_column(value);
+                let validity = scalar_row_validity(validity, is_scalar);
+                let (keys, values, offsets, invalid_rows) =
+                    Self::variant_object_entries(&col, validity.as_ref(), is_try)?;
+                let (values, failed) = run!(inner, Value::Column(values), None)?;
+                let failed = and_failures(invalid_rows, row_failures(&offsets, failed));
+                let col = Column::Map(Box::new(ArrayColumn::new(
+                    Column::Tuple(vec![keys, values.into_column().unwrap()]),
+                    offsets.into(),
+                )));
+                (Self::nested_value(col, is_scalar), failed)
             }
-            (DataType::Variant, DataType::Vector(inner_dest_ty)) => {
-                if matches!(inner_dest_ty, VectorDataType::Int8(_)) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
-                    ))
-                    .set_span(span));
-                }
+            CastStep::ToVector => Self::cast_to_vector(span, dest_type, value, validity, is_try)?,
+        };
 
-                let dimension = inner_dest_ty.dimension() as usize;
-                match value {
-                    Value::Scalar(Scalar::Variant(val)) => {
-                        if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
-                            Ok(Value::Scalar(Scalar::Vector(
-                                Self::cast_variant_to_vector_scalar(span, &val, dimension)?,
-                            )))
-                        } else {
-                            Ok(Value::Scalar(Scalar::default_value(dest_type)))
-                        }
-                    }
-                    Value::Column(Column::Variant(col)) => {
-                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                        for (idx, val) in col.iter().enumerate() {
-                            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
-                                builder.push_default();
-                                continue;
-                            }
-                            let vector = Self::cast_variant_to_vector_scalar(span, val, dimension)?;
-                            builder.push(ScalarRef::Vector(vector.as_ref()));
-                        }
-                        Ok(Value::Column(builder.build()))
-                    }
-                    other => unreachable!("source: {}", other),
-                }
+        // A failed row becomes NULL at the nearest nullable destination.
+        Ok(match failed {
+            Some(failed) if dest_type.is_nullable_or_null() => {
+                (value.wrap_nullable(Some(failed)), None)
             }
-            (DataType::Array(inner_src_ty), DataType::Vector(inner_dest_ty)) => {
-                if !matches!(
-                    inner_src_ty.remove_nullable(),
-                    DataType::Number(_) | DataType::Decimal(_)
-                ) || matches!(inner_dest_ty, VectorDataType::Int8(_))
-                {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
-                    ))
-                    .set_span(span));
-                }
-                let dimension = inner_dest_ty.dimension() as usize;
-                match value {
-                    Value::Scalar(Scalar::Array(col)) => {
-                        if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
-                            Ok(Value::Scalar(Scalar::Vector(
-                                Self::cast_array_to_vector_scalar(span, col, dimension)?,
-                            )))
-                        } else {
-                            Ok(Value::Scalar(Scalar::default_value(dest_type)))
-                        }
-                    }
-                    Value::Column(Column::Array(array_col)) => {
-                        let mut builder = ColumnBuilder::with_capacity(dest_type, array_col.len());
-                        for (idx, col) in array_col.iter().enumerate() {
-                            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
-                                builder.push_default();
-                                continue;
-                            }
-                            let vector = Self::cast_array_to_vector_scalar(span, col, dimension)?;
-                            builder.push(ScalarRef::Vector(vector.as_ref()));
-                        }
-                        Ok(Value::Column(builder.build()))
-                    }
-                    other => unreachable!("source: {}", other),
-                }
-            }
-            _ => Err(ErrorCode::BadArguments(format!(
-                "unable to cast type `{src_type}` to type `{dest_type}`"
-            ))
-            .set_span(span)),
-        }?;
-
-        if options.strict_eval {
-            let mut check = CheckStrictValue;
-            assert!(
-                check.visit_value(result.clone()).is_ok(),
-                "strict check fail on expr: {}, result: {result}",
-                expr_display()
-            )
-        }
-
-        Ok(result)
+            failed => (value, failed),
+        })
     }
 
-    pub(crate) fn run_try_cast(
+    /// Runs the cast function of a plan step.
+    #[allow(clippy::too_many_arguments)]
+    fn run_cast_function(
         &self,
         span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
+        plan: &CastPlan,
+        call: &CastCall,
+        reject_null: bool,
         value: Value<AnyType>,
+        validity: Option<Bitmap>,
+        is_try: bool,
         expr_display: &impl Fn() -> String,
-    ) -> Result<Value<AnyType>> {
-        if src_type == dest_type {
-            return Ok(value);
-        }
-
-        let nullable_dest_type = dest_type.wrap_nullable();
-        let inner_dest_type = &**nullable_dest_type.as_nullable().unwrap();
-
-        if let Some(call) = resolve_cast_function(span, true, src_type, dest_type, self.fn_registry)
+        options: &mut EvaluateOptions,
+    ) -> Result<(Value<AnyType>, Option<Bitmap>)> {
+        // A scalar that no active row uses, e.g. one that failed in an earlier step of a chain,
+        // is not converted.
+        if matches!(value, Value::Scalar(_))
+            && validity.as_ref().is_some_and(|v| v.true_count() == 0)
         {
-            // `try_to_xxx` functions must not return errors, so we can safely call them without concerning validity.
-            if let Ok(new_value) = self.run_simple_cast(
-                src_type,
-                value.clone(),
-                call,
-                None,
-                expr_display,
-                &mut EvaluateOptions::default(),
-            ) {
-                return Ok(new_value);
-            }
+            return Ok((Value::Scalar(Scalar::default_value(&plan.dest_type)), None));
         }
-
-        match (src_type, inner_dest_type) {
-            (DataType::Null, _) => match value {
-                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Column(Column::Null { len }) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
-                    }
-                    Ok(Value::Column(builder.build()))
-                }
-                other => unreachable!("source: {}", other),
+        let src_type = &plan.src_type;
+        let active = validity.clone();
+        // `TRY_CAST` collects the failed rows instead of reporting them. The errors of a column
+        // are its own rows, e.g. the elements of nested values. Those of a scalar belong to every
+        // row that uses it; `TRY_CAST` records them for the single row of the scalar.
+        let mut try_options = EvaluateOptions {
+            suppress_error: true,
+            ..EvaluateOptions::default()
+        };
+        let (validity, num_rows, step_options) = match &value {
+            Value::Scalar(_) if is_try => (None, 1, &mut try_options),
+            Value::Scalar(_) => {
+                let num_rows = validity
+                    .as_ref()
+                    .map_or(self.data_block.num_rows(), Bitmap::len);
+                (validity, num_rows, options)
+            }
+            Value::Column(col) if is_try => (validity, col.len(), &mut try_options),
+            Value::Column(col) => (validity, col.len(), options),
+        };
+        // A cast function is not evaluated per dictionary entry: none has the property, and
+        // `partial_run` decodes the input of a cast that converts its values. The errors of the
+        // function belong to the cast.
+        let value = self.call_evaluated(
+            EvaluatedCall {
+                span,
+                id: &call.id,
+                function: &call.function,
+                generics: &call.generics,
+                args: vec![value],
+                num_rows,
+                validity,
+                dictionary_eval: false,
             },
-            (DataType::Nullable(inner_src_ty), _) => match value {
-                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Scalar(_) => {
-                    self.run_try_cast(span, inner_src_ty, inner_dest_type, value, expr_display)
+            None,
+            None,
+            expr_display,
+            step_options,
+        )?;
+        let mut failed = try_options.errors.map(|(failed, _)| failed.into());
+
+        // Only a NULL in an active row is rejected: an inactive row is not converted, and the
+        // function may leave a NULL there.
+        if reject_null {
+            let (value, nulls) = match value {
+                Value::Scalar(Scalar::Null) => {
+                    let has_active = active
+                        .as_ref()
+                        .is_none_or(|active| active.null_count() < active.len());
+                    (
+                        Value::Scalar(Scalar::default_value(&plan.dest_type)),
+                        has_active.then(|| Bitmap::new_constant(false, 1)),
+                    )
                 }
                 Value::Column(Column::Nullable(col)) => {
                     let (column, validity) = col.destructure();
-                    let value = Value::Column(column);
-                    let new_col = self
-                        .run_try_cast(span, inner_src_ty, dest_type, value, expr_display)?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Column(new_col.wrap_nullable(Some(validity))))
+                    let validity = match &active {
+                        Some(active) => &validity | &!active,
+                        None => validity,
+                    };
+                    (
+                        Value::Column(column),
+                        (validity.null_count() > 0).then_some(validity),
+                    )
                 }
-                other => unreachable!("source: {}", other),
-            },
-            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
-                Value::Scalar(_) => Ok(value),
-                Value::Column(column) => Ok(Value::Column(column.wrap_nullable(None))),
-            },
-
-            (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::EmptyArray) => {
-                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
-                    Ok(Value::Scalar(Scalar::Array(new_column)))
-                }
-                Value::Column(Column::EmptyArray { len }) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
-                    }
-                    Ok(Value::Column(builder.build()))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::Array(array)) => {
-                    let value = Value::Column(array);
-                    let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Scalar(Scalar::Array(new_array)))
-                }
-                Value::Column(Column::Array(col)) => {
-                    let value = Value::Column(col.underlying_column());
-                    let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
-                        .into_column()
-                        .unwrap();
-                    let new_col = Column::Array(Box::new(ArrayColumn::new(
-                        new_values,
-                        col.underlying_offsets(),
-                    )));
-                    Ok(Value::Column(new_col.wrap_nullable(None)))
-                }
-                _ => unreachable!(),
-            },
-            (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::EmptyMap) => {
-                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
-                    Ok(Value::Scalar(Scalar::Map(new_column)))
-                }
-                Value::Column(Column::EmptyMap { len }) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                    for _ in 0..len {
-                        builder.push_default();
-                    }
-                    Ok(Value::Column(builder.build()))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
-                Value::Scalar(Scalar::Map(array)) => {
-                    let value = Value::Column(array);
-                    let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
-                        .into_column()
-                        .unwrap();
-                    Ok(Value::Scalar(Scalar::Map(new_array)))
-                }
-                Value::Column(Column::Map(col)) => {
-                    let value = Value::Column(col.underlying_column());
-                    let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
-                        .into_column()
-                        .unwrap();
-                    let new_col = Column::Map(Box::new(ArrayColumn::new(
-                        new_values,
-                        col.underlying_offsets(),
-                    )));
-                    Ok(Value::Column(new_col.wrap_nullable(None)))
-                }
-                _ => unreachable!(),
-            },
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                match value {
-                    Value::Scalar(Scalar::Tuple(fields)) => {
-                        let new_fields = fields
-                            .into_iter()
-                            .zip(fields_src_ty.iter())
-                            .zip(fields_dest_ty.iter())
-                            .map(|((field, src_ty), dest_ty)| {
-                                let value = Value::Scalar(field);
-                                Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, value, expr_display)?
-                                    .into_scalar()
-                                    .unwrap())
-                            })
-                            .collect::<Result<_>>()?;
-                        Ok(Value::Scalar(Scalar::Tuple(new_fields)))
-                    }
-                    Value::Column(Column::Tuple(fields)) => {
-                        let new_fields = fields
-                            .into_iter()
-                            .zip(fields_src_ty.iter())
-                            .zip(fields_dest_ty.iter())
-                            .map(|((field, src_ty), dest_ty)| {
-                                let value = Value::Column(field);
-                                Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, value, expr_display)?
-                                    .into_column()
-                                    .unwrap())
-                            })
-                            .collect::<Result<_>>()?;
-                        let new_col = Column::Tuple(new_fields);
-                        Ok(Value::Column(new_col.wrap_nullable(None)))
-                    }
-                    other => unreachable!("source: {}", other),
-                }
-            }
-            (DataType::String, DataType::Vector(inner_vector_ty)) => {
-                if matches!(inner_vector_ty, VectorDataType::Int8(_)) {
+                value => (value, None),
+            };
+            if let Some(nulls) = nulls {
+                if !is_try {
                     return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                        "unable to cast type `{src_type}` to type `{}`, result has null values",
+                        plan.dest_type
                     ))
                     .set_span(span));
                 }
-
-                let dimension = inner_vector_ty.dimension() as usize;
-                match value {
-                    Value::Scalar(Scalar::String(val)) => Ok(
-                        match Self::cast_string_to_vector_scalar(span, &val, dimension) {
-                            Ok(vector) => Value::Scalar(Scalar::Vector(vector)),
-                            Err(_) => Value::Scalar(Scalar::Null),
-                        },
-                    ),
-                    Value::Column(Column::String(col)) => {
-                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                        for val in col.iter() {
-                            match Self::cast_string_to_vector_scalar(span, val, dimension) {
-                                Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
-                                Err(_) => builder.push(ScalarRef::Null),
-                            }
-                        }
-                        Ok(Value::Column(builder.build()))
-                    }
-                    _ => unreachable!(),
-                }
+                failed = and_failures(failed, Some(nulls));
             }
-            (DataType::Variant, DataType::Vector(inner_vector_ty)) => {
-                if matches!(inner_vector_ty, VectorDataType::Int8(_)) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to type `{dest_type}`"
-                    ))
-                    .set_span(span));
-                }
-
-                let dimension = inner_vector_ty.dimension() as usize;
-                match value {
-                    Value::Scalar(Scalar::Variant(val)) => Ok(
-                        match Self::cast_variant_to_vector_scalar(span, &val, dimension) {
-                            Ok(vector) => Value::Scalar(Scalar::Vector(vector)),
-                            Err(_) => Value::Scalar(Scalar::Null),
-                        },
-                    ),
-                    Value::Column(Column::Variant(col)) => {
-                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                        for val in col.iter() {
-                            match Self::cast_variant_to_vector_scalar(span, val, dimension) {
-                                Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
-                                Err(_) => builder.push(ScalarRef::Null),
-                            }
-                        }
-                        Ok(Value::Column(builder.build()))
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            (DataType::Array(inner_src_ty), DataType::Vector(inner_vector_ty)) => {
-                if !matches!(
-                    inner_src_ty.remove_nullable(),
-                    DataType::Number(_) | DataType::Decimal(_)
-                ) || matches!(inner_vector_ty, VectorDataType::Int8(_))
-                {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to type `{dest_type}`"
-                    ))
-                    .set_span(span));
-                }
-
-                let dimension = inner_vector_ty.dimension() as usize;
-                match value {
-                    Value::Scalar(Scalar::Array(col)) => Ok(
-                        match Self::cast_array_to_vector_scalar(span, col, dimension) {
-                            Ok(vector) => Value::Scalar(Scalar::Vector(vector)),
-                            Err(_) => Value::Scalar(Scalar::Null),
-                        },
-                    ),
-                    Value::Column(Column::Array(col)) => {
-                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                        for value in col.iter() {
-                            match Self::cast_array_to_vector_scalar(span, value, dimension) {
-                                Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
-                                Err(_) => builder.push(ScalarRef::Null),
-                            }
-                        }
-                        Ok(Value::Column(builder.build()))
-                    }
-                    _ => unreachable!(),
-                }
-            }
-
-            _ => Err(ErrorCode::BadArguments(format!(
-                "unable to cast type `{src_type}` to type `{dest_type}`"
-            ))
-            .set_span(span)),
+            return Ok((value, failed));
         }
+        Ok((value, failed))
+    }
+
+    /// Runs `call`, the function of a cast step, on the single value `value` as `CAST` does, or
+    /// `None` when it fails.
+    pub(crate) fn run_cast_call(&self, call: &CastCall, value: Scalar) -> Option<Scalar> {
+        let value = self
+            .call_evaluated(
+                EvaluatedCall {
+                    span: None,
+                    id: &call.id,
+                    function: &call.function,
+                    generics: &call.generics,
+                    args: vec![Value::Scalar(value)],
+                    num_rows: 1,
+                    validity: None,
+                    dictionary_eval: false,
+                },
+                None,
+                None,
+                &String::new,
+                &mut EvaluateOptions::default(),
+            )
+            .ok()?;
+        value.into_scalar().ok()
+    }
+
+    /// Converts each String, Variant or numeric Array value to a vector.
+    fn cast_to_vector(
+        span: Span,
+        dest_type: &DataType,
+        value: Value<AnyType>,
+        validity: Option<Bitmap>,
+        is_try: bool,
+    ) -> Result<(Value<AnyType>, Option<Bitmap>)> {
+        let DataType::Vector(vector_type) = dest_type else {
+            unreachable!("destination: {}", dest_type);
+        };
+        let dimension = vector_type.dimension() as usize;
+        let convert = |value: ScalarRef| match value {
+            ScalarRef::String(val) => Self::cast_string_to_vector_scalar(span, val, dimension),
+            ScalarRef::Variant(val) => Self::cast_variant_to_vector_scalar(span, val, dimension),
+            ScalarRef::Array(col) => Self::cast_array_to_vector_scalar(span, col, dimension),
+            other => unreachable!("source: {}", other),
+        };
+
+        match value {
+            Value::Scalar(scalar) => {
+                // A scalar is converted when any active row uses it.
+                if validity.as_ref().is_some_and(|v| v.true_count() == 0) {
+                    return Ok((Value::Scalar(Scalar::default_value(dest_type)), None));
+                }
+                match convert(scalar.as_ref()) {
+                    Ok(vector) => Ok((Value::Scalar(Scalar::Vector(vector)), None)),
+                    Err(_) if is_try => Ok((
+                        Value::Scalar(Scalar::default_value(dest_type)),
+                        Some(Bitmap::new_constant(false, 1)),
+                    )),
+                    Err(err) => Err(err),
+                }
+            }
+            Value::Column(col) => {
+                let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                let mut failed = MutableBitmap::from_len_set(col.len());
+                for (idx, val) in col.iter().enumerate() {
+                    if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
+                        builder.push_default();
+                        continue;
+                    }
+                    match convert(val) {
+                        Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
+                        Err(_) if is_try => {
+                            builder.push_default();
+                            failed.set(idx, false);
+                        }
+                        Err(err) => return Err(err),
+                    }
+                }
+                let failed: Bitmap = failed.into();
+                let failed = (failed.null_count() > 0).then_some(failed);
+                Ok((Value::Column(builder.build()), failed))
+            }
+        }
+    }
+
+    /// `col` as a scalar when the cast input was a scalar.
+    fn nested_value(col: Column, is_scalar: bool) -> Value<AnyType> {
+        if is_scalar {
+            Value::Scalar(col.index(0).unwrap().to_owned())
+        } else {
+            Value::Column(col)
+        }
+    }
+
+    /// The value of a cast from `NULL`. Rows outside `validity` are not converted.
+    fn cast_null(
+        span: Span,
+        dest_type: &DataType,
+        value: Value<AnyType>,
+        validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>> {
+        let len = match &value {
+            Value::Scalar(_) => None,
+            Value::Column(column) => Some(column.len()),
+        };
+        if !dest_type.is_nullable_or_null() {
+            let has_valid = match &validity {
+                Some(validity) => validity.null_count() < validity.len(),
+                None => len != Some(0),
+            };
+            if has_valid {
+                return Err(ErrorCode::BadArguments(format!(
+                    "unable to cast type `NULL` to type `{dest_type}`"
+                ))
+                .set_span(span));
+            }
+        }
+        Ok(match len {
+            None => Value::Scalar(Scalar::default_value(dest_type)),
+            Some(len) => Value::Column(ColumnBuilder::repeat_default(dest_type, len).build()),
+        })
+    }
+
+    /// `value` as a Variant column, and whether it was a scalar.
+    fn variant_column(value: Value<AnyType>) -> (BinaryColumn, bool) {
+        match value {
+            Value::Scalar(scalar) => {
+                let column = ColumnBuilder::repeat(&scalar.as_ref(), 1, &DataType::Variant).build();
+                (column.into_variant().unwrap(), true)
+            }
+            Value::Column(column) => (column.into_variant().unwrap(), false),
+        }
+    }
+
+    /// The elements of each JSON array in `col`, with the offsets of each row. A value that is
+    /// not an array has no elements, and neither has a row outside `validity`. A value that is
+    /// not valid JSON is an error, or, with `invalid_as_null`, a row without elements that is
+    /// unset in the returned bitmap, which is `None` when every value is valid.
+    fn variant_array_elements(
+        col: &BinaryColumn,
+        validity: Option<&Bitmap>,
+        invalid_as_null: bool,
+    ) -> Result<(Column, Vec<u64>, Option<Bitmap>)> {
+        let mut offsets = Vec::with_capacity(col.len() + 1);
+        offsets.push(0);
+        let mut builder = VariantType::create_builder(col.len(), &[]);
+        let mut invalid_rows: Option<MutableBitmap> = None;
+        for (idx, x) in col.iter().enumerate() {
+            if validity.is_none_or(|validity| validity.get_bit(idx)) {
+                match jsonb::from_slice(x) {
+                    Ok(value) => {
+                        for v in value.as_array().into_iter().flatten() {
+                            v.write_to_vec(&mut builder.data);
+                            builder.commit_row();
+                        }
+                    }
+                    Err(_) if invalid_as_null => invalid_rows
+                        .get_or_insert_with(|| MutableBitmap::from_len_set(col.len()))
+                        .set(idx, false),
+                    Err(e) => {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Expect to be valid json, got err: {e:?}"
+                        )));
+                    }
+                }
+            }
+            offsets.push(builder.len() as u64);
+        }
+        Ok((
+            Column::Variant(builder.build()),
+            offsets,
+            invalid_rows.map(Into::into),
+        ))
+    }
+
+    /// The keys and values of each JSON object in `col`, with the offsets of each row, following
+    /// the rules of [`Self::variant_array_elements`].
+    fn variant_object_entries(
+        col: &BinaryColumn,
+        validity: Option<&Bitmap>,
+        invalid_as_null: bool,
+    ) -> Result<(Column, Column, Vec<u64>, Option<Bitmap>)> {
+        let mut offsets = Vec::with_capacity(col.len() + 1);
+        offsets.push(0);
+        let mut key_builder = StringType::create_builder(col.len(), &[]);
+        let mut value_builder = VariantType::create_builder(col.len(), &[]);
+        let mut invalid_rows: Option<MutableBitmap> = None;
+        for (idx, x) in col.iter().enumerate() {
+            if validity.is_none_or(|validity| validity.get_bit(idx)) {
+                match jsonb::from_slice(x) {
+                    Ok(value) => {
+                        for (k, v) in value.as_object().into_iter().flatten() {
+                            key_builder.put_and_commit(k.as_str());
+                            v.write_to_vec(&mut value_builder.data);
+                            value_builder.commit_row();
+                        }
+                    }
+                    Err(_) if invalid_as_null => invalid_rows
+                        .get_or_insert_with(|| MutableBitmap::from_len_set(col.len()))
+                        .set(idx, false),
+                    Err(e) => {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Expect to be valid json, got err: {e:?}"
+                        )));
+                    }
+                }
+            }
+            offsets.push(key_builder.len() as u64);
+        }
+        Ok((
+            Column::String(key_builder.build()),
+            Column::Variant(value_builder.build()),
+            offsets,
+            invalid_rows.map(Into::into),
+        ))
     }
 
     fn cast_array_to_vector_scalar(
@@ -1799,41 +1612,6 @@ impl<'a> Evaluator<'a> {
         }
 
         Ok(VectorScalar::Float32(vector))
-    }
-
-    fn run_simple_cast(
-        &self,
-        src_type: &DataType,
-        value: Value<AnyType>,
-        call: FunctionCall,
-        validity: Option<Bitmap>,
-        expr_display: &impl Fn() -> String,
-        options: &mut EvaluateOptions,
-    ) -> Result<Value<AnyType>> {
-        let num_rows = validity
-            .as_ref()
-            .map(|validity| validity.len())
-            .unwrap_or_else(|| match &value {
-                Value::Scalar(_) => 1,
-                Value::Column(col) => col.len(),
-            });
-
-        let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
-        let block = DataBlock::new(vec![entry], num_rows);
-        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        // The cast may run on a one-row temporary block for scalar values, so
-        // its error bitmap is scoped to that block. Collect it in local
-        // options first, then merge into the shared options with the outer
-        // row count so a scalar error broadcasts to every row.
-        let mut local_options = options.with_suppress_error(options.suppress_error);
-        let result =
-            evaluator.eval_common_call(&call, validity, expr_display, &mut local_options)?;
-        merge_eval_errors(
-            &mut options.errors,
-            local_options.errors.take(),
-            self.data_block.num_rows(),
-        );
-        Ok(result)
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
@@ -2160,6 +1938,7 @@ impl<'a> Evaluator<'a> {
             arg0 = self
                 .run_cast(
                     None,
+                    false,
                     expr.data_type(),
                     &col_type,
                     result,
@@ -2733,19 +2512,16 @@ impl<'a> Evaluator<'a> {
             }) => {
                 let value = self.get_select_child(expr, options)?.0;
                 let src_type = expr.data_type();
-                let value = if *is_try {
-                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
-                } else {
-                    self.run_cast(
-                        *span,
-                        src_type,
-                        dest_type,
-                        value,
-                        None,
-                        &|| expr.sql_display(),
-                        options,
-                    )?
-                };
+                let value = self.run_cast(
+                    *span,
+                    *is_try,
+                    src_type,
+                    dest_type,
+                    value,
+                    None,
+                    &|| expr.sql_display(),
+                    options,
+                )?;
                 Ok((value, dest_type.clone()))
             }
             Expr::FunctionCall(FunctionCall {

@@ -352,6 +352,18 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        Ok(self
+            .get_table_with_db_id(tenant, db_name, table_name)
+            .await?
+            .0)
+    }
+
+    async fn get_table_with_db_id(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<(Arc<dyn Table>, Option<u64>)> {
         let (table_in_txn, is_active) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
@@ -367,18 +379,21 @@ impl Catalog for SessionCatalog {
             }
         };
         if let Some(table) = table_in_txn {
-            return table;
+            return Ok((table?, None));
         }
         if let Some(table) = self.temp_tbl_mgr.lock().get_table(db_name, table_name)? {
-            return self.get_table_by_info(&table);
+            return Ok((self.get_table_by_info(&table)?, None));
         }
-        let table = self.inner.get_table(tenant, db_name, table_name).await?;
+        let (table, db_id) = self
+            .inner
+            .get_table_with_db_id(tenant, db_name, table_name)
+            .await?;
         if table.is_stream() && is_active {
             self.txn_mgr
                 .lock()
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
-        Ok(table)
+        Ok((table, db_id))
     }
 
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
@@ -568,7 +583,7 @@ impl Catalog for SessionCatalog {
         match state {
             TxnState::AutoCommit => {
                 let update_temp_tables = std::mem::take(&mut req.update_temp_tables);
-                let reply = if req.is_empty() {
+                let reply = if !req.has_persistent_updates() {
                     Ok(Default::default())
                 } else {
                     self.inner

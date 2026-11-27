@@ -20,33 +20,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
 
-#[test]
-fn test_recluster_task_selection_v2_setting() {
-    let settings = Settings::create(Tenant::new_literal("test"));
-    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
-    for value in ["1", "0"] {
-        settings
-            .set_setting(
-                "enable_recluster_task_selection_v2".to_string(),
-                value.to_string(),
-            )
-            .unwrap();
-        assert_eq!(
-            settings.get_enable_recluster_task_selection_v2().unwrap(),
-            value == "1"
-        );
-    }
-    assert!(
-        settings
-            .set_setting(
-                "enable_recluster_task_selection_v2".to_string(),
-                "2".to_string()
-            )
-            .is_err()
-    );
-    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));
@@ -244,6 +217,18 @@ async fn test_set_global_settings() {
         .await;
     let expect = "UnknownVariable. Code: 2801, Text = Unknown variable: \"query_flight_compression_notfound\".";
     assert_eq!(expect, format!("{}", result.unwrap_err()));
+}
+
+#[test]
+fn test_deduplicate_label_is_not_a_setting() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+    let err = settings
+        .set_setting("deduplicate_label".to_string(), "legacy".to_string())
+        .unwrap_err();
+    assert_eq!(
+        err.code(),
+        databend_common_exception::ErrorCode::UNKNOWN_VARIABLE
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

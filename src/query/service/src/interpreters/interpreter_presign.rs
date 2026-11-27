@@ -84,7 +84,7 @@ impl Interpreter for PresignInterpreter {
             let presigned_req = if op.info().full_capability().presign {
                 self.presign_with_operator(&op).await?
             } else if let Some(cfg) = azblob_user_delegation_presign_config(
-                internal_stage_storage_params(&self.plan.stage),
+                internal_stage_storage_params(&self.plan.stage)?,
             ) {
                 // Workload Identity deployments have no static credential to
                 // presign with; mint a short-lived user delegation SAS.

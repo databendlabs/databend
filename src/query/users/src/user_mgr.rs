@@ -24,6 +24,7 @@ use databend_common_management::UserApi;
 use databend_common_management::errors::meta_service_error;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
@@ -228,6 +229,13 @@ impl UserApiProvider {
         user_info: UserInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
+        // The user name is the directory of the user stage `@~` under the storage root.
+        if !StageInfo::is_valid_prefix_name(&user_info.name) {
+            return Err(ErrorCode::IllegalUser(format!(
+                "Illegal Username: Illegal user name [{}], user name must not be empty, '.' or '..', and must not contain '/'",
+                user_info.name
+            )));
+        }
         self.validate_key_pair_keys(&user_info.name, &user_info.auth_info)?;
         if let Some(name) = user_info.option.network_policy() {
             if self.get_network_policy(tenant, name).await.is_err() {

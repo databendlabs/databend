@@ -28,6 +28,7 @@ use crate::with_mapped_cmp_method;
 mod select_column;
 mod select_column_scalar;
 mod select_scalar;
+mod select_string;
 
 impl Selector<'_> {
     pub(super) fn select_type_values_cmp<T: AccessType>(

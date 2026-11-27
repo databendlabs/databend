@@ -227,6 +227,7 @@ mod tests {
                 PRODUCER_SCAN,
             )],
             build_table_rows: Some(1000),
+            probe_table_rows: None,
             enable_bloom_runtime_filter: false,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: true,

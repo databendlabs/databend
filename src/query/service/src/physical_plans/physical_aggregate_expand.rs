@@ -62,21 +62,18 @@ impl IPhysicalPlan for AggregateExpand {
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut output_fields = input_schema.fields().clone();
-        // Add virtual columns to group by.
-        output_fields.reserve(self.group_bys.len() + 1);
+        output_fields.reserve(1);
 
-        for (group_by, (actual, ty)) in self
-            .group_bys
-            .iter()
-            .zip(self.grouping_sets.dup_group_items.iter())
-        {
-            // All group by columns will wrap nullable.
+        // Rolled-up keys receive injected NULLs. The binder gives them nullable
+        // symbols already; wrapping keeps the schema valid for any key that is
+        // not nullable yet. Keys present in every set keep their type.
+        for group_by in self.group_bys() {
+            if !self.grouping_sets.is_rolled_up(*group_by) {
+                continue;
+            }
             let i = input_schema.index_of(&group_by.to_string())?;
             let f = &mut output_fields[i];
-            debug_assert!(f.data_type() == ty || f.data_type().wrap_nullable() == *ty);
             *f = DataField::new(f.name(), f.data_type().wrap_nullable());
-            let new_field = DataField::new(&actual.to_string(), ty.clone());
-            output_fields.push(new_field);
         }
 
         output_fields.push(DataField::new(
@@ -131,44 +128,28 @@ impl IPhysicalPlan for AggregateExpand {
 
         let input_schema = self.input.output_schema()?;
         let group_bys = self
-            .group_bys
-            .iter()
-            .take(self.group_bys.len() - 1) // The last group-by will be virtual column `_grouping_id`
+            .group_bys()
             .map(|i| input_schema.index_of(&i.to_string()))
             .collect::<Result<Vec<_>>>()?;
-        let grouping_sets = self
+        let grouping_ids = self
             .grouping_sets
-            .sets
-            .iter()
-            .map(|sets| {
-                sets.iter()
-                    .map(|i| {
-                        let i = input_schema.index_of(&i.to_string())?;
-                        let offset = group_bys.iter().position(|j| *j == i).unwrap();
-                        Ok(offset)
-                    })
-                    .collect::<Result<Vec<_>>>()
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let mut grouping_ids = Vec::with_capacity(grouping_sets.len());
-        let mask = (1 << group_bys.len()) - 1;
-        for set in grouping_sets {
-            let mut id = 0;
-            for i in set {
-                id |= 1 << i;
-            }
-            // For element in `group_bys`,
-            // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
-            // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
-            // group_bys: [a, b]
-            // grouping_sets: [[0, 1], [0], [1], []]
-            // grouping_ids: 00, 01, 10, 11
-            grouping_ids.push(!id & mask);
-        }
+            .grouping_ids(self.group_bys().copied())
+            .into_iter()
+            .map(|id| id as usize)
+            .collect::<Vec<_>>();
 
         builder.main_pipeline.add_accumulating_transformer(|| {
             TransformExpandGroupingSets::new(group_bys.clone(), grouping_ids.clone())
         });
         Ok(())
+    }
+}
+
+impl AggregateExpand {
+    /// Grouping keys, without the virtual `_grouping_id` column.
+    fn group_bys(&self) -> impl Iterator<Item = &Symbol> {
+        self.group_bys
+            .iter()
+            .filter(|index| **index != self.grouping_sets.grouping_id_index)
     }
 }

@@ -140,7 +140,7 @@ Limit
     ├── sort keys: [COUNT(*) (#5) DESC NULLS LAST]
     ├── limit: [NONE]
     └── EvalScalar
-        ├── scalars: [COUNT(*) (#5) AS (#5), k (#4) AS (#6)]
+        ├── scalars: [k (#4) AS (#4), COUNT(*) (#5) AS (#5)]
         └── Aggregate(Initial)
             ├── group items: [plus(events.item (#0), 1) AS (#4)]
             ├── aggregate functions: [count() AS (#5)]
@@ -157,23 +157,21 @@ TopN
 ├── sort keys: [COUNT(*) (#5) DESC NULLS LAST]
 ├── limit: [5]
 ├── offset: [0]
-└── EvalScalar
-    ├── scalars: [COUNT(*) (#5) AS (#5), k (#4) AS (#6)]
-    └── Aggregate(Final)
+└── Aggregate(Final)
+    ├── group items: [plus(events.item (#0), 1) AS (#4)]
+    ├── aggregate functions: [count() AS (#5)]
+    ├── adaptive Top-K COUNT: 5, candidate hint: false
+    └── Aggregate(Partial)
         ├── group items: [plus(events.item (#0), 1) AS (#4)]
         ├── aggregate functions: [count() AS (#5)]
         ├── adaptive Top-K COUNT: 5, candidate hint: false
-        └── Aggregate(Partial)
-            ├── group items: [plus(events.item (#0), 1) AS (#4)]
-            ├── aggregate functions: [count() AS (#5)]
-            ├── adaptive Top-K COUNT: 5, candidate hint: false
-            └── EvalScalar
-                ├── scalars: [plus(events.item (#0), 1) AS (#4)]
-                └── Scan
-                    ├── table: default.events (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [plus(events.item (#0), 1) AS (#4)]
+            └── Scan
+                ├── table: default.events (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 
 === top_count_sort_with_limit ===
@@ -643,6 +641,7 @@ TopN
                 ├── build keys: [small.item (#4)]
                 ├── probe keys: [events.item (#0)]
                 ├── other filters: []
+                ├── runtime filters: [#0: small.item (#4) -> events.item (#0)]
                 ├── Scan
                 │   ├── table: default.small (#1)
                 │   ├── filters: []
@@ -652,7 +651,8 @@ TopN
                     ├── table: default.events (#0)
                     ├── filters: []
                     ├── order by: []
-                    └── limit: NONE
+                    ├── limit: NONE
+                    └── runtime filters: [#0: events.item (#0)]
 
 
 === unique_key_is_not_rewritten ===

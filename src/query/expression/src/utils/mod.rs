@@ -136,7 +136,7 @@ pub fn cast_scalar(
         dest_type: dest_type.clone(),
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let block = DataBlock::empty();
+    let block = DataBlock::empty_with_rows(1);
     let func_ctx = &FunctionContext::default();
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok(evaluator.run(&expr)?.into_scalar().unwrap())

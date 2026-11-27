@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use anyhow::bail;
 use clap::Args;
-use databend_meta::raft_config::Secret;
+use databend_meta::Secret;
 use serde::Deserialize;
 use serde::Serialize;
 

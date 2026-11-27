@@ -229,6 +229,7 @@ impl PhysicalPlanBuilder {
                 build_key: sources[0].build_key.clone(),
                 probe_targets,
                 build_table_rows: sources.iter().map(|source| source.build_table_rows).sum(),
+                probe_table_rows: None,
                 enable_bloom_runtime_filter: sources
                     .iter()
                     .all(|source| source.enable_bloom_runtime_filter),

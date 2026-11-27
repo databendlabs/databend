@@ -75,6 +75,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
@@ -624,14 +625,20 @@ impl ReclusterTableInterpreter {
         let table_info = tbl.get_table_info().clone();
         let ReclusterParts {
             tasks,
+            task_batches,
             remained_blocks,
             virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
-        let is_distributed = tasks.len() > 1;
+        // Keep a single batch local, even if it contains multiple tasks.
+        // Distributed placement preserves whole batches; unbatched strategies
+        // route one task per node.
+        let placements = task_batches.as_ref().map_or(tasks.len(), Vec::len);
+        let is_distributed = !self.ctx.get_cluster().is_empty() && placements > 1;
         let mut input = PhysicalPlan::new(Recluster {
             tasks,
+            task_batches,
             table_meta_timestamps,
             table_info: table_info.clone(),
             meta: PhysicalPlanMeta::new("Recluster"),
@@ -656,7 +663,6 @@ impl ReclusterTableInterpreter {
                 merge_meta: false,
             },
             update_stream_meta: vec![],
-            deduplicated_label: None,
             table_meta_timestamps,
             recluster_info: Some(ReclusterInfoSideCar {
                 merged_blocks: remained_blocks,

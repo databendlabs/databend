@@ -37,7 +37,6 @@ use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContextSettings;
 
 #[derive(Clone)]
 pub struct HttpQueryContext {
@@ -51,7 +50,6 @@ pub struct HttpQueryContext {
     pub is_query_id_from_client: bool,
     pub node_id: String,
     pub expected_node_id: Option<String>,
-    pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
     pub trace_parent: Option<String>,
     pub opentelemetry_baggage: Option<Vec<(String, String)>>,
@@ -85,10 +83,6 @@ impl HttpQueryContext {
         result.extend([
             ("query_id".to_string(), self.query_id.clone()),
             ("node_id".to_string(), self.node_id.clone()),
-            (
-                "deduplicate_label".to_string(),
-                self.deduplicate_label.clone().unwrap_or_default(),
-            ),
             (
                 "user_agent".to_string(),
                 self.user_agent.clone().unwrap_or_default(),
@@ -245,14 +239,6 @@ impl HttpQueryContext {
 
         let ctx = session.create_query_context(self.version).await?;
 
-        // Deduplicate label is used on the DML queries which may be retried by the client.
-        // It can be used to avoid the duplicated execution of the DML queries.
-        let deduplicate_label = &self.deduplicate_label;
-        if let Some(label) = deduplicate_label {
-            unsafe {
-                ctx.get_settings().set_deduplicate_label(label.clone())?;
-            }
-        }
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }

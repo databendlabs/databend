@@ -217,6 +217,7 @@ impl FromToProto for StorageGcsConfig {
             endpoint_url: p.endpoint_url,
             bucket: p.bucket,
             root: p.root,
+            allow_credential_chain: None,
             network_config: p.network_config.from_pb_opt()?,
         })
     }
@@ -481,6 +482,7 @@ impl FromToProto for StorageAzblobConfig {
             account_name: p.account_name,
             account_key: p.account_key,
             root: p.root,
+            allow_credential_chain: None,
             network_config: p.network_config.from_pb_opt()?,
         })
     }

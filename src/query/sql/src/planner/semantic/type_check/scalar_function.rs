@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::TypeName;
@@ -33,9 +31,11 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::CONVERSION_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::TRY_CONVERSIONS_TO_OWN_TYPE;
 use simsearch::SimSearch;
 use unicase::Ascii;
 
@@ -51,9 +51,6 @@ use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
 use super::scalar_fold::BoundScalar;
 use super::scalar_fold::ScalarFacts;
-use crate::binder::AliasLookup;
-use crate::binder::NameResolutionResult;
-use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -216,62 +213,6 @@ where A: TypeCheckAdapter
             ))
             .set_span(span)
         }
-    }
-
-    /// GROUPING arguments must match grouping-sets items exactly (see
-    /// `AggregateInfo::replace_grouping`), but alias-preferring clauses such as
-    /// HAVING and ORDER BY can resolve a bare name to a same-name SELECT alias
-    /// like `if(grouping(x) = 1, 0, x) AS x`, shadowing the group column `x`.
-    /// Retarget such an argument to the input column when that column is a
-    /// grouping-sets item. This only fires on arguments that would otherwise
-    /// be rejected, so it never changes a previously working query.
-    pub(super) fn grouping_argument_group_item(
-        &self,
-        arena: &CoreExprArena<'_>,
-        arg: CoreExprId,
-        resolved: &ScalarExpr,
-    ) -> Option<ScalarExpr> {
-        let aggregate_info = &self.bind_context.aggregate_info;
-        if aggregate_info.grouping_sets().is_none()
-            || aggregate_info.is_grouping_sets_item(resolved)
-        {
-            return None;
-        }
-
-        // Only bare unqualified names can be shadowed by SELECT aliases.
-        let CoreExpr::ColumnRef {
-            span,
-            column:
-                ColumnRef {
-                    database: None,
-                    table: None,
-                    column: ColumnID::Name(ident),
-                },
-        } = arena.get(arg)
-        else {
-            return None;
-        };
-
-        // Unknown or ambiguous names keep the original resolution.
-        let column = match self.bind_context.resolve_name(
-            None,
-            None,
-            ident,
-            AliasLookup::all(&[]),
-            self.name_resolution_ctx,
-        ) {
-            Ok(NameResolutionResult::Column(column)) => column,
-            _ => return None,
-        };
-
-        let candidate: ScalarExpr = BoundColumnRef {
-            span: *span,
-            column,
-        }
-        .into();
-        aggregate_info
-            .is_grouping_sets_item(&candidate)
-            .then_some(candidate)
     }
 
     /// Rewrites that must run before generic child traversal. A recognized
@@ -598,99 +539,112 @@ where A: TypeCheckAdapter
                     }
                 }
             }
-        } else if (func_name.eq_ignore_ascii_case("to_number")
+        } else if func_name.eq_ignore_ascii_case("to_number")
             || func_name.eq_ignore_ascii_case("to_numeric")
             || func_name.eq_ignore_ascii_case("to_decimal")
             || func_name.eq_ignore_ascii_case("try_to_number")
             || func_name.eq_ignore_ascii_case("try_to_numeric")
-            || func_name.eq_ignore_ascii_case("try_to_decimal"))
-            && params.is_empty()
+            || func_name.eq_ignore_ascii_case("try_to_decimal")
         {
-            if args.is_empty() || args.len() > 4 {
+            if args.is_empty() || args.len() > 4 || (!params.is_empty() && params.len() != 2) {
                 return Err(ErrorCode::SemanticError(format!(
                     "Invalid arguments for `{func_name}`, get {} params and {} arguments",
                     params.len(),
                     args.len()
                 )));
             }
-            let arg_fn = |args: &[BoundScalar],
-                          index: usize,
-                          arg_name: &str,
-                          default: i64|
-             -> Result<i64> {
-                Ok(args
-                    .get(index)
-                    .map(|arg| match self.bound_constant_value(&arg.scalar, &arg.facts) {
-                        Some((value, _)) => Ok(value.get_i64()),
-                        None => Err(ErrorCode::SemanticError(format!(
-                            "Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"
-                        ))),
-                    })
-                    .transpose()?
-                    .flatten()
-                    .unwrap_or(default))
-            };
-
-            let (precision_index, scale_index) =
-                if args.len() > 1 && args[1].scalar.data_type().remove_nullable().is_string() {
-                    (2, 3)
-                } else {
-                    (1, 2)
+            let size = if let [precision, scale] = params.as_slice() {
+                DecimalSize::try_from_scalars(precision, scale)
+            } else {
+                let arg_fn = |index: usize, name: &str, default: u8| -> Result<Scalar> {
+                    let Some(arg) = args.get(index) else {
+                        return Ok(Scalar::Number(NumberScalar::UInt8(default)));
+                    };
+                    self.bound_constant_value(&arg.scalar, &arg.facts)
+                        .map(|(value, _)| value)
+                        .ok_or_else(|| ErrorCode::SemanticError(format!(
+                            "Invalid arguments for `{func_name}`, {name} is only allowed to be a constant"
+                        )))
                 };
-            let precision = arg_fn(
-                &args,
-                precision_index,
-                "precision",
-                DEFAULT_DECIMAL_PRECISION,
-            )?;
-            let scale = arg_fn(&args, scale_index, "scale", DEFAULT_DECIMAL_SCALE)?;
-
-            if let Err(err) = DecimalSize::new(precision as u8, scale as u8) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "Invalid arguments for `{func_name}`, {}",
-                    err,
-                )));
+                let precision_index =
+                    if args.len() > 1 && args[1].scalar.data_type().remove_nullable().is_string() {
+                        2
+                    } else {
+                        1
+                    };
+                let precision = arg_fn(precision_index, "precision", DEFAULT_DECIMAL_PRECISION)?;
+                let scale = arg_fn(precision_index + 1, "scale", DEFAULT_DECIMAL_SCALE)?;
+                DecimalSize::try_from_scalars(&precision, &scale)
+            };
+            let size = size.map_err(|err| {
+                ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {err}"))
+            })?;
+            if params.is_empty() {
+                // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
+                params.push(Scalar::Number(NumberScalar::UInt8(size.precision())));
+                params.push(Scalar::Number(NumberScalar::UInt8(size.scale())));
             }
-
-            // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
-            params.push(Scalar::Number(NumberScalar::UInt8(precision as _)));
-            params.push(Scalar::Number(NumberScalar::UInt8(scale as _)));
         }
 
-        let placeholders = args
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| Self::placeholder(index, &arg.scalar, &arg.facts))
-            .collect::<Vec<_>>();
-        let identity = match placeholders.as_slice() {
-            [placeholder] => Some(type_check::check(placeholder, &BUILTIN_FUNCTIONS)?),
+        // `to_x(a)` of a value of type X keeps the value, and so do the try functions that take a
+        // value of their own type, as `X NULL`. They have no overload for it.
+        let own_type = match args.as_slice() {
+            [argument] if params.is_empty() => {
+                let name = BUILTIN_FUNCTIONS
+                    .aliases
+                    .get(func_name)
+                    .map_or(func_name, String::as_str);
+                let takes = |functions: &[(&str, DataType)]| {
+                    functions.iter().any(|(function, data_type)| {
+                        name.eq_ignore_ascii_case(function)
+                            && argument.data_type.remove_nullable() == *data_type
+                    })
+                };
+                if takes(CONVERSION_FUNCTIONS) {
+                    Some(argument.data_type.clone())
+                } else if takes(TRY_CONVERSIONS_TO_OWN_TYPE) {
+                    Some(argument.data_type.wrap_nullable())
+                } else {
+                    None
+                }
+            }
             _ => None,
         };
-        let raw_expr = RawExpr::FunctionCall {
-            span,
-            name: func_name.to_string(),
-            params: params.clone(),
-            args: placeholders,
-        };
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        if let Some(identity) = identity
-            && expr == identity
+        if let Some(dest_type) = &own_type
+            && dest_type == &args[0].data_type
         {
             let argument = args.pop().unwrap();
             if !argument.facts.deterministic {
                 self.adapter.set_result_cache_uncacheable();
             }
-            return Ok(BoundScalar {
-                data_type: expr.data_type().clone(),
-                ..argument
-            });
+            return Ok(argument);
         }
 
+        let mut placeholders = args
+            .iter()
+            .enumerate()
+            .map(|(index, arg)| Self::placeholder(index, &arg.scalar, &arg.facts))
+            .collect::<Vec<_>>();
+        let raw_expr = match own_type {
+            Some(dest_type) => RawExpr::Cast {
+                span,
+                is_try: false,
+                expr: Box::new(placeholders.pop().unwrap()),
+                dest_type,
+            },
+            None => RawExpr::FunctionCall {
+                span,
+                name: func_name.to_string(),
+                params: params.clone(),
+                args: placeholders,
+            },
+        };
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         match type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS) {
             EExpr::FunctionCall(call) => self.fold_bound_call(span, func_name, params, call, args),
             EExpr::Cast(cast) => {
                 let child = args.pop().expect("a cast call has one argument");
-                Ok(self.fold_bound_cast(cast, child))
+                Ok(self.bind_checked_cast(cast, child))
             }
             expr => {
                 let return_type = expr.into_data_type();

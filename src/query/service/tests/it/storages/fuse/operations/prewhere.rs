@@ -76,6 +76,88 @@ async fn test_prewhere_with_single_reader() -> Result<()> {
     run_prewhere_test_with_threshold(0, true).await
 }
 
+// Finish filtering the deciding batch, then skip subsequent low-yield applies.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_low_yield_bloom_skips_second_probe_block() -> Result<()> {
+    // Keep the fixture alive until its context and readers have been dropped.
+    let PrewhereTestSetup {
+        _fixture,
+        ctx,
+        block_reader,
+        scan_id,
+        ..
+    } = prepare_prewhere_data().await?;
+    let _ = _fixture;
+    let mut state = ReadState::create(ctx, scan_id, None, block_reader)?;
+    state.runtime_filters.truncate(1);
+    let filter = &mut state.runtime_filters[0];
+    filter.probe_expr = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "probe".into(),
+    });
+    filter.filter = Arc::new(create_bloom_filter(Int32Type::from_data(vec![1])));
+    let stats = filter.stats.clone();
+
+    // Just two distinct values in one repeated primitive column, no large
+    // business fixture or SQL. This reaches the production minimum sample
+    // using only APIs already present on the parent revision.
+    let mut values = vec![1; 1_000_000];
+    values[0] = 2;
+    let block = DataBlock::new_from_columns(vec![Int32Type::from_data(values)]);
+    let bitmap = state.runtime_filter(&block, block.num_rows())?.unwrap();
+    assert_eq!(bitmap.null_count(), 1); // Current batch still filters.
+    assert_eq!(stats.snapshot().bloom_rows_filtered, 1);
+    assert!(state.runtime_filter(&block, block.num_rows())?.is_none());
+    assert_eq!(stats.snapshot().bloom_rows_filtered, 1);
+    Ok(())
+}
+
+// A small sample isolates skip/bitmap behavior from the production threshold.
+// The second filter remains active after the first one is disabled.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_adaptive_bloom_keeps_current_bitmap_and_other_filter() -> Result<()> {
+    // Match the existing prewhere tests' fixture/context destruction order.
+    let PrewhereTestSetup {
+        _fixture,
+        ctx,
+        block_reader,
+        scan_id,
+        ..
+    } = prepare_prewhere_data().await?;
+    let _ = _fixture;
+    let mut state = ReadState::create(ctx, scan_id, None, block_reader)?;
+    for (filter, value) in state.runtime_filters.iter_mut().zip([1, 2]) {
+        filter.probe_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: "probe".into(),
+        });
+        filter.filter = Arc::new(create_bloom_filter(Int32Type::from_data(vec![value])));
+        filter.sample_rows = 100;
+    }
+    let low = state.runtime_filters[0].stats.clone();
+    let high = state.runtime_filters[1].stats.clone();
+    let mut values = vec![1; 100];
+    values[0] = 2;
+    let block = DataBlock::new_from_columns(vec![Int32Type::from_data(values)]);
+    // The low-yield filter still rejects row 0 in its deciding batch. The
+    // high-yield filter rejects every other row: their AND must reject all.
+    let bitmap = state.runtime_filter(&block, block.num_rows())?.unwrap();
+    assert_eq!(bitmap.null_count(), 100);
+    assert!(low.bloom_disabled());
+    assert!(!high.bloom_disabled());
+    let bitmap = state.runtime_filter(&block, block.num_rows())?.unwrap();
+    assert_eq!(bitmap.null_count(), 99);
+    assert_eq!(low.snapshot().bloom_rows_checked, 100);
+    assert_eq!(low.snapshot().bloom_rows_filtered, 1);
+    assert_eq!(high.snapshot().bloom_rows_checked, 200);
+    assert_eq!(high.snapshot().bloom_rows_filtered, 198);
+    Ok(())
+}
+
 async fn run_prewhere_test_with_threshold(
     selectivity_threshold: u64,
     expect_single_reader: bool,
@@ -106,13 +188,20 @@ async fn run_prewhere_test_with_threshold(
         block_reader.clone(),
     )?;
     assert_eq!(read_state.use_single_prewhere_reader, expect_single_reader);
+    if !expect_single_reader {
+        // x, y and z are decoded once in early, despite being output and y also being
+        // probed by a Bloom filter. Only the second Bloom filter needs a newly decoded column.
+        let late_fields = read_state.pre_reader.data_fields();
+        assert_eq!(late_fields.len(), 1);
+        assert_eq!(late_fields[0].name(), "d");
+    }
 
     // Use the new unified API that handles all states internally
     let ReadStateOutput {
         block: data_block,
         bitmap_selection,
         scan_stats,
-    } = read_state.deserialize_and_filter(column_chunks.clone(), &part)?;
+    } = read_state.deserialize_and_filter(column_chunks.clone(), &part, false, None, false)?;
 
     // Scan statistics describe the whole block that was read and decoded,
     // not the single row left after prewhere and runtime filters. All five
@@ -126,7 +215,9 @@ async fn run_prewhere_test_with_threshold(
     // filtered-row count proves Bloom was not evaluated on the four rows that
     // prewhere had already rejected.
     for stats in runtime_filter_stats {
-        assert_eq!(stats.snapshot().bloom_rows_filtered, 0);
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.bloom_rows_filtered, 0);
+        assert_eq!(snapshot.bloom_rows_checked, 1);
     }
 
     // Verify the final data_block (all columns in order: x, y, z, d, e)

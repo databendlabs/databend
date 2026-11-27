@@ -140,5 +140,8 @@ data_cache_storage = "none"
 [cache.disk]
 # cache path
 path = "/var/lib/databend/cache"
-# max bytes of cached data 20G
+# max bytes of cached data 20G. Unset, it is sized at start to the room the file system under
+# `path` leaves 5% below `watermark_ratio` (85% of it in use by default; the watermark is then
+# held to 95% at most), the cache's own files counted in, at most 1 TiB. Set it when several
+# nodes share one file system.
 max_bytes = 21474836480

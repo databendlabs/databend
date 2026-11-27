@@ -266,7 +266,7 @@ fn dedup_column(
     };
 
     let expr = databend_common_expression::type_check::check(&distinct_expr, &BUILTIN_FUNCTIONS)?;
-    let block = DataBlock::empty();
+    let block = DataBlock::empty_with_rows(1);
     let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
     let value = evaluator.run(&expr)?;
 
@@ -294,6 +294,7 @@ mod tests {
             }),
             probe_targets: vec![],
             build_table_rows: Some(2),
+            probe_table_rows: None,
             enable_bloom_runtime_filter: false,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: false,

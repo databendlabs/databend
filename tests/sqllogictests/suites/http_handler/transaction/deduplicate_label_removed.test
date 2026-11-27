@@ -1,0 +1,33 @@
+# The retired setting is not accepted by SET.
+statement error 2801
+SET deduplicate_label = 'legacy';
+
+statement ok
+CREATE OR REPLACE DATABASE test_deduplicate_label_removed;
+
+statement ok
+USE test_deduplicate_label_removed;
+
+statement ok
+CREATE TABLE t(id INT);
+
+# The generic SET_VAR syntax ignores unknown settings; both INSERTs execute.
+statement ok
+BEGIN;
+
+statement ok
+INSERT /*+ SET_VAR(deduplicate_label='legacy') */ INTO t VALUES (1);
+
+statement ok
+INSERT /*+ SET_VAR(deduplicate_label='legacy') */ INTO t VALUES (1);
+
+statement ok
+COMMIT;
+
+query I
+SELECT count(*) FROM t;
+----
+2
+
+statement ok
+DROP DATABASE test_deduplicate_label_removed;

@@ -69,6 +69,7 @@ use crate::operations::recluster::ReclusterGroup;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
+use crate::operations::recluster::ReclusterTaskBudget;
 use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::operations::recluster::SelectedReclusterSegment;
 use crate::operations::recluster::VECTOR_LEVEL_MIXED;
@@ -92,6 +93,7 @@ const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
 /// Maximum block count for applying the Linear small-table depth threshold.
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 const MULTI_PEAK_LIMIT: usize = 4;
+/// Bound scoring across singleton, full-run and shared-resource competitors.
 const MAX_BATCH_GAIN_CALLS: usize = 11;
 
 #[derive(Clone)]
@@ -103,13 +105,26 @@ struct PlannedLinearTask {
     average_depth: f64,
 }
 
+fn batch_identity(batch: &[PlannedLinearTask]) -> Vec<Vec<usize>> {
+    let mut identity = batch
+        .iter()
+        .map(|task| {
+            let mut blocks = task.blocks.clone();
+            blocks.sort_unstable();
+            blocks
+        })
+        .collect::<Vec<_>>();
+    identity.sort_unstable();
+    identity
+}
+
 fn push_unique_batch(
     batches: &mut Vec<Vec<PlannedLinearTask>>,
     identities: &mut HashSet<Vec<Vec<usize>>>,
     batch: Vec<PlannedLinearTask>,
-    task_budget: usize,
+    task_limit: usize,
 ) -> bool {
-    if batch.is_empty() || batch.len() > task_budget {
+    if batch.is_empty() || batch.len() > task_limit {
         return false;
     }
     let mut used = HashSet::new();
@@ -120,20 +135,86 @@ fn push_unique_batch(
     {
         return false;
     }
-    let mut identity = batch
-        .iter()
-        .map(|task| {
-            let mut blocks = task.blocks.clone();
-            blocks.sort_unstable();
-            blocks
-        })
-        .collect::<Vec<_>>();
-    identity.sort_unstable();
-    if !identities.insert(identity) {
+    if !identities.insert(batch_identity(&batch)) {
         return false;
     }
     batches.push(batch);
     true
+}
+
+/// Rank resource-feasible, non-overlapping prefixes of the singleton seeds.
+/// Estimated gains order proposals only; callers must score their actual joint gain.
+fn shared_task_combinations(
+    seeds: &[(PlannedLinearTask, i64)],
+    budget: ReclusterTaskBudget,
+    task_limit: usize,
+) -> Vec<Vec<usize>> {
+    let mut order = (0..seeds.len()).collect::<Vec<_>>();
+    order.sort_by(|&left, &right| {
+        seeds[right]
+            .1
+            .cmp(&seeds[left].1)
+            .then_with(|| seeds[left].0.bytes.cmp(&seeds[right].0.bytes))
+            .then_with(|| left.cmp(&right))
+    });
+    let mut combinations = Vec::new();
+    let mut seen = HashSet::new();
+    for start in 0..order.len() {
+        let mut selected = Vec::new();
+        let mut used = HashSet::new();
+        for &idx in order.iter().cycle().skip(start).take(order.len()) {
+            let task = &seeds[idx].0;
+            if selected.len() >= task_limit {
+                break;
+            }
+            if task.blocks.iter().any(|idx| used.contains(idx)) {
+                continue;
+            }
+            selected.push(idx);
+            if budget
+                .assign(
+                    selected
+                        .iter()
+                        .map(|&idx| (seeds[idx].0.bytes, ReclusterTaskKind::MergeBlocks)),
+                )
+                .is_none()
+            {
+                selected.pop();
+                continue;
+            }
+            used.extend(task.blocks.iter().copied());
+            if selected.len() < 2 {
+                continue;
+            }
+            let mut indices = selected.clone();
+            indices.sort_unstable();
+            if !seen.insert(indices.clone()) {
+                continue;
+            }
+            let Some(bytes) = indices
+                .iter()
+                .try_fold(0usize, |bytes, &idx| bytes.checked_add(seeds[idx].0.bytes))
+            else {
+                continue;
+            };
+            let estimate = indices
+                .iter()
+                .fold(0i64, |gain, &idx| gain.saturating_add(seeds[idx].1));
+            combinations.push((estimate, bytes, indices));
+        }
+    }
+    combinations.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| left.2.len().cmp(&right.2.len()))
+            .then_with(|| left.2.cmp(&right.2))
+    });
+    combinations
+        .into_iter()
+        .map(|(_, _, indices)| indices)
+        .collect()
 }
 
 /// Candidate tasks plus cached segment metadata for one scanned window.
@@ -233,7 +314,10 @@ pub struct ReclusterMutator {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) operator: Operator,
     pub(crate) schema: TableSchemaRef,
+    // Per-executor probe target and task cap for strategies without shared placement.
     pub(crate) max_tasks: usize,
+    // Batch placement shares input-byte and task-count limits per executor.
+    pub(crate) task_budget: Option<ReclusterTaskBudget>,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
     virtual_column_layout_policy: VirtualColumnLayoutPolicy,
@@ -337,11 +421,26 @@ impl ReclusterMutator {
             memory_threshold,
         )?;
 
+        let task_budget = if properties.cluster_key_info.cluster_type == ClusterType::Linear
+            && strategy.supports_ordered_merge()
+            && properties.split_sort_tasks
+        {
+            Some(ReclusterTaskBudget {
+                nodes: max_tasks,
+                // Workers serialize a batch when their local threads cannot run it in parallel.
+                tasks_per_node: ReclusterTaskBudget::MAX_TASKS_PER_NODE,
+                bytes_per_node: memory_threshold,
+            })
+        } else {
+            None
+        };
+
         Ok(Self {
             ctx,
             operator: table.get_operator(),
             schema,
             max_tasks,
+            task_budget,
             properties,
             strategy,
             virtual_column_layout_policy: table.virtual_column_layout_policy(),
@@ -391,6 +490,7 @@ impl ReclusterMutator {
             operator,
             schema,
             max_tasks,
+            task_budget: None,
             properties,
             strategy,
             virtual_column_layout_policy: Default::default(),
@@ -402,11 +502,11 @@ impl ReclusterMutator {
     pub async fn probe_candidate_window(
         &self,
         compact_segments: Vec<SelectedReclusterSegment>,
-        task_budget: usize,
+        task_limit: usize,
         decode_runtime: Arc<Runtime>,
         decode_semaphore: Arc<Semaphore>,
     ) -> Result<ReclusterCandidateWindow> {
-        debug_assert!(task_budget > 0);
+        debug_assert!(task_limit > 0);
         let mut window_segments = Vec::with_capacity(compact_segments.len());
         let mut window_segment_infos = Vec::with_capacity(compact_segments.len());
         let mut selected_segments = Vec::with_capacity(compact_segments.len());
@@ -438,23 +538,25 @@ impl ReclusterMutator {
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
 
-        let dynamic = self.properties.mode == ReclusterMode::Aggressive
-            && self.properties.cluster_key_info.cluster_type == ClusterType::Linear
-            && self
-                .ctx
-                .get_settings()
-                .get_enable_recluster_task_selection_v2()?;
-        let tasks = if dynamic {
-            match self.build_dynamic_linear_tasks(&blocks, task_budget)? {
-                Some(tasks) => {
-                    candidate_window.atomic_tasks = !tasks.is_empty();
-                    tasks
-                }
-                None => self.build_tasks(&blocks, task_budget)?,
+        // Persisted Linear also covers vector clustering. Only scalar inputs use
+        // joint-gain selection; other strategies retain their own geometry.
+        let scalar_linear = self.properties.cluster_key_info.cluster_type == ClusterType::Linear
+            && self.strategy.supports_ordered_merge();
+        let tasks = if scalar_linear {
+            match self.build_linear_window_tasks(&blocks, task_limit)? {
+                Some(tasks) => tasks,
+                None => self.build_tasks(
+                    &blocks,
+                    self.task_budget
+                        .map_or(task_limit, |budget| task_limit.min(budget.nodes)),
+                )?,
             }
         } else {
-            self.build_tasks(&blocks, task_budget)?
+            self.build_tasks(&blocks, task_limit)?
         };
+        // Prepared scalar groups use the same joint-gain selector. Keep their
+        // winners intact across window selection as well.
+        candidate_window.atomic_tasks = scalar_linear && !tasks.is_empty();
 
         for candidate in &tasks {
             for (window_pos, _) in &candidate.selected_blocks {
@@ -558,8 +660,6 @@ impl ReclusterMutator {
             ) {
                 partition.to_vec()
             } else {
-                // Never rewrite a block with missing or non-constant partition metadata
-                // together with another partition.
                 continue;
             };
             groups
@@ -570,12 +670,13 @@ impl ReclusterMutator {
         groups
     }
 
-    /// Build the Python-validated bounded candidate set in one planner window.
-    /// `None` preserves main's maintenance and normalized-block paths.
-    fn build_dynamic_linear_tasks(
+    /// Select a bounded joint-gain winner that can be placed on the executors.
+    /// Resource-aware batches compete with singleton tasks under shared budgets.
+    /// `None` requests compact/sort preparation, not an alternative overlap selector.
+    fn build_linear_window_tasks(
         &self,
         blocks: &[&ReclusterBlock],
-        task_budget: usize,
+        task_limit: usize,
     ) -> Result<Option<Vec<ReclusterTaskCandidate>>> {
         if blocks.iter().any(|block| {
             matches!(block.stats, ReclusterBlockStats::Normalized(_))
@@ -585,9 +686,54 @@ impl ReclusterMutator {
             return Ok(None);
         }
 
+        let groups = self.bin_blocks_into_groups(blocks);
+        if groups.values().any(|indices| {
+            if indices.len() == 2
+                && indices
+                    .iter()
+                    .all(|idx| blocks[*idx].stats().level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS)
+            {
+                return false;
+            }
+            let (rows, bytes) = indices.iter().fold((0usize, 0usize), |acc, idx| {
+                (
+                    acc.0.saturating_add(blocks[*idx].meta.row_count as usize),
+                    acc.1.saturating_add(blocks[*idx].meta.block_size as usize),
+                )
+            });
+            indices.len() >= 2
+                && self
+                    .properties
+                    .block_thresholds
+                    .check_for_compact(rows, bytes)
+                && bytes <= self.properties.memory_threshold
+        }) {
+            return Ok(None);
+        }
+        Self::plan_linear_tasks(
+            &self.properties,
+            blocks,
+            groups
+                .into_iter()
+                .map(|((group, _), indices)| (group, indices)),
+            self.task_budget,
+            task_limit,
+        )
+        .map(Some)
+    }
+
+    /// The sole scalar overlap selector, shared by whole windows and prepared groups.
+    /// Preparation may split unordered inputs or compact small blocks before reaching here.
+    pub(super) fn plan_linear_tasks(
+        properties: &ReclusterProperties,
+        blocks: &[&ReclusterBlock],
+        block_groups: impl IntoIterator<Item = (ReclusterGroup, Vec<usize>)>,
+        task_budget: Option<ReclusterTaskBudget>,
+        task_limit: usize,
+    ) -> Result<Vec<ReclusterTaskCandidate>> {
         let mut groups = Vec::new();
         let mut peaks = Vec::new();
-        for ((group, _), indices) in self.bin_blocks_into_groups(blocks) {
+        for (group, indices) in block_groups {
             if indices.len() < 2
                 || indices.len() == 2
                     && indices
@@ -596,25 +742,8 @@ impl ReclusterMutator {
             {
                 continue;
             }
-            let (rows, bytes) = indices.iter().fold((0usize, 0usize), |acc, idx| {
-                (
-                    acc.0.saturating_add(blocks[*idx].meta.row_count as usize),
-                    acc.1.saturating_add(blocks[*idx].meta.block_size as usize),
-                )
-            });
-            if self
-                .properties
-                .block_thresholds
-                .check_for_compact(rows, bytes)
-                && bytes <= self.properties.memory_threshold
-            {
-                return Ok(None);
-            }
             let Some(scan) = super::linear_recluster::LinearReclusterStrategy::scan_hotspots(
-                &self.properties,
-                group,
-                &indices,
-                blocks,
+                properties, group, &indices, blocks,
             ) else {
                 continue;
             };
@@ -650,7 +779,7 @@ impl ReclusterMutator {
                 limit,
                 indices,
                 blocks,
-                self.properties.memory_threshold,
+                properties.memory_threshold,
             )
             .into_iter()
             .map(|(selected, bytes)| PlannedLinearTask {
@@ -684,10 +813,10 @@ impl ReclusterMutator {
         let mut batches: Vec<Vec<PlannedLinearTask>> = Vec::new();
         let mut identities = HashSet::new();
 
-        // Horizontal exploration: legal combinations from the existing four
-        // centered/original skip-fill candidates. Prefer full task batches;
-        // singletons are retained only when no legal full batch exists.
-        let spread_task_count = task_budget.min(spread.len());
+        // Shared-node exploration retains singleton seeds. Strategies without
+        // shared placement (for example MV aggregation) compare complete runs.
+        let focus_limit = if task_budget.is_some() { 1 } else { task_limit };
+        let spread_task_count = focus_limit.min(spread.len());
         let mut full_spread = false;
         for mask in 1usize..(1usize << spread.len()) {
             if mask.count_ones() as usize != spread_task_count {
@@ -702,37 +831,58 @@ impl ReclusterMutator {
                     .filter(|(idx, _)| mask & (1 << idx) != 0)
                     .map(|(_, task)| task.clone())
                     .collect(),
-                task_budget,
+                task_limit,
             );
         }
-        if !full_spread {
+        if !full_spread && task_budget.is_none() {
             for task in &spread {
                 push_unique_batch(
                     &mut batches,
                     &mut identities,
                     vec![task.clone()],
-                    task_budget,
+                    task_limit,
                 );
             }
         }
 
         // Vertical focus: one complete original-order contiguous run per
-        // leading peak, plus one centered run at the main peak.
+        // leading peak, plus one centered run at the main peak. Packing is
+        // prefix-stable: shared-budget planning reuses each run's first task
+        // as its singleton.
+        let run_limit = task_budget.map_or(task_limit, |budget| task_limit.min(budget.nodes));
+        let mut focus_runs = Vec::new();
         let mut first_groups = Vec::new();
         for &(group_idx, peak, height, _) in selected_peaks {
-            let tasks = make_tasks(group_idx, peak, height, false, true, task_budget);
-            if let Some(first) = tasks.first() {
+            let tasks = make_tasks(group_idx, peak, height, false, true, run_limit);
+            if task_budget.is_none()
+                && let Some(first) = tasks.first()
+            {
                 first_groups.push(first.clone());
             }
-            push_unique_batch(&mut batches, &mut identities, tasks, task_budget);
+            focus_runs.push(tasks);
         }
         if let Some(&(group_idx, peak, height, _)) = selected_peaks.first() {
-            let centered = make_tasks(group_idx, peak, height, true, false, task_budget);
-            push_unique_batch(&mut batches, &mut identities, centered, task_budget);
+            focus_runs.push(make_tasks(group_idx, peak, height, true, false, run_limit));
+        }
+        if task_budget.is_some() {
+            for tasks in &focus_runs {
+                if let Some(first) = tasks.first() {
+                    push_unique_batch(
+                        &mut batches,
+                        &mut identities,
+                        vec![first.clone()],
+                        task_limit,
+                    );
+                }
+            }
+        } else {
+            for tasks in focus_runs.drain(..) {
+                push_unique_batch(&mut batches, &mut identities, tasks, task_limit);
+            }
         }
 
         // Mixed focus/exploration fills only the remaining bounded score slots.
-        'cross: for count in 2..=task_budget.min(first_groups.len()) {
+        'cross: for count in 2..=task_limit.min(first_groups.len()) {
             for mask in 1usize..(1usize << first_groups.len()) {
                 if mask.count_ones() as usize != count {
                     continue;
@@ -746,43 +896,138 @@ impl ReclusterMutator {
                         .filter(|(idx, _)| mask & (1 << idx) != 0)
                         .map(|(_, task)| task.clone())
                         .collect(),
-                    task_budget,
+                    task_limit,
                 );
                 if batches.len() >= MAX_BATCH_GAIN_CALLS {
                     break 'cross;
                 }
             }
         }
+        let mut extra_singletons = Vec::new();
+        if let Some(budget) = task_budget {
+            // Reserve scores for every feasible full-run competitor as well as
+            // shared-resource proposals before choosing the singleton seeds.
+            let mut unique_runs = Vec::new();
+            // Register full-run identities only after all singleton identities,
+            // preserving the original deduplication and scoring order.
+            for tasks in focus_runs {
+                push_unique_batch(&mut unique_runs, &mut identities, tasks, task_limit);
+            }
+            unique_runs.retain(|batch| {
+                batch.len() > 1
+                    && budget
+                        .assign(
+                            batch
+                                .iter()
+                                .map(|task| (task.bytes, ReclusterTaskKind::MergeBlocks)),
+                        )
+                        .is_some()
+            });
+            batches.retain(|batch| {
+                budget
+                    .assign(
+                        batch
+                            .iter()
+                            .map(|task| (task.bytes, ReclusterTaskKind::MergeBlocks)),
+                    )
+                    .is_some()
+            });
+            // Up to five full runs leave at least the four spread singletons
+            // and two joint-gain probes within the existing eleven-score cap.
+            let shared_scores = if task_limit >= 2 { 2 } else { 0 };
+            let singleton_scores =
+                MAX_BATCH_GAIN_CALLS.saturating_sub(unique_runs.len() + shared_scores);
+            if batches.len() > singleton_scores {
+                extra_singletons = batches.split_off(singleton_scores);
+            }
+            batches.extend(unique_runs);
+        }
         batches.truncate(MAX_BATCH_GAIN_CALLS);
 
         let stats = super::linear_recluster::ReclusterDepthStats::create(
             blocks,
-            &self.properties.scalar_cluster_key_types,
+            &properties.scalar_cluster_key_types,
         )?;
         let mut best_gain = 0i64;
         let mut best_bytes = usize::MAX;
         let mut best = Vec::new();
-        for batch in batches.iter() {
-            let gain = stats.gain(
-                batch.iter().map(|task| task.blocks.as_slice()),
-                blocks,
-                &self.properties,
-            )?;
+        let mut gain_calls = batches.len();
+        // Candidate deduplication is complete. Deferred batches must not be
+        // treated as scored, so reuse the set only after clearing its entries.
+        let mut scored_batches = identities;
+        scored_batches.clear();
+        let mut seeds = Vec::new();
+        for batch in batches {
+            let gain = stats.gain(batch.iter().map(|task| task.blocks.as_slice()), properties)?;
+            scored_batches.insert(batch_identity(&batch));
+            // Non-positive singletons may still improve a batch's joint gain.
+            if task_budget.is_some() && batch.len() == 1 {
+                seeds.push((batch[0].clone(), gain));
+            }
             let bytes = batch.iter().map(|task| task.bytes).sum();
-            if gain > best_gain || gain == best_gain && gain > 0 && bytes < best_bytes {
+            if gain > best_gain
+                || gain == best_gain
+                    && gain > 0
+                    && (bytes < best_bytes || bytes == best_bytes && batch.len() < best.len())
+            {
                 best_gain = gain;
                 best_bytes = bytes;
-                best = batch.clone();
+                best = batch;
             }
         }
 
-        let task_count = best.len();
-        let selected_bytes = if task_count == 0 { 0 } else { best_bytes };
+        if let Some(budget) = task_budget.filter(|_| task_limit >= 2) {
+            let combinations = shared_task_combinations(&seeds, budget, task_limit);
+            // Full runs have already been scored. Try shared-resource proposals
+            // first, then recover singleton scores if no unique combinations remain.
+            let proposals = combinations
+                .into_iter()
+                .map(|indices| {
+                    indices
+                        .into_iter()
+                        .map(|idx| seeds[idx].0.clone())
+                        .collect::<Vec<_>>()
+                })
+                .chain(extra_singletons);
+            for batch in proposals {
+                if gain_calls >= MAX_BATCH_GAIN_CALLS {
+                    break;
+                }
+                let Some(bytes) = batch
+                    .iter()
+                    .try_fold(0usize, |bytes, task| bytes.checked_add(task.bytes))
+                else {
+                    continue;
+                };
+                if !scored_batches.insert(batch_identity(&batch)) {
+                    continue;
+                }
+                let gain =
+                    stats.gain(batch.iter().map(|task| task.blocks.as_slice()), properties)?;
+                gain_calls += 1;
+                if gain <= 0 {
+                    continue;
+                }
+                if gain > best_gain
+                    || gain == best_gain
+                        && (bytes < best_bytes || bytes == best_bytes && batch.len() < best.len())
+                {
+                    best_gain = gain;
+                    best_bytes = bytes;
+                    best = batch;
+                }
+            }
+        }
+
+        // Construct physical candidate metadata only for the winning batch.
+        let selected_bytes = if best.is_empty() { 0 } else { best_bytes };
         let tasks = best
             .into_iter()
             .map(|task| {
                 task_candidate(
-                    self.strategy.supports_ordered_merge(),
+                    // Both callers use scalar Linear strategies, which support ordered merge.
+                    // task_candidate still requires Original stats to produce MergeBlocks.
+                    true,
                     task.group,
                     CandidateScore {
                         selected_total_bytes: task.bytes,
@@ -793,16 +1038,18 @@ impl ReclusterMutator {
                     blocks,
                 )
             })
-            .collect();
+            .collect::<Vec<_>>();
         debug!(
-            "recluster: dynamic linear window peaks={} gain_calls={} batch_gain={} tasks={} bytes={}",
-            peaks.len(),
-            batches.len(),
-            best_gain,
-            task_count,
-            selected_bytes,
+            event = "recluster.dynamic_linear_planned",
+            peaks = peaks.len(),
+            gain_calls = gain_calls,
+            task_budget :? = task_budget,
+            batch_gain = best_gain,
+            tasks = tasks.len(),
+            bytes = selected_bytes;
+            "Dynamic linear window planned"
         );
-        Ok(Some(tasks))
+        Ok(tasks)
     }
 
     /// Bin block indices into recluster groups and build rewrite-task
@@ -812,51 +1059,54 @@ impl ReclusterMutator {
     fn build_tasks(
         &self,
         blocks: &[&ReclusterBlock],
-        task_budget: usize,
+        task_limit: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let blocks_map = self.bin_blocks_into_groups(blocks);
         let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
         let mut deferred_candidates = Vec::new();
         let large_task_bytes_threshold = self.large_task_bytes_threshold();
         for ((group, _), indices) in blocks_map {
-            if tasks.len() >= task_budget {
+            if tasks.len() >= task_limit {
                 break;
             }
-            let remaining_task_budget = task_budget - tasks.len();
+            let remaining_task_limit = task_limit - tasks.len();
             let candidates = self.build_recluster_task_candidates_for_indices(
                 group,
                 indices,
                 blocks,
-                remaining_task_budget,
+                remaining_task_limit,
             )?;
 
-            for candidate in candidates {
-                let defer = candidate.score.selected_total_bytes < large_task_bytes_threshold
-                    && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
+            // Defer and backfill each scalar group's joint winner intact.
+            // Non-linear strategy candidates remain independent.
+            let batches = if self.strategy.supports_ordered_merge() {
+                vec![candidates]
+            } else {
+                candidates.into_iter().map(|task| vec![task]).collect()
+            };
+            for batch in batches {
+                if batch.is_empty() {
+                    continue;
+                }
+                let defer = batch.iter().all(|candidate| {
+                    candidate.score.selected_total_bytes < large_task_bytes_threshold
+                        && (candidate.score.max_depth as f64)
+                            < 4.0 * self.properties.depth_threshold
+                });
                 if defer {
-                    debug!(
-                        "recluster: defer candidate group={} block_size={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
-                        group,
-                        candidate.score.selected_total_bytes,
-                        candidate.score.max_depth,
-                        self.properties.depth_threshold,
-                    );
-                    deferred_candidates.push(candidate);
+                    deferred_candidates.push(batch);
                 } else {
-                    tasks.push(candidate);
-                    if tasks.len() >= task_budget {
-                        break;
-                    }
+                    tasks.extend(batch);
                 }
             }
         }
 
-        if tasks.len() < task_budget {
-            deferred_candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
-            let remaining_task_budget = task_budget - tasks.len();
-            for candidate in deferred_candidates.into_iter().take(remaining_task_budget) {
-                debug!("recluster: backfill deferred candidate {}", candidate);
-                tasks.push(candidate);
+        if tasks.len() < task_limit {
+            deferred_candidates.sort_by(|left, right| right[0].score.cmp_desc(&left[0].score));
+            for batch in deferred_candidates {
+                if batch.len() <= task_limit - tasks.len() {
+                    tasks.extend(batch);
+                }
             }
         }
 
@@ -915,7 +1165,11 @@ impl ReclusterMutator {
                         .or_insert_with(|| segment_info.clone());
                     for &block_idx in block_indices {
                         let block_meta = segment_info.blocks[block_idx].clone();
-                        selected_block_keys.insert((current_segment_idx, block_idx));
+                        if !selected_block_keys.insert((current_segment_idx, block_idx)) {
+                            return Err(ErrorCode::Internal(
+                                "Shared input block in recluster task batch",
+                            ));
+                        }
                         total_rows += block_meta.row_count as usize;
                         total_bytes += block_meta.block_size as usize;
                         total_compressed += block_meta.file_size as usize;
@@ -923,33 +1177,18 @@ impl ReclusterMutator {
                     }
                 }
 
-                if self.properties.split_sort_tasks {
-                    match candidate.kind {
-                        ReclusterTaskKind::MergeBlocks => {
-                            if block_metas.iter().any(|(_, meta)| {
-                                !meta.cluster_stats.as_ref().is_some_and(|stats| {
-                                    self.strategy
-                                        .can_reuse_cluster_stats(&self.properties, stats)
-                                })
-                            }) {
-                                return Err(ErrorCode::Internal(
-                                    "MergeBlocks requires sources ordered by the current cluster key",
-                                ));
-                            }
-                        }
-                        ReclusterTaskKind::SortBlocks => {
-                            if block_metas.len() > 1
-                                && !self
-                                    .properties
-                                    .block_thresholds
-                                    .check_for_compact(total_rows, total_bytes)
-                            {
-                                return Err(ErrorCode::Internal(
-                                    "multi-source SortBlocks exceeds the small-block group limits",
-                                ));
-                            }
-                        }
-                    }
+                if self.properties.split_sort_tasks
+                    && candidate.kind == ReclusterTaskKind::MergeBlocks
+                    && block_metas.iter().any(|(_, meta)| {
+                        !meta.cluster_stats.as_ref().is_some_and(|stats| {
+                            self.strategy
+                                .can_reuse_cluster_stats(&self.properties, stats)
+                        })
+                    })
+                {
+                    return Err(ErrorCode::Internal(
+                        "MergeBlocks requires sources ordered by the current cluster key",
+                    ));
                 }
 
                 let (stats, parts) = FuseTable::to_partitions(
@@ -1033,8 +1272,23 @@ impl ReclusterMutator {
         }
         let remained_blocks = self.gather_retained_blocks(retained).await?;
 
+        let task_batches = self
+            .task_budget
+            .filter(|_| !tasks.is_empty())
+            .map(|budget| {
+                budget
+                    .assign(tasks.iter().map(|task| (task.total_bytes, task.kind)))
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(
+                            "Selected recluster tasks have no resource-feasible placement",
+                        )
+                    })
+            })
+            .transpose()?;
+
         Ok((selected_block_count, ReclusterParts {
             tasks,
+            task_batches,
             remained_blocks,
             virtual_schemas,
             removed_segment_indexes,
@@ -1049,9 +1303,9 @@ impl ReclusterMutator {
         group: ReclusterGroup,
         indices: Vec<usize>,
         blocks: &[&ReclusterBlock],
-        task_budget: usize,
+        task_limit: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        debug_assert!(task_budget > 0);
+        debug_assert!(task_limit > 0);
         let indices = self
             .strategy
             .eligible_blocks(&self.properties, indices, blocks);
@@ -1111,29 +1365,14 @@ impl ReclusterMutator {
                 .iter()
                 .any(|idx| matches!(blocks[*idx].stats, ReclusterBlockStats::Normalized(_)))
         {
-            // A large mixed group is not a full-sort task. Establish order in each
-            // unordered block independently; only ordered blocks enter merge selection.
+            // Pack unordered blocks from the same partition and base level into
+            // sort tasks. Only ordered blocks enter merge selection.
             let (ordered, unordered): (Vec<_>, Vec<_>) = indices
                 .into_iter()
                 .partition(|idx| matches!(blocks[*idx].stats, ReclusterBlockStats::Original));
-            let mut candidates = match ordered.len() {
-                0 | 1 => Vec::new(),
-                _ => {
-                    // Reapply the small-group and level gates to the ordered subset.
-                    // All inputs are now ordered, so the helper cannot split again.
-                    self.build_recluster_task_candidates_for_indices(
-                        group,
-                        ordered,
-                        blocks,
-                        task_budget,
-                    )?
-                }
-            };
-            for idx in unordered {
-                let bytes = blocks[idx].meta.block_size as usize;
-                if bytes > self.properties.memory_threshold {
-                    continue;
-                }
+            let bins = self.pack_unordered_blocks(unordered, blocks, task_limit);
+            let mut candidates = Vec::with_capacity(bins.len());
+            for (indices, bytes) in bins {
                 candidates.push(task_candidate(
                     self.strategy.supports_ordered_merge(),
                     group,
@@ -1142,12 +1381,19 @@ impl ReclusterMutator {
                         max_depth: 1,
                         average_depth: 1.0,
                     },
-                    &[idx],
+                    &indices,
                     blocks,
                 ));
             }
+            let remaining = task_limit - candidates.len();
+            if ordered.len() >= 2 && remaining > 0 {
+                // Reserve sort preparation slots before selecting an indivisible
+                // joint winner from the ordered subset. Never truncate it later.
+                candidates.extend(self.build_recluster_task_candidates_for_indices(
+                    group, ordered, blocks, remaining,
+                )?);
+            }
             candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
-            candidates.truncate(task_budget);
             return Ok(candidates);
         }
 
@@ -1155,7 +1401,37 @@ impl ReclusterMutator {
             return Ok(Vec::new());
         }
         self.strategy
-            .fetch_task_candidates(&self.properties, group, &indices, blocks, task_budget)
+            .fetch_task_candidates(&self.properties, group, &indices, blocks, task_limit)
+    }
+
+    /// Pack unordered blocks into byte-bounded tasks within one candidate group.
+    /// Place the largest blocks first on the least loaded task so tasks from
+    /// a single large window can still use all executors.
+    fn pack_unordered_blocks(
+        &self,
+        mut indices: Vec<usize>,
+        blocks: &[&ReclusterBlock],
+        task_limit: usize,
+    ) -> Vec<(Vec<usize>, usize)> {
+        let block_bytes = |idx: usize| blocks[idx].meta.block_size as usize;
+        let memory = self.properties.memory_threshold;
+        indices.retain(|&idx| block_bytes(idx) <= memory);
+        indices.sort_by_key(|&idx| std::cmp::Reverse(block_bytes(idx)));
+        let mut pending = indices.into_iter();
+        let mut bins = pending
+            .by_ref()
+            .take(task_limit)
+            .map(|idx| (vec![idx], block_bytes(idx)))
+            .collect::<Vec<_>>();
+        for idx in pending {
+            let bytes = block_bytes(idx);
+            let (indices, total_bytes) = bins.iter_mut().min_by_key(|bin| bin.1).unwrap();
+            if bytes <= memory.saturating_sub(*total_bytes) {
+                indices.push(idx);
+                *total_bytes += bytes;
+            }
+        }
+        bins
     }
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.

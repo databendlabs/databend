@@ -22,16 +22,20 @@ use databend_common_ast::ast::ScheduleOptions as AstScheduleOptions;
 use databend_common_ast::ast::TaskSql;
 use databend_common_exception::Result;
 use databend_common_management::TaskMgr;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::ScheduleOptions;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
 use databend_common_meta_app::principal::WarehouseOptions;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
+use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task::TaskSql as MetaTaskSql;
+use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_meta_client::types::MatchSeq;
 use databend_meta_runtime::DatabendRuntime;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -240,6 +244,43 @@ async fn test_scheduler_update_does_not_overwrite_alter() -> anyhow::Result<()> 
         task_mgr.describe_task("task_1").await??.unwrap().status,
         Status::Suspended
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_accept_keeps_a_later_message() -> anyhow::Result<()> {
+    let (kv, task_mgr) = new_task_api().await?;
+    let task = test_task("task_1", "select 1");
+    let key = TaskMessageIdent::new(
+        Tenant::new_literal("admin"),
+        TaskMessage::AfterTask(task.clone()).key(),
+    );
+
+    task_mgr.send(TaskMessage::AfterTask(task.clone())).await?;
+    let first_seq = kv.get_pb(&key).await?.unwrap().seq;
+
+    // The task is resumed before a node handles the first message: the second message replaces
+    // it at the same key.
+    let mut started = task;
+    started.status = Status::Started;
+    task_mgr.send(TaskMessage::AfterTask(started)).await?;
+    let second_seq = kv.get_pb(&key).await?.unwrap().seq;
+
+    // A node that handles the first message does not remove the second one.
+    assert!(!task_mgr.accept(&key, MatchSeq::Exact(first_seq)).await?);
+    let message = kv.get_pb(&key).await?.unwrap();
+    assert_eq!(message.seq, second_seq);
+    assert!(matches!(
+        message.data,
+        TaskMessage::AfterTask(Task {
+            status: Status::Started,
+            ..
+        })
+    ));
+
+    assert!(task_mgr.accept(&key, MatchSeq::Exact(second_seq)).await?);
+    assert!(kv.get_pb(&key).await?.is_none());
 
     Ok(())
 }

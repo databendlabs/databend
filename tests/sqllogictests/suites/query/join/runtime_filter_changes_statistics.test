@@ -1,0 +1,65 @@
+# CHANGES needs the scan ChangeType to define its statistics. A bloom
+# denominator is optional and must not make otherwise valid planning fail.
+# Keep the two intended build/probe directions; do not disable other optimizers.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+create or replace table rf_changes_source(g UInt64,k UInt64) change_tracking='true';
+
+statement ok
+create or replace table rf_changes_regular(k UInt64);
+
+statement ok
+insert into rf_changes_regular values (0),(1),(2);
+
+statement ok
+insert into rf_changes_source values (99,99);
+
+statement ok
+set variable rf_changes_start = (select snapshot_id from fuse_snapshot('default','rf_changes_source') order by timestamp desc limit 1);
+
+statement ok
+insert into rf_changes_source select number%3,number%3 from numbers(17);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+query I
+select count(*) from rf_changes_source changes(information => append_only) at(snapshot => $rf_changes_start) p left semi join rf_changes_regular b on p.k=b.k;
+----
+17
+
+query I
+select count(*) from rf_changes_regular p left semi join (select g,min(k) as k from rf_changes_source changes(information => append_only) at(snapshot => $rf_changes_start) group by g) b on p.k=b.k;
+----
+3
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# Before the fix these optional lookups request statistics without ChangeType.
+query I
+select count(*) from rf_changes_source changes(information => append_only) at(snapshot => $rf_changes_start) p left semi join rf_changes_regular b on p.k=b.k;
+----
+17
+
+query I
+select count(*) from rf_changes_regular p left semi join (select g,min(k) as k from rf_changes_source changes(information => append_only) at(snapshot => $rf_changes_start) group by g) b on p.k=b.k;
+----
+3
+
+statement ok
+unset variable rf_changes_start;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table rf_changes_source;
+
+statement ok
+drop table rf_changes_regular;

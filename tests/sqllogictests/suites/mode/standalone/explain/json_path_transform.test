@@ -8,7 +8,7 @@ explain select json_path_transform(doc, '$.a', v -> to_variant(left(v::String, m
 ----
 EvalScalar
 ├── output columns: [json_path_transform(doc, '$.a', v -> to_variant(left(v::STRING, max_len))) (#2)]
-├── expressions: [json_path_transform(t_json_path_transform.doc (#0), '$.a', t_json_path_transform.max_len (#1), ["v"] -> to_variant(left(CAST(v (#2) AS String NULL), CAST(t_json_path_transform.max_len (#1) AS UInt64 NULL))))]
+├── expressions: [json_path_transform(t_json_path_transform.doc (#0), '$.a', t_json_path_transform.max_len (#1), ["v"] -> to_variant(left(CAST(v AS String NULL), CAST(t_json_path_transform.max_len (#1) AS UInt64 NULL))))]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_json_path_transform

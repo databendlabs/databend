@@ -80,13 +80,6 @@ impl<'a> CoreExprArena<'a> {
         let display_name = format!("{original_expr:#}");
         let mut func_name = func_name.to_string();
 
-        if *distinct && !order_by.is_empty() {
-            return Err(
-                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
-                    .set_span(span),
-            );
-        }
-
         let remove_count_args = filter.is_none()
             && func_name.eq_ignore_ascii_case("count")
             && !*distinct
@@ -269,6 +262,9 @@ where A: TypeCheckAdapter
         let in_window = self.in_window_function;
         self.in_window_function = self.in_window_function || in_window_call;
         let in_aggregate_function = self.in_aggregate_function;
+        // The arguments of a grouped aggregate are evaluated before it, those of
+        // a window aggregate after it.
+        let suspended = !in_window_call && self.suspend_grouping_key_scope();
         let result = (|| {
             let arguments =
                 self.resolve_aggregate_arguments(arena, span, func_name, args, order_by)?;
@@ -284,6 +280,7 @@ where A: TypeCheckAdapter
                 remove_count_args,
             )
         })();
+        self.resume_grouping_key_scope(suspended);
         self.in_window_function = in_window;
         self.in_aggregate_function = in_aggregate_function;
         result
@@ -299,10 +296,9 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
         order_by: &CoreOrderByExprs,
     ) -> Result<AggregateArguments> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
+        // Lowering rejects those written in a lambda body; this one is in a
+        // SQL UDF that aggregates, expanded in a body.
+        if !self.lambda_params.is_empty() {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in lambda function".to_string(),
             )
@@ -431,6 +427,20 @@ where A: TypeCheckAdapter
         } else {
             params
         };
+
+        // DISTINCT keeps only the unique argument values, so independent sort
+        // keys cannot be recovered. Follow PostgreSQL: every ORDER BY
+        // expression of a DISTINCT aggregate must appear in its argument list.
+        if distinct
+            && sort_descs
+                .iter()
+                .any(|desc| !arguments.contains(&desc.expr))
+        {
+            return Err(ErrorCode::SemanticError(
+                "in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list",
+            )
+            .set_span(span));
+        }
 
         let agg_func = AGGR_REGISTRY
             .resolve(RawAggregateCall {

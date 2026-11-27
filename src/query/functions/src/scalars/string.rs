@@ -21,6 +21,7 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -173,7 +174,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         .function()
         .typed_1_arg::<StringType, NumberType<u64>>()
         .passthrough_nullable()
-        .each_row(|val, _| val.len() as u64)
+        // The byte length is in the string views; the value bytes are never read.
+        .vectorized(|val, _| match val {
+            Value::Scalar(s) => Value::Scalar(s.len() as u64),
+            Value::Column(col) => Value::Column(col.len_iter().map(u64::from).collect()),
+        })
         .register();
 
     registry.register_1_arg::<StringType, NumberType<u64>, _>(

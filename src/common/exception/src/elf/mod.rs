@@ -20,7 +20,6 @@ mod dwarf_subprogram;
 mod dwarf_unit;
 mod library_loader;
 mod library_manager;
-mod library_symbol;
 
 #[cfg(target_pointer_width = "32")]
 type ElfFile = object::read::elf::ElfFile32<'static, object::NativeEndian, &'static [u8]>;

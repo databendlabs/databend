@@ -193,11 +193,13 @@ impl StorageParams {
                 s1.account_name = s2.account_name;
                 s1.account_key = s2.account_key;
                 s1.network_config = s2.network_config;
+                s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::Azblob(s1))
             }
             (StorageParams::Gcs(mut s1), StorageParams::Gcs(s2)) => {
                 s1.credential = s2.credential;
                 s1.network_config = s2.network_config;
+                s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::Gcs(s1))
             }
             (StorageParams::S3(mut s1), StorageParams::S3(s2)) => {
@@ -211,6 +213,14 @@ impl StorageParams {
                 s1.disable_credential_loader = s2.disable_credential_loader;
                 s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::S3(s1))
+            }
+            (StorageParams::Oss(mut current), StorageParams::Oss(update)) => {
+                // Keep the table's location; the update may have a placeholder bucket and root.
+                current.access_key_id = update.access_key_id;
+                current.access_key_secret = update.access_key_secret;
+                current.role_arn = update.role_arn;
+                current.network_config = update.network_config;
+                Ok(Self::Oss(current))
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
                 "Cannot apply update from {:?} to {:?}",
@@ -370,12 +380,16 @@ impl StorageParams {
             StorageParams::Azblob(cfg) => {
                 cfg.account_name.clear();
                 cfg.account_key.clear();
+                cfg.allow_credential_chain = None;
             }
             StorageParams::Ftp(cfg) => {
                 cfg.username.clear();
                 cfg.password.clear();
             }
-            StorageParams::Gcs(cfg) => cfg.credential.clear(),
+            StorageParams::Gcs(cfg) => {
+                cfg.credential.clear();
+                cfg.allow_credential_chain = None;
+            }
             StorageParams::Obs(cfg) => {
                 cfg.access_key_id.clear();
                 cfg.secret_access_key.clear();
@@ -562,6 +576,12 @@ pub struct StorageAzblobConfig {
     pub account_name: String,
     pub account_key: String,
     pub root: String,
+    /// Runtime-only override for whether ambient credential chains are allowed.
+    ///
+    /// This value is never serialized/persisted and is only used when building
+    /// operators in the current process.
+    #[serde(skip)]
+    pub allow_credential_chain: Option<bool>,
     pub network_config: Option<StorageNetworkParams>,
 }
 
@@ -573,6 +593,7 @@ impl Debug for StorageAzblobConfig {
             .field("root", &self.root)
             .field("account_name", &self.account_name)
             .field("account_key", &mask_string(&self.account_key, 3))
+            .field("allow_credential_chain", &self.allow_credential_chain)
             .finish()
     }
 }
@@ -635,6 +656,12 @@ pub struct StorageGcsConfig {
     pub bucket: String,
     pub root: String,
     pub credential: String,
+    /// Runtime-only override for whether ambient credential chains are allowed.
+    ///
+    /// This value is never serialized/persisted and is only used when building
+    /// operators in the current process.
+    #[serde(skip)]
+    pub allow_credential_chain: Option<bool>,
     pub network_config: Option<StorageNetworkParams>,
 }
 
@@ -645,6 +672,7 @@ impl Default for StorageGcsConfig {
             bucket: String::new(),
             root: String::new(),
             credential: String::new(),
+            allow_credential_chain: None,
             network_config: Default::default(),
         }
     }
@@ -657,6 +685,7 @@ impl Debug for StorageGcsConfig {
             .field("bucket", &self.bucket)
             .field("root", &self.root)
             .field("credential", &mask_string(&self.credential, 3))
+            .field("allow_credential_chain", &self.allow_credential_chain)
             .finish()
     }
 }
@@ -1021,6 +1050,60 @@ pub struct StorageNetworkParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apply_oss_update_preserves_storage_location() {
+        let current = StorageOssConfig {
+            endpoint_url: "https://oss.example.com".to_string(),
+            presign_endpoint_url: "https://oss-public.example.com".to_string(),
+            bucket: "table-bucket".to_string(),
+            root: "/table-prefix/".to_string(),
+            access_key_id: "old-key".to_string(),
+            access_key_secret: "old-secret".to_string(),
+            role_arn: "old-role".to_string(),
+            server_side_encryption: "KMS".to_string(),
+            server_side_encryption_key_id: "table-kms-key".to_string(),
+            network_config: Some(StorageNetworkParams {
+                connect_timeout: 5,
+                ..Default::default()
+            }),
+        };
+        let update = StorageOssConfig {
+            endpoint_url: "https://other-oss.example.com".to_string(),
+            bucket: "test".to_string(),
+            root: "/".to_string(),
+            access_key_id: "new-key".to_string(),
+            access_key_secret: "new-secret".to_string(),
+            role_arn: "new-role".to_string(),
+            ..Default::default()
+        };
+
+        // SQL currently supplies None. Match S3's replacement semantics for both cases.
+        for network_config in [
+            None,
+            Some(StorageNetworkParams {
+                connect_timeout: 10,
+                ..Default::default()
+            }),
+        ] {
+            let result = StorageParams::Oss(current.clone())
+                .apply_update(StorageParams::Oss(StorageOssConfig {
+                    network_config: network_config.clone(),
+                    ..update.clone()
+                }))
+                .unwrap();
+            assert_eq!(
+                result,
+                StorageParams::Oss(StorageOssConfig {
+                    access_key_id: update.access_key_id.clone(),
+                    access_key_secret: update.access_key_secret.clone(),
+                    role_arn: update.role_arn.clone(),
+                    network_config,
+                    ..current.clone()
+                })
+            );
+        }
+    }
 
     #[test]
     fn without_credentials_preserves_s3_location() {

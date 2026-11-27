@@ -1,0 +1,39 @@
+# A cached bundle must serve subsequent searches on different fields, including a field
+# with no postings in its segment, and still return the same scored matches afterward.
+
+statement ok
+CREATE OR REPLACE TABLE cached_fts_docs (
+    id INT NOT NULL,
+    body STRING NOT NULL,
+    title STRING NULL,
+    INVERTED INDEX idx(body, title) tokenizer = 'english'
+) STORAGE_FORMAT = 'parquet'
+
+statement ok
+INSERT INTO cached_fts_docs VALUES (1, 'amber amber', NULL), (2, 'amber slate', NULL), (3, 'slate slate', NULL)
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+SET enable_prune_cache = 0
+
+query I
+SELECT id FROM cached_fts_docs WHERE match(body, 'amber') ORDER BY score() DESC
+----
+1
+2
+
+query I
+SELECT count(*) FROM cached_fts_docs WHERE match(title, 'amber')
+----
+0
+
+query I
+SELECT id FROM cached_fts_docs WHERE match(body, 'amber') ORDER BY score() DESC
+----
+1
+2
+
+statement ok
+DROP TABLE cached_fts_docs

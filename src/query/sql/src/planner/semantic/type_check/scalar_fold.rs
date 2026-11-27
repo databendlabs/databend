@@ -22,6 +22,41 @@
 //! values implied by types and nullability, filter absorption, contradictory
 //! ranges and `if` branch selection. They come from
 //! `databend_common_expression::FoldRules`.
+//!
+//! # Folding policy
+//!
+//! The keys of a grouping scope and the pre-aggregate forms compared with
+//! them are bound with the same folding policy, that of the scope; every
+//! other expression folds as it is evaluated. The policies differ only for
+//! grouping sets, whose keys keep their structure, see `may_fold`: the
+//! aggregate injects NULLs into the outputs of the keys, so folding by value
+//! would turn `a IS NULL` over a NOT NULL key `a` into `false`. A type
+//! checker derives the policy from the scope, see `scalar_folding_policy`;
+//! only the body of a SQL UDF, bound in a context without a parent, has it
+//! passed.
+//!
+//! # Layers of folding
+//!
+//! - `FoldRules`: the node-local rules, shared by the layers below.
+//! - Bind time, this module: applies the rules to `ScalarExpr` as it is
+//!   bound, with [`ScalarFacts`] for the parents. Its results are visible to
+//!   binding: keys and forms compare as folded, and a folded constant types
+//!   its parent as a literal does.
+//! - The optimizer: rules that evaluate predicates with `ConstantFolder`,
+//!   e.g. selectivity estimation and the conversion of outer joins to inner
+//!   joins.
+//! - Physical plans: `ConstantFolder::fold` on the expressions they evaluate,
+//!   e.g. of filters and project sets.
+//!
+//! Two known inconsistencies are kept:
+//!
+//! - A lambda body is compiled with `ConstantFolder::fold` whatever the
+//!   policy, see `compile_lambda_body`. Under `ROLLUP`, `x -> x + (1 + 1)`
+//!   is thus the key `x -> x + 2::UInt16`, the type of `1 + 1`, though not
+//!   `x -> x + 2`.
+//! - An ordinary GROUP BY compares keys and forms as folded, grouping sets as
+//!   written: `SELECT a + 2 FROM t GROUP BY a + (1 + 1)` binds, and with
+//!   `ROLLUP(a + (1 + 1))` it is rejected.
 
 use databend_common_ast::Span;
 use databend_common_exception::Result;
@@ -35,6 +70,7 @@ use databend_common_expression::IfPruning;
 use databend_common_expression::RangeConstraint;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::cast_plan::casts_through;
 use databend_common_expression::expr;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -45,6 +81,7 @@ use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::ColumnBinding;
 use crate::Symbol;
+use crate::binder::ScalarFoldingPolicy;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -129,6 +166,26 @@ pub(super) struct ArgFacts {
     pub deterministic: bool,
 }
 
+/// A simplification of bind-time folding, which `TypeChecker::may_fold`
+/// allows or not.
+pub(super) enum FoldStep<'x> {
+    /// Replace a cast whose argument is constant with the cast value.
+    ConstantCast,
+    /// Apply the rules of `FoldRules` to a type checked call: constant
+    /// evaluation, singletons of domains, filter absorption, contradictory
+    /// ranges and `if` branch selection.
+    Call(&'x expr::FunctionCall<usize>),
+    /// Replace a constant argument that the check of a call cast implicitly,
+    /// `checked`, with the constant of its checked type, e.g. the literal in
+    /// `timestamp > '2001-01-01'`, whose value is known only after the check.
+    ImplicitCastConstant {
+        arg: &'x BoundScalar,
+        checked: &'x EExpr<usize>,
+        /// Whether the parameter of the argument has a generic type.
+        is_generic: bool,
+    },
+}
+
 fn full_domain(data_type: &DataType) -> Option<Domain> {
     // `Domain::full` is undefined for generic and stage location types.
     (!data_type.has_generic() && data_type.remove_nullable() != DataType::StageLocation)
@@ -138,6 +195,59 @@ fn full_domain(data_type: &DataType) -> Option<Domain> {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
+    /// The folding policy of the expression being bound: that of the
+    /// grouping scope whose keys, or the pre-aggregate forms compared with
+    /// them, are being bound, see `key_binding_scope`, and `Normal`
+    /// otherwise. The body of a SQL UDF folds as the expression it is
+    /// expanded in.
+    pub(super) fn scalar_folding_policy(&self) -> ScalarFoldingPolicy {
+        if let Some(policy) = self.inherited_folding_policy {
+            return policy;
+        }
+        self.key_binding_scope()
+            .map_or(ScalarFoldingPolicy::Normal, |scope| scope.folding_policy)
+    }
+
+    /// Whether bind-time folding may make `step`, the one place that decides
+    /// it.
+    ///
+    /// Under `ScalarFoldingPolicy::PreserveStructure`, nothing is folded: the
+    /// keys of grouping sets and the pre-aggregate forms compared with them
+    /// keep the structure they are written with. The aggregate injects NULLs
+    /// into the outputs of the keys, so a constant derived from types, such
+    /// as `is_null(a)` over a NOT NULL key `a`, does not hold after it; and a
+    /// folded constant would be matched to any key that folds to the same
+    /// value. Otherwise:
+    ///
+    /// - a constant cast always folds;
+    /// - a call folds unless it is a set-returning function, which yields
+    ///   rows, `grouping()`, which only the aggregate computes, see
+    ///   `is_grouping`, or it has more than
+    ///   `FoldRules::MAX_FUNCTION_ARGS_TO_FOLD` arguments, which bounds the
+    ///   folding cost;
+    /// - an implicitly cast constant argument is replaced if it is
+    ///   evaluable, its parameter is not generic and the check changed its
+    ///   type. The caller then keeps the constant only if it has the checked
+    ///   type, so that the call binds as checked.
+    pub(super) fn may_fold(&self, step: FoldStep<'_>) -> bool {
+        if !self.scalar_folding_policy().allows_folding() {
+            return false;
+        }
+        match step {
+            FoldStep::ConstantCast => true,
+            FoldStep::Call(call) => {
+                !matches!(call.function.eval, FunctionEval::SRF { .. })
+                    && !Self::is_grouping(call)
+                    && call.args.len() <= FoldRules::MAX_FUNCTION_ARGS_TO_FOLD
+            }
+            FoldStep::ImplicitCastConstant {
+                arg,
+                checked,
+                is_generic,
+            } => arg.facts.evaluable && !is_generic && checked.data_type() != &arg.data_type,
+        }
+    }
+
     /// Attaches facts to an expression bound without them.
     pub(super) fn bind_derived(&self, scalar: ScalarExpr, data_type: DataType) -> BoundScalar {
         let facts = self.derive_facts(&scalar);
@@ -382,20 +492,27 @@ where A: TypeCheckAdapter
         child: &ScalarExpr,
         facts: &ScalarFacts,
     ) -> ArgFacts {
-        let mut arg = self.wrapped_facts(checked, &child.data_type(), facts);
-        if arg.constant.is_none() && arg.deterministic {
-            arg.constant = if facts.column_free && facts.evaluable {
-                // A column-free child is lowered as a whole, so the checked
-                // argument can be evaluated directly.
+        // A column-free child is lowered as a whole, so the checked argument can be evaluated
+        // directly, once. A value that fails to evaluate is left for runtime.
+        let evaluable = facts.column_free && facts.evaluable;
+        if evaluable
+            && facts.deterministic
+            && checked.as_constant().is_none()
+            && let Some(constant) =
                 FoldRules::eval_constant(&self.func_ctx, &BUILTIN_FUNCTIONS, checked)
-            } else if arg.removable {
-                arg.domain.as_ref().and_then(Domain::as_singleton)
-            } else {
-                None
+        {
+            return ArgFacts {
+                domain: Some(constant.as_ref().domain(checked.data_type())),
+                constant: Some(constant),
+                removable: true,
+                deterministic: true,
             };
+        }
+        let mut arg = self.wrapped_facts(checked, &child.data_type(), facts);
+        if arg.constant.is_none() && arg.deterministic && !evaluable && arg.removable {
+            arg.constant = arg.domain.as_ref().and_then(Domain::as_singleton);
             if let Some(constant) = &arg.constant {
                 arg.domain = Some(constant.as_ref().domain(checked.data_type()));
-                arg.removable = true;
             }
         }
         arg
@@ -426,7 +543,6 @@ where A: TypeCheckAdapter
                     FoldRules::cast_domain(
                         &self.func_ctx,
                         &BUILTIN_FUNCTIONS,
-                        cast.span,
                         cast.expr.data_type(),
                         &cast.dest_type,
                         cast.is_try,
@@ -611,6 +727,40 @@ where A: TypeCheckAdapter
     }
 
     /// A call that type checking turned into a cast of its only argument.
+    /// Binds `cast`, a cast that a call was rewritten to, over `child`, the argument of the call.
+    /// The checked argument, `cast.expr`, keeps the casts that type checking added to `child`,
+    /// e.g. `to_date(x)` of a UInt8 `x` is `CAST(CAST(x AS Int64) AS Date)`. Two casts are bound
+    /// as one only when the plan of the outer cast runs the inner one first.
+    pub(super) fn bind_checked_cast(
+        &self,
+        cast: expr::Cast<usize>,
+        child: BoundScalar,
+    ) -> BoundScalar {
+        if cast.expr.data_type() == &child.data_type {
+            return self.fold_bound_cast(cast, child);
+        }
+        let EExpr::Cast(inner) = cast.expr.as_ref() else {
+            return self.fold_bound_cast(cast, child);
+        };
+        if !inner.is_try
+            && !cast.is_try
+            && casts_through(
+                inner.expr.data_type(),
+                &inner.dest_type,
+                &cast.dest_type,
+                &BUILTIN_FUNCTIONS,
+            )
+        {
+            let cast = expr::Cast {
+                expr: inner.expr.clone(),
+                ..cast
+            };
+            return self.bind_checked_cast(cast, child);
+        }
+        let inner = self.bind_checked_cast(inner.clone(), child);
+        self.fold_bound_cast(cast, inner)
+    }
+
     pub(super) fn fold_bound_cast(
         &self,
         cast: expr::Cast<usize>,
@@ -621,7 +771,9 @@ where A: TypeCheckAdapter
         if !arg.deterministic {
             self.adapter.set_result_cache_uncacheable();
         }
-        if let Some(value) = arg.constant {
+        if let Some(value) = arg.constant
+            && self.may_fold(FoldStep::ConstantCast)
+        {
             return Self::folded_constant_of_type(cast.span(), value, cast.data_type().clone());
         }
         let EExpr::Cast(cast) = cast else {
@@ -668,7 +820,7 @@ where A: TypeCheckAdapter
         let is_grouping = Self::is_grouping(&call);
         let all_removable = arg_facts.iter().all(|arg| arg.removable);
         let mut domain = None;
-        if !is_srf && !is_grouping && call.args.len() <= FoldRules::MAX_FUNCTION_ARGS_TO_FOLD {
+        if self.may_fold(FoldStep::Call(&call)) {
             if name == "if" && call.args.len() >= 3 && !call.args.len().is_multiple_of(2) {
                 match FoldRules::if_pruning(call.args.len(), |index| {
                     arg_facts[index].constant.as_ref()
@@ -791,16 +943,13 @@ where A: TypeCheckAdapter
             }
         }
 
-        // Arguments fold before the call is checked. An argument whose checked
-        // type differs from its own was cast implicitly by the check, e.g. the
-        // literal in `timestamp > '2001-01-01'`, and its value is known only
-        // now. It is replaced only if the constant keeps the checked type, so
-        // that the call binds as checked. A non-nullable argument becomes a
-        // literal; nullability that the check added is ignored, as lowering
-        // adds it again. A nullable argument keeps its nullability, as the
-        // call may be nullable only because of it, so it becomes a constant
-        // of the checked type. Other arguments, including folded explicit
-        // casts, are kept as bound.
+        // Arguments fold before the call is checked, so an argument that the
+        // check cast implicitly is replaced now, see `FoldStep`. A
+        // non-nullable argument becomes a literal; nullability that the check
+        // added is ignored, as lowering adds it again. A nullable argument
+        // keeps its nullability, as the call may be nullable only because of
+        // it, so it becomes a constant of the checked type. Other arguments,
+        // including folded explicit casts, are kept as bound.
         let mut folded_args = call
             .args
             .iter()
@@ -816,9 +965,11 @@ where A: TypeCheckAdapter
             .map(
                 |(((checked_arg, is_generic), arg), facts)| match &facts.constant {
                     Some(value)
-                        if arg.facts.evaluable
-                            && !is_generic
-                            && checked_arg.data_type() != &arg.data_type =>
+                        if self.may_fold(FoldStep::ImplicitCastConstant {
+                            arg: &arg,
+                            checked: checked_arg,
+                            is_generic,
+                        }) =>
                     {
                         let (folded, checked_type) = if arg.data_type.is_nullable_or_null() {
                             let data_type = checked_arg.data_type().clone();

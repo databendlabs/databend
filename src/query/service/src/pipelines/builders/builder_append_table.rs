@@ -232,7 +232,6 @@ impl PipelineBuilder {
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
@@ -246,7 +245,6 @@ impl PipelineBuilder {
             update_stream_meta,
             overwrite,
             None,
-            deduplicated_label,
             table_meta_timestamps,
         )?;
 

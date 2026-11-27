@@ -1,0 +1,13 @@
+=== case_sensitive_lambda_parameter_matches_same_case ===
+description: With unquoted names case sensitive, a parameter is referred to by its name as written.
+sql: array_transform([number], X -> X + 1)
+status: ok
+scalar: array_transform(array(number (#0)), ["X"] -> X + 1)
+type: Array(Int64 NULL)
+
+=== case_sensitive_lambda_parameter_differs_from_other_case ===
+description: With unquoted names case sensitive, a name in another case is not the parameter.
+sql: array_transform([number], X -> x + 1)
+status: error
+code: 1065
+message: column x doesn't exist

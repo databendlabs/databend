@@ -170,7 +170,7 @@ insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
 statement ok
 insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
 
-statement error 4001
+statement error 1135
 MERGE INTO orders2 USING (
     SELECT o.a,o.b
     FROM orders2 o

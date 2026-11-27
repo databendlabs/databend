@@ -24,6 +24,7 @@ use thiserror::Error;
 use crate::ErrorFrame;
 use crate::StackTrace;
 use crate::exception_backtrace::capture;
+use crate::redact::redact_url_secrets;
 use crate::span::Span;
 use crate::span::pretty_print_error;
 
@@ -52,11 +53,12 @@ impl<C> ErrorCode<C> {
     }
 
     pub fn display_text(&self) -> String {
-        if let Some(cause) = &self.cause {
+        let text = if let Some(cause) = &self.cause {
             format!("{}\n{:?}", self.display_text, cause)
         } else {
             self.display_text.clone()
-        }
+        };
+        redact_url_secrets(&text).into_owned()
     }
 
     pub fn message(&self) -> String {
@@ -64,12 +66,12 @@ impl<C> ErrorCode<C> {
         if self.detail.is_empty() {
             msg
         } else {
-            format!("{}\n{}", msg, self.detail)
+            format!("{}\n{}", msg, self.detail())
         }
     }
 
     pub fn detail(&self) -> String {
-        self.detail.clone()
+        redact_url_secrets(&self.detail).into_owned()
     }
 
     #[must_use]

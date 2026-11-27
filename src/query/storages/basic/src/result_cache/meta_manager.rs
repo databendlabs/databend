@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_store::MetaStore;
 use databend_meta_client::kvapi::KVApi;
@@ -25,6 +26,7 @@ use databend_meta_client::types::MetaSpec;
 use databend_meta_client::types::Operation;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::UpsertKV;
+use log::warn;
 
 use crate::meta_service_error;
 use crate::result_cache::common::ResultCacheValue;
@@ -68,7 +70,7 @@ impl ResultCacheMetaManager {
         match raw {
             None => Ok(None),
             Some(SeqV { data, .. }) => {
-                let mut value: ResultCacheValue = serde_json::from_slice(&data)?;
+                let mut value = decode_value(&key, &data)?;
                 value.sql = truncate_sql(&value.sql);
                 Ok(Some(value))
             }
@@ -84,8 +86,8 @@ impl ResultCacheMetaManager {
             .map_err(meta_service_error)?;
 
         let mut r = vec![];
-        for (_key, val) in result {
-            let mut u = serde_json::from_slice::<ResultCacheValue>(&val.data)?;
+        for (key, val) in result {
+            let mut u = decode_value(&key, &val.data)?;
             u.sql = truncate_sql(&u.sql);
             r.push(u);
         }
@@ -96,4 +98,21 @@ impl ResultCacheMetaManager {
     pub fn get_ttl(&self) -> u64 {
         self.ttl
     }
+}
+
+/// Decodes a stored [`ResultCacheValue`].
+///
+/// The error leaves out the decoder's message, because that message can
+/// quote the stored bytes.
+fn decode_value(key: &str, data: &[u8]) -> Result<ResultCacheValue> {
+    serde_json::from_slice(data).map_err(|e| {
+        warn!(
+            "Failed to decode result cache value: key={}, category={:?}, line={}, column={}",
+            key,
+            e.classify(),
+            e.line(),
+            e.column()
+        );
+        ErrorCode::Internal(format!("Invalid result cache value at key '{key}'"))
+    })
 }

@@ -46,10 +46,10 @@ use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::ScalarExpr;
 
-use super::builder::find_probe_targets;
 use super::builder::normalize_probe_target;
-use super::builder::probe_child_is_safe;
 use super::builder::supported_join_type_for_runtime_filter;
+use super::cte_targets::find_probe_targets;
+use super::cte_targets::probe_child_is_safe;
 use super::types::resolve_runtime_filter_probe_expr;
 
 /// A probe expression and the scan that applies it.
@@ -401,13 +401,15 @@ impl CteFilterPlanner<'_> {
         let Some(probe) = resolve_runtime_filter_probe_expr(self.metadata, &scalar)? else {
             return Ok(None);
         };
+        let Some(scan_id) = self.metadata.read().base_column_scan_id(column) else {
+            return Ok(None);
+        };
         let targets = find_probe_targets(
             self.metadata,
             producer,
-            probe.probe_key.as_remote_expr(),
-            probe.scan_id,
-            probe.column_idx,
-            true,
+            probe.as_remote_expr(),
+            scan_id,
+            column,
             self.func_ctx,
         )?;
         Ok((!targets.is_empty()).then_some(targets))

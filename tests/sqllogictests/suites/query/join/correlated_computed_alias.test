@@ -204,6 +204,16 @@ WHERE EXISTS (
     ) s WHERE s.n=t1.a
 );
 
+# Even if another predicate already forces materialization, an incompatible
+# count() alias must still be checked for its empty-input row.
+statement error 1002
+SELECT count(*) FROM (VALUES (0,2),(1,1)) t1(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b
+    ) s WHERE s.n > t1.b AND s.n=t1.a
+);
+
 statement error 1002
 SELECT count(*) FROM (VALUES (0,2),(1,1)) t1(a,b)
 WHERE EXISTS (

@@ -115,10 +115,10 @@ impl Settings {
     fn try_get_string(&self, key: &str) -> Result<String> {
         DefaultSettings::check_setting_mode(key, SettingMode::Read)?;
 
-        unsafe { self.unchecked_try_get_string(key) }
+        self.get_string_without_mode_check(key)
     }
 
-    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String> {
+    fn get_string_without_mode_check(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
             None => match self.configs.get(key) {
@@ -710,31 +710,15 @@ impl Settings {
     }
 
     pub fn get_enterprise_license(&self, version: BuildInfoRef) -> String {
-        let license = unsafe {
-            self.unchecked_try_get_string("enterprise_license")
-                .unwrap_or_default()
-        };
+        let license = self
+            .get_string_without_mode_check("enterprise_license")
+            .unwrap_or_default();
         if license.is_empty() {
             // Try load license from embedded env if failed to load from settings.
             version.embedded_license.clone()
         } else {
             license
         }
-    }
-
-    /// # Safety
-    pub unsafe fn get_deduplicate_label(&self) -> Result<Option<String>> {
-        let deduplicate_label = unsafe { self.unchecked_try_get_string("deduplicate_label")? };
-        if deduplicate_label.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(deduplicate_label))
-        }
-    }
-
-    /// # Safety
-    pub unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
-        unsafe { self.unchecked_set_setting("deduplicate_label".to_string(), val) }
     }
 
     pub fn get_enable_distributed_copy(&self) -> Result<bool> {
@@ -853,10 +837,6 @@ impl Settings {
 
     pub fn get_compact_max_block_selection(&self) -> Result<u64> {
         self.try_get_u64("compact_max_block_selection")
-    }
-
-    pub fn get_enable_recluster_task_selection_v2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_recluster_task_selection_v2")? != 0)
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
@@ -1102,6 +1082,10 @@ impl Settings {
 
     pub fn get_enable_prune_pipeline(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
+    }
+
+    pub fn get_enable_condition_cache(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_condition_cache")? == 1)
     }
 
     pub fn get_enable_prune_cache(&self) -> Result<bool> {

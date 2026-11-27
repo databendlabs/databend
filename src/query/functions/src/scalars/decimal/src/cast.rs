@@ -118,8 +118,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let decimal_size =
-            DecimalSize::new(params[0].get_i64()? as _, params[1].get_i64()? as _).ok()?;
+        let decimal_size = DecimalSize::try_from_scalars(&params[0], &params[1]).ok()?;
 
         let is_variant = from_type == DataType::Variant;
         let return_type = if is_variant {
@@ -197,33 +196,13 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         })
     };
 
-    registry.register_function_factory(
-        "to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            Some(Arc::new(factory(params, args_type, false)?))
-        })),
-    );
-    registry.register_function_factory(
-        "to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let f = factory(params, args_type, false)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
+    registry.register_passthrough_nullable_factory("to_decimal", move |params, args_type| {
+        factory(params, args_type, false)
+    });
     registry.register_aliases("to_decimal", &["to_numeric", "to_number"]);
-    registry.register_function_factory(
-        "try_to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            Some(Arc::new(factory(params, args_type, true)?))
-        })),
-    );
-    registry.register_function_factory(
-        "try_to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let f = factory(params, args_type, true)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
+    registry.register_passthrough_nullable_factory("try_to_decimal", move |params, args_type| {
+        factory(params, args_type, true)
+    });
     registry.register_aliases("try_to_decimal", &["try_to_numeric", "try_to_number"]);
 
     let as_decimal = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
@@ -337,38 +316,16 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
 
     let name = if is_f32 { "to_float32" } else { "to_float64" };
 
-    registry.register_function_factory(
-        name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            Some(Arc::new(factory(params, args_type, data_type)?))
-        })),
-    );
-    registry.register_function_factory(
-        name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            let f = factory(params, args_type, data_type)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
-    registry.register_function_factory(
+    registry.register_passthrough_nullable_factory(name, move |params, args_type| {
+        factory(params, args_type, NumberType::<T>::data_type())
+    });
+    registry.register_passthrough_nullable_factory(
         &format!("try_{name}"),
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            let mut f = factory(params, args_type, data_type)?;
+        move |params, args_type| {
+            let mut f = factory(params, args_type, NumberType::<T>::data_type())?;
             f.signature.name = format!("try_{name}");
-            Some(Arc::new(f.error_to_null()))
-        })),
-    );
-    registry.register_function_factory(
-        &format!("try_{name}"),
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            let mut f = factory(params, args_type, data_type)?;
-            f.signature.name = format!("try_{name}");
-            Some(Arc::new(f.error_to_null().passthrough_nullable()))
-        })),
+            Some(f.error_to_null())
+        },
     );
 }
 
@@ -425,35 +382,12 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
         Some(function)
     };
 
-    registry.register_function_factory(
-        &name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            Some(Arc::new(factory(params, args_type)?))
-        })),
-    );
-    registry.register_function_factory(
-        &name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let f = factory(params, args_type)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
-    registry.register_function_factory(
-        &try_name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let mut f = factory(params, args_type)?;
-            f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
-            Some(Arc::new(f.error_to_null()))
-        })),
-    );
-    registry.register_function_factory(
-        &try_name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let mut f = factory(params, args_type)?;
-            f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
-            Some(Arc::new(f.error_to_null().passthrough_nullable()))
-        })),
-    );
+    registry.register_passthrough_nullable_factory(&name, factory);
+    registry.register_passthrough_nullable_factory(&try_name, move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
+        Some(f.error_to_null())
+    });
 }
 
 pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
@@ -565,7 +499,7 @@ where
                 skip_inactive_with_builder_1_arg::<BooleanType, DecimalType<T>>(
                     |a, out: &mut Vec<T>, ctx| {
                         if a {
-                            ctx.set_error(out.len(), "Decimal overflow");
+                            ctx.set_error(out.len(), DecimalOverflow(size));
                             out.push(T::one());
                         } else {
                             out.push(T::zero());
@@ -758,7 +692,7 @@ where
             from, ctx,
         )
     } else {
-        let overflow = concat!("Decimal overflow at line : ", line!());
+        let overflow = DecimalOverflow(size);
         if let Value::Scalar(value) = &from {
             let x = S::to_scalar_ref(value);
             if let Some(x) = T::from_i128(x).and_then(|x| x.checked_mul(multiplier))
@@ -797,13 +731,15 @@ where
 {
     let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
         let rounding_mode = ctx.func_ctx.rounding_mode;
-        match T::from_float(x.as_(), size, rounding_mode) {
+        let x: f64 = x.as_();
+        match T::from_float(x, size, rounding_mode) {
             Some(x) => builder.push(x),
+            None if !x.is_finite() => {
+                ctx.set_error(builder.len(), NonFiniteDecimal(x));
+                builder.push(T::one());
+            }
             None => {
-                ctx.set_error(
-                    builder.len(),
-                    concat!("Decimal overflow at line : ", line!()),
-                );
+                ctx.set_error(builder.len(), DecimalOverflow(size));
                 builder.push(T::one());
             }
         }
@@ -843,28 +779,29 @@ where
     let min = W::min_for_precision(dest.precision());
     let max = W::max_for_precision(dest.precision());
     match dest.scale().cmp(&from.scale()) {
-        Ordering::Equal => {
-            rescale::<F, W, T>(value, ctx, move |x, _| (x >= min && x <= max).then_some(x))
-        }
+        Ordering::Equal => rescale::<F, W, T>(value, ctx, dest, move |x, _| {
+            (x >= min && x <= max).then_some(x)
+        }),
         Ordering::Greater => {
             let factor = W::e(dest.scale() - from.scale());
-            rescale::<F, W, T>(value, ctx, move |x, _| {
+            rescale::<F, W, T>(value, ctx, dest, move |x, _| {
                 x.checked_mul(factor).filter(|x| *x >= min && *x <= max)
             })
         }
         Ordering::Less => {
             let reduction = ScaleReduction::<W>::new(from.scale() - dest.scale(), dest.precision());
-            rescale::<F, W, T>(value, ctx, move |x, rounding_mode| {
+            rescale::<F, W, T>(value, ctx, dest, move |x, rounding_mode| {
                 reduction.reduce(x, rounding_mode)
             })
         }
     }
 }
 
-// Rows the rescaling rejects do not fit the target precision.
+// Rows the rescaling rejects do not fit `dest`.
 fn rescale<F, W, T>(
     value: Value<DecimalType<F>>,
     ctx: &mut EvalContext,
+    dest: DecimalSize,
     rescale: impl Fn(W, bool) -> Option<W> + Copy + Send + Sync,
 ) -> Value<DecimalType<T>>
 where
@@ -879,14 +816,36 @@ where
         ) {
             Some(y) => builder.push(y.as_decimal::<T>()),
             None => {
-                ctx.set_error(
-                    builder.len(),
-                    concat!("Decimal overflow at line : ", line!()),
-                );
+                ctx.set_error(builder.len(), DecimalOverflow(dest));
                 builder.push(T::one());
             }
         },
     )(value, ctx)
+}
+
+/// The error of a value that a decimal of `size` cannot hold. The evaluator
+/// adds the function and its arguments to it, which show the value.
+#[derive(Clone, Copy)]
+struct DecimalOverflow(DecimalSize);
+
+impl std::fmt::Display for DecimalOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Decimal overflow: the value does not fit {}",
+            DataType::Decimal(self.0)
+        )
+    }
+}
+
+/// The error of a NaN or infinite float cast to a decimal.
+#[derive(Clone, Copy)]
+struct NonFiniteDecimal(f64);
+
+impl std::fmt::Display for NonFiniteDecimal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Decimal overflow: {} has no decimal value", self.0)
+    }
 }
 
 /// Drops `shift >= 1` fractional digits, truncating or rounding half away
@@ -1161,6 +1120,20 @@ fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
         Ok(format!("-{}", final_result))
     } else {
         Ok(final_result)
+    }
+}
+
+/// The casts to and from decimals.
+pub fn register_decimal_casts(registry: &mut FunctionRegistry) {
+    let decimal = DataType::Decimal(DecimalSize::default());
+
+    let mut sources = vec![DataType::Boolean, decimal.clone(), DataType::String];
+    sources.extend(ALL_NUMERICS_TYPES.iter().map(|num| DataType::Number(*num)));
+    for src in sources {
+        registry.register_cast(Some(src), decimal.clone());
+    }
+    for num in ALL_NUMERICS_TYPES {
+        registry.register_cast(Some(decimal.clone()), DataType::Number(*num));
     }
 }
 

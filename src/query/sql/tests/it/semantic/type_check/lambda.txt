@@ -16,7 +16,7 @@ message: function array_transform must have a lambda expression
 description: Lambda functions should be allowed inside another lambda body.
 sql: array_transform([number], x -> array_transform([x], y -> y))
 status: ok
-scalar: array_transform(array(number (#0)), ["x"] -> array_transform(array(x (#7)), ["y"] -> y (#8)))
+scalar: array_transform(array(number (#0)), ["x"] -> array_transform(array(x), ["y"] -> y))
 type: Array(Array(Int64 NULL))
 
 === lambda_function_requires_collection_argument ===
@@ -39,3 +39,45 @@ sql: array_transform([number], (x, y) -> x)
 status: error
 code: 1065
 message: incorrect number of parameters in lambda function, array_transform expects 1 parameter(s), but got 2
+
+=== lambda_body_rejects_subquery ===
+description: A lambda body compiles into an expression evaluated per element, which cannot hold a subquery.
+sql: array_transform([number], x -> x + (SELECT 1))
+status: error
+code: 1065
+message: subqueries can not be used in lambda function
+
+=== lambda_body_rejects_set_returning_function ===
+description: A lambda body cannot hold a set-returning function, which a ProjectSet evaluates.
+sql: array_transform([number], x -> x + unnest([1]))
+status: error
+code: 1065
+message: set-returning functions can not be used in lambda function
+
+=== lambda_body_rejects_async_function ===
+description: A lambda body cannot hold an async function, which an AsyncFunction plan evaluates.
+sql: array_transform([number], x -> x + sleep(1))
+status: error
+code: 1065
+message: async functions can not be used in lambda function
+
+=== lambda_parameter_names_are_normalized_like_references ===
+description: Parameter names are normalized as the names in the body are: an unquoted name matches it in any case.
+sql: array_transform([number], X -> x + 1)
+status: ok
+scalar: array_transform(array(number (#0)), ["x"] -> x + 1)
+type: Array(Int64 NULL)
+
+=== lambda_parameter_must_not_be_quoted ===
+description: A parameter is named by a plain identifier, so a quoted name is rejected.
+sql: array_transform([number], "Y" -> "Y" + 1)
+status: error
+code: 1065
+message: lambda parameter "Y" must be a plain identifier, without quotes or IDENTIFIER()
+
+=== lambda_parameters_must_not_be_quoted ===
+description: Each of the parameters of a lambda is named by a plain identifier.
+sql: array_reduce([number], (x, `y`) -> x + y)
+status: error
+code: 1065
+message: lambda parameter `y` must be a plain identifier, without quotes or IDENTIFIER()

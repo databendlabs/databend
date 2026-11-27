@@ -140,9 +140,37 @@ status: error
 code: 1065
 message: Qualify clause must not contain aggregate functions
 
+=== predicate_alias__where_scalar_alias_shadows_outer_column ===
+matrix: predicate_alias
+key: P0N0S1_7_2
+sql: SELECT * FROM o WHERE EXISTS (SELECT i AS k FROM t WHERE k = 1)
+status: ok
+EvalScalar
+├── scalars: [o.k (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#1)]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: t.i (#1)
+    │       └── EvalScalar
+    │           ├── scalars: [t.i (#1) AS (#1)]
+    │           └── Filter
+    │               ├── filters: [eq(t.i (#1), 1)]
+    │               └── Scan
+    │                   ├── table: default.t (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Scan
+        ├── table: default.o (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
 === predicate_alias__where_qualified_name_does_not_consume_scalar_alias ===
 matrix: predicate_alias
-key: P0N1S1_7_
+key: P0N1S1_8_
 sql: SELECT i > 0 AS ok FROM t AS t WHERE t.ok
 status: error
 code: 1065
@@ -150,7 +178,7 @@ message: column ok doesn't exist
 
 === predicate_alias__having_qualified_name_does_not_consume_aggregate_alias ===
 matrix: predicate_alias
-key: P1N1S2_7_
+key: P1N1S2_8_
 sql: SELECT sum(number) > 0 AS ok FROM t AS t HAVING t.ok
 status: error
 code: 1065
@@ -158,7 +186,7 @@ message: column ok doesn't exist
 
 === predicate_alias__qualify_qualified_name_does_not_consume_window_alias ===
 matrix: predicate_alias
-key: P2N1S3_7_
+key: P2N1S3_8_
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t AS t QUALIFY t.rn = 1
 status: error
 code: 1065
@@ -166,7 +194,7 @@ message: column rn doesn't exist
 
 === predicate_alias__where_duplicate_scalar_alias_is_ambiguous ===
 matrix: predicate_alias
-key: P0N0S1_7_
+key: P0N0S1_8_
 sql: SELECT i > 0 AS ok, i < 10 AS ok FROM t WHERE ok
 status: error
 code: 1065
@@ -174,7 +202,7 @@ message: column ok reference or alias is ambiguous, please use another alias nam
 
 === predicate_alias__having_duplicate_aggregate_alias_is_ambiguous ===
 matrix: predicate_alias
-key: P1N0S2_7_
+key: P1N0S2_8_
 sql: SELECT sum(number) > 0 AS ok, count(*) > 0 AS ok FROM t HAVING ok
 status: error
 code: 1065
@@ -182,7 +210,7 @@ message: column ok reference or alias is ambiguous, please use another alias nam
 
 === predicate_alias__qualify_duplicate_window_alias_is_ambiguous ===
 matrix: predicate_alias
-key: P2N0S3_7_
+key: P2N0S3_8_
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn, rank() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
 status: error
 code: 1065
@@ -190,7 +218,7 @@ message: column rn reference or alias is ambiguous, please use another alias nam
 
 === predicate_alias__where_window_alias_no_input_rejected ===
 matrix: predicate_alias
-key: P0N0S3_7_
+key: P0N0S3_8_
 sql: SELECT row_number() OVER (ORDER BY number) AS rn FROM t WHERE rn = 1
 status: error
 code: 1065
@@ -198,7 +226,7 @@ message: Where clause can't contain aggregate or window functions
 
 === predicate_alias__having_window_alias_no_input_rejected ===
 matrix: predicate_alias
-key: P1N0S3_7_
+key: P1N0S3_8_
 sql: SELECT row_number() OVER (ORDER BY number) AS rn FROM t HAVING rn = 1
 status: error
 code: 1065

@@ -20,13 +20,16 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
+use std::ops::Bound::Excluded;
+use std::ops::Bound::Unbounded;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use async_trait::async_trait;
+use databend_common_base::runtime::LimitMemGuard;
+use parking_lot::RwLock;
 use tantivy::Directory;
 use tantivy::HasLen;
 use tantivy::directory::FileHandle;
@@ -63,21 +66,28 @@ impl FileRangeCache {
                 "cached range and byte lengths differ",
             ));
         }
-        let mut ranges = self.0.write().expect("search pin lock poisoned");
+        let mut ranges = self.0.write();
         if Self::last_from(&ranges, range.start).is_some_and(|cached| cached.range.end >= range.end)
         {
             return Ok(());
         }
-        // The ranges it contains start at or after it and, ends growing, are consecutive.
+        // The new range replaces any range with the same start. The later ranges it contains
+        // are consecutive because their ends grow with their starts.
         let contained = ranges
-            .range(range.start..)
+            .range((Excluded(range.start), Unbounded))
             .take_while(|(_, cached)| cached.range.end <= range.end)
             .map(|(&start, _)| start)
             .collect::<Vec<_>>();
+        // Never unpin a dictionary range before its replacement is in place. A BTreeMap
+        // insertion can allocate after splitting a node, so do not let a memory limit
+        // interrupt the tree update. The range bytes were already allocated under the limit.
+        {
+            let _unlimited = LimitMemGuard::enter_unlimited();
+            ranges.insert(range.start, CachedRange { range, bytes });
+        }
         for start in contained {
             ranges.remove(&start);
         }
-        ranges.insert(range.start, CachedRange { range, bytes });
         Ok(())
     }
 
@@ -85,7 +95,7 @@ impl FileRangeCache {
         if range.is_empty() {
             return Some(OwnedBytes::empty());
         }
-        let ranges = self.0.read().expect("search pin lock poisoned");
+        let ranges = self.0.read();
         if let Some(cached) =
             Self::last_from(&ranges, range.start).filter(|cached| cached.range.end >= range.end)
         {
@@ -111,15 +121,63 @@ impl FileRangeCache {
     }
 }
 
-/// Directory that pins asynchronously warmed ranges for one index search.
+/// The pinned ranges of each file, by path.
+#[derive(Clone, Debug, Default)]
+struct PinnedFiles(Arc<RwLock<HashMap<PathBuf, FileRangeCache>>>);
+
+impl PinnedFiles {
+    fn file_cache(&self, path: &Path) -> FileRangeCache {
+        if let Some(cache) = self.0.read().get(path).cloned() {
+            return cache;
+        }
+        self.0
+            .write()
+            .entry(path.to_path_buf())
+            .or_default()
+            .clone()
+    }
+}
+
+/// The ranges that the searches through a shared pin warm in the files it does not retain,
+/// for the search running in this task, by pin.
+#[derive(Default)]
+struct SearchScope(RwLock<HashMap<usize, PinnedFiles>>);
+
+impl SearchScope {
+    fn files(&self, pin: usize) -> PinnedFiles {
+        if let Some(files) = self.0.read().get(&pin) {
+            return files.clone();
+        }
+        self.0.write().entry(pin).or_default().clone()
+    }
+}
+
+tokio::task_local! {
+    static SEARCH_SCOPE: SearchScope;
+}
+
+/// Runs one search: the ranges it warms through shared pins, in the files they do not retain,
+/// are pinned until it completes. The synchronous search must run inside `search` too.
+pub async fn with_search_scope<F: Future>(search: F) -> F::Output {
+    SEARCH_SCOPE.scope(SearchScope::default(), search).await
+}
+
+/// Directory that pins asynchronously warmed ranges for index searches.
 ///
 /// Lookup/Payload page caches provide capacity-bounded cross-query reuse. This layer prevents
 /// those pages from being evicted between asynchronous warmup and synchronous Tantivy search.
-/// Sync misses return `WouldBlock`; pinned ranges are released when this directory is dropped.
+/// Sync misses return `WouldBlock`.
+///
+/// A pin made by `new` serves one search, and releases its ranges when dropped. One made by
+/// `shared` serves the searches of an index opened once: it keeps the ranges of the files it
+/// retains while it lives, and those of the other files for the search that warmed them, in
+/// `with_search_scope`.
 #[derive(Clone)]
 pub struct SearchPinDirectory {
     underlying: Arc<dyn Directory>,
-    files: Arc<RwLock<HashMap<PathBuf, FileRangeCache>>>,
+    files: PinnedFiles,
+    /// For a shared pin, the files whose ranges it keeps for all of its searches.
+    retains: Option<fn(&Path) -> bool>,
 }
 
 impl SearchPinDirectory {
@@ -127,26 +185,29 @@ impl SearchPinDirectory {
     pub fn new(underlying: Arc<dyn Directory>) -> Self {
         Self {
             underlying,
-            files: Arc::new(RwLock::new(HashMap::new())),
+            files: PinnedFiles::default(),
+            retains: None,
         }
     }
 
-    fn file_cache(&self, path: &Path) -> FileRangeCache {
-        if let Some(cache) = self
-            .files
-            .read()
-            .expect("search pin lock poisoned")
-            .get(path)
-            .cloned()
-        {
-            return cache;
+    /// Creates an empty range pin shared by the searches of an index, keeping the ranges of the
+    /// files `retains` accepts for all of them.
+    pub fn shared(underlying: Arc<dyn Directory>, retains: fn(&Path) -> bool) -> Self {
+        Self {
+            underlying,
+            files: PinnedFiles::default(),
+            retains: Some(retains),
         }
-        self.files
-            .write()
-            .expect("search pin lock poisoned")
-            .entry(path.to_path_buf())
-            .or_default()
-            .clone()
+    }
+
+    fn pinned_ranges(&self, path: &Path) -> PinnedRanges {
+        match self.retains {
+            Some(retains) if !retains(path) => PinnedRanges::Search {
+                pin: Arc::as_ptr(&self.files.0) as usize,
+                path: path.to_path_buf(),
+            },
+            _ => PinnedRanges::Kept(self.files.file_cache(path)),
+        }
     }
 
     /// Inserts an externally fetched range during search warmup.
@@ -157,7 +218,41 @@ impl SearchPinDirectory {
         bytes: OwnedBytes,
     ) -> io::Result<()> {
         let path = path.into();
-        self.file_cache(&path).insert(range, bytes)
+        self.pinned_ranges(&path).insert(range, bytes)
+    }
+}
+
+/// Where the pinned ranges of a file are.
+#[derive(Clone, Debug)]
+enum PinnedRanges {
+    /// Kept by the pin.
+    Kept(FileRangeCache),
+    /// Kept for the search running in the task, of a shared pin's file it does not retain.
+    Search { pin: usize, path: PathBuf },
+}
+
+impl PinnedRanges {
+    /// The ranges, unless they are a search's and no search runs in the task.
+    fn cache(&self) -> Option<FileRangeCache> {
+        match self {
+            PinnedRanges::Kept(cache) => Some(cache.clone()),
+            PinnedRanges::Search { pin, path } => SEARCH_SCOPE
+                .try_with(|scope| scope.files(*pin).file_cache(path))
+                .ok(),
+        }
+    }
+
+    fn get(&self, range: Range<usize>) -> Option<OwnedBytes> {
+        self.cache()?.get(range)
+    }
+
+    fn insert(&self, range: Range<usize>, bytes: OwnedBytes) -> io::Result<()> {
+        match self.cache() {
+            Some(cache) => cache.insert(range, bytes),
+            None => Err(io::Error::other(
+                "a shared search pin is warmed outside of a search scope",
+            )),
+        }
     }
 }
 
@@ -172,7 +267,7 @@ impl fmt::Debug for SearchPinDirectory {
 
 struct SearchPinFileHandle {
     underlying: Arc<dyn FileHandle>,
-    cache: FileRangeCache,
+    ranges: PinnedRanges,
     path: PathBuf,
 }
 
@@ -194,7 +289,7 @@ impl HasLen for SearchPinFileHandle {
 #[async_trait]
 impl FileHandle for SearchPinFileHandle {
     fn read_bytes(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
-        self.cache.get(range.clone()).ok_or_else(|| {
+        self.ranges.get(range.clone()).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::WouldBlock,
                 format!(
@@ -208,11 +303,15 @@ impl FileHandle for SearchPinFileHandle {
     }
 
     async fn read_bytes_async(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
-        if let Some(bytes) = self.cache.get(range.clone()) {
+        let cache = self.ranges.cache();
+        if let Some(bytes) = cache.as_ref().and_then(|cache| cache.get(range.clone())) {
             return Ok(bytes);
         }
         let bytes = self.underlying.read_bytes_async(range.clone()).await?;
-        self.cache.insert(range, bytes.clone())?;
+        // Outside of a search scope, a shared pin has nowhere to keep a search's range.
+        if let Some(cache) = cache {
+            cache.insert(range, bytes.clone())?;
+        }
         Ok(bytes)
     }
 }
@@ -221,7 +320,7 @@ impl Directory for SearchPinDirectory {
     fn get_file_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>, OpenReadError> {
         Ok(Arc::new(SearchPinFileHandle {
             underlying: self.underlying.get_file_handle(path)?,
-            cache: self.file_cache(path),
+            ranges: self.pinned_ranges(path),
             path: path.to_path_buf(),
         }))
     }
@@ -264,8 +363,76 @@ mod tests {
         assert_eq!(file.read_bytes_slice(2..4).unwrap().as_ref(), b"cd");
     }
 
+    fn retains_kept(path: &Path) -> bool {
+        path == Path::new("kept")
+    }
+
+    fn shared_pin() -> SearchPinDirectory {
+        let directory = RamDirectory::default();
+        for name in ["kept", "scoped"] {
+            directory.atomic_write(Path::new(name), b"abcdef").unwrap();
+        }
+        SearchPinDirectory::shared(Arc::new(directory), retains_kept)
+    }
+
+    /// A shared pin keeps the ranges of the files it retains for every search, and those of
+    /// the other files for the search that warmed them only.
+    #[tokio::test]
+    async fn test_shared_pin_keeps_search_ranges_for_their_search() {
+        let pin = shared_pin();
+        let kept = pin.open_read(Path::new("kept")).unwrap();
+        let scoped = pin.open_read(Path::new("scoped")).unwrap();
+        with_search_scope(async {
+            kept.slice(0..2).read_bytes_async().await.unwrap();
+            scoped.slice(2..4).read_bytes_async().await.unwrap();
+            assert_eq!(kept.read_bytes_slice(0..2).unwrap().as_ref(), b"ab");
+            assert_eq!(scoped.read_bytes_slice(2..4).unwrap().as_ref(), b"cd");
+        })
+        .await;
+
+        // A later search reads the retained range, not the other search's.
+        with_search_scope(async {
+            assert_eq!(kept.read_bytes_slice(0..2).unwrap().as_ref(), b"ab");
+            let error = scoped.read_bytes_slice(2..4).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        })
+        .await;
+
+        // Outside of a search, a range of a file it does not retain is read but not kept.
+        assert_eq!(kept.read_bytes_slice(0..2).unwrap().as_ref(), b"ab");
+        let bytes = scoped.slice(2..4).read_bytes_async().await.unwrap();
+        assert_eq!(bytes.as_ref(), b"cd");
+        let error = scoped.read_bytes_slice(2..4).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        assert!(
+            pin.insert("scoped", 0..2, OwnedBytes::new(b"ab".to_vec()))
+                .is_err()
+        );
+    }
+
+    /// Concurrent searches through one shared pin do not see the ranges of each other.
+    #[tokio::test]
+    async fn test_shared_pin_separates_concurrent_searches() {
+        let pin = shared_pin();
+        let scoped = pin.open_read(Path::new("scoped")).unwrap();
+        let (warmed, other) = tokio::sync::oneshot::channel();
+        let first = with_search_scope(async {
+            scoped.slice(0..2).read_bytes_async().await.unwrap();
+            warmed.send(()).unwrap();
+            tokio::task::yield_now().await;
+            scoped.read_bytes_slice(0..2).map(|bytes| bytes.to_vec())
+        });
+        let second = with_search_scope(async {
+            other.await.unwrap();
+            scoped.read_bytes_slice(0..2).map(|bytes| bytes.to_vec())
+        });
+        let (first, second) = tokio::join!(first, second);
+        assert_eq!(first.unwrap(), b"ab");
+        assert_eq!(second.unwrap_err().kind(), io::ErrorKind::WouldBlock);
+    }
+
     fn pinned(cache: &FileRangeCache) -> Vec<Range<usize>> {
-        let ranges = cache.0.read().unwrap();
+        let ranges = cache.0.read();
         ranges.values().map(|cached| cached.range.clone()).collect()
     }
 
@@ -357,7 +524,7 @@ mod tests {
                         .insert(start..end, OwnedBytes::new(data[start..end].to_vec()))
                         .unwrap();
                     model.insert(start..end);
-                    let pinned = cache.0.read().unwrap();
+                    let pinned = cache.0.read();
                     let mut want = model.0.clone();
                     want.sort_by_key(|r| r.start);
                     let got = pinned.values().map(|c| c.range.clone()).collect::<Vec<_>>();

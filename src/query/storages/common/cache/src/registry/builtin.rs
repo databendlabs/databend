@@ -45,6 +45,7 @@ impl CacheRegistry {
             .register::<parquet::Meta>()
             .register::<iceberg::Table>()
             .register::<table::PruneResult>()
+            .register::<table::Condition>()
             .register::<bloom::Filter>()
             .register::<zone_map::Chunk>()
             .register::<vector::Index>()
@@ -52,6 +53,8 @@ impl CacheRegistry {
             .register::<inverted::Lookup>()
             .register::<inverted::Payload>()
             .register::<inverted::FullPayload>()
+            .register::<inverted::Searcher>()
+            .register::<inverted::TermInfo>()
             .register::<spatial::Index>()
             .register::<column::Data>()
             .register::<column::Array>();

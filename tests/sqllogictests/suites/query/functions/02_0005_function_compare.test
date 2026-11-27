@@ -1258,3 +1258,9 @@ query BBBB
 select equal_null(1, 1), equal_null(1, null), equal_null(null, null), equal_null(1, 0)
 ----
 1 0 1 0
+
+# An out-of-range integer literal must not be narrowed to the UInt8 default (0).
+query I
+SELECT count(*) FROM (SELECT number::UInt8 AS x FROM numbers(2)) WHERE x = 300;
+----
+0

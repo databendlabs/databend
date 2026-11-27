@@ -192,3 +192,46 @@ select count(*) from (select _row_id, a from (select a from t_lazy_row_id where 
 
 statement ok
 drop table t_lazy_row_id
+
+# A filter-only Parquet scan must preserve row offsets after dropping a whole batch. The subquery
+# scans only for `_row_id`; reading the rows back by these ids checks the offsets whatever the
+# blocks are, as a cluster writes the rows into more than one block.
+statement ok
+create or replace table t_prewhere_row_id (url string null, n int not null)
+storage_format = 'parquet' row_per_block = 32768
+
+statement ok
+settings (max_threads = 1, max_block_size = 32768)
+insert into t_prewhere_row_id
+select case when number in (8192, 8195, 16385, 24575) then 'prefix-needle-suffix'
+            when number % 2 = 0 then null else '' end,
+       number
+from numbers(25000)
+
+query I
+select n
+from t_prewhere_row_id
+where _row_id in (
+    select _row_id from t_prewhere_row_id where url like '%needle%' and n % 2 = 1
+)
+order by n
+----
+8195
+16385
+24575
+
+# A non-deterministic prewhere filter must not take the batched filter-only scan: seeded `rand()`
+# restarts its sequence on every evaluation, so batches would select other rows than the scan
+# that also reads `n` and evaluates the filter on the whole block. `n` is read back as a no-op term.
+query I
+settings (random_function_seed = 1)
+select count(*) from (
+    select _row_id from t_prewhere_row_id where n >= 0 and rand() < 0.5
+    except
+    select _row_id + (n - n)::uint64 from t_prewhere_row_id where n >= 0 and rand() < 0.5
+)
+----
+0
+
+statement ok
+drop table t_prewhere_row_id

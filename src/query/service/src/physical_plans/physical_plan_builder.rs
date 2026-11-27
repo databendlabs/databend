@@ -40,6 +40,8 @@ use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::optimize_distributed_fuse_pruning;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::recount_materialized_cte_refs;
+use crate::physical_plans::rename_duplicate_materialized_ctes;
 use crate::physical_plans::runtime_filter::CteFilterSource;
 use crate::physical_plans::runtime_filter::JoinId;
 use crate::sessions::TableContext;
@@ -129,6 +131,10 @@ impl PhysicalPlanBuilder {
 
         let mut plan = build_result?;
         if is_root_build {
+            if !self.cte_required_columns.is_empty() {
+                rename_duplicate_materialized_ctes(&mut plan);
+                recount_materialized_cte_refs(&mut plan);
+            }
             plan = optimize_distributed_fuse_pruning(&plan, &self.distributed_fuse_pruning_scans);
             plan.adjust_plan_id(&mut 0);
             self.publish_synchronous_pruning_stats(&plan);

@@ -166,6 +166,21 @@ impl Function {
                     ))
                 }
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
+                // A row that fails is NULL, and the others keep their domain.
+                FunctionDomain::MayThrowDomain(domain) => {
+                    let value = match domain {
+                        Domain::Nullable(domain) => domain.value,
+                        domain => Some(Box::new(domain)),
+                    };
+                    let new_domain = NullableDomain {
+                        has_null: true,
+                        value,
+                    };
+                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain_with_type(
+                        new_domain,
+                        &return_type,
+                    ))
+                }
             }
         });
         let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
