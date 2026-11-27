@@ -24,6 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::ColumnMeta;
+use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::v2::BlockMeta;
@@ -189,6 +190,45 @@ impl BlockMeta {
         Ok(())
     }
 
+    /// Records that `group` holds new values of the columns it stores, with `col_stats` the
+    /// statistics of those values, as a partial UPDATE writes them.
+    ///
+    /// The statistics of the rewritten columns are replaced. `block_size` changes by the
+    /// difference of the in-memory sizes of the columns in `col_stats`. A rewritten column
+    /// without new statistics counts as keeping its size.
+    pub fn append_rewritten_column_group(
+        &mut self,
+        group: ColumnGroupFileMeta,
+        col_stats: HashMap<ColumnId, ColumnStatistics>,
+    ) -> Result<()> {
+        if let Some(id) = col_stats
+            .keys()
+            .find(|id| !group.leaf_column_metas.contains_key(id))
+        {
+            return Err(ErrorCode::Internal(format!(
+                "column group {} has statistics of column {id}, which it does not store",
+                group.location.0
+            )));
+        }
+        let rewritten = group
+            .leaf_column_metas
+            .keys()
+            .copied()
+            .collect::<HashSet<_>>();
+        self.append_column_group(group)?;
+
+        let old_size: u64 = col_stats
+            .keys()
+            .filter_map(|id| self.col_stats.get(id))
+            .map(|stats| stats.in_memory_size)
+            .sum();
+        let new_size: u64 = col_stats.values().map(|stats| stats.in_memory_size).sum();
+        self.block_size = (self.block_size + new_size).saturating_sub(old_size);
+        self.col_stats.retain(|id, _| !rewritten.contains(id));
+        self.col_stats.extend(col_stats);
+        Ok(())
+    }
+
     /// Checks the invariants a split block read from storage must satisfy.
     pub fn check_column_groups(&self) -> Result<()> {
         if !self.is_split() {
@@ -255,6 +295,9 @@ impl BlockMeta {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+
     use super::*;
     use crate::meta::v0;
 
@@ -407,6 +450,48 @@ mod tests {
         assert!(split.column_chunk(&42).is_none());
         assert_eq!(split.column_metas().into_owned(), col_metas(&[ID, A, B]));
         Ok(())
+    }
+
+    fn col_stats(sizes: &[(ColumnId, u64)]) -> HashMap<ColumnId, ColumnStatistics> {
+        sizes
+            .iter()
+            .map(|(id, size)| {
+                let value = Scalar::Number(NumberScalar::Int64(*size as i64));
+                (
+                    *id,
+                    ColumnStatistics::new(value.clone(), value, 0, *size, None),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn append_rewritten_replaces_statistics_of_rewritten_columns() -> Result<()> {
+        let mut block = legacy_block();
+        block.col_stats = col_stats(&[(ID, 10), (A, 20), (B, 30)]);
+        block.block_size = 60;
+
+        // `B` gets no new statistics. Its old ones describe old values and go.
+        block.append_rewritten_column_group(group("d1", &[A, B]), col_stats(&[(A, 50)]))?;
+        assert_eq!(served(&block), vec![
+            ("d0.parquet".to_string(), vec![ID]),
+            ("d1.parquet".to_string(), vec![A, B]),
+        ]);
+        assert_eq!(block.col_stats, col_stats(&[(ID, 10), (A, 50)]));
+        assert_eq!(block.block_size, 60 - 20 + 50);
+        block.check_column_groups()
+    }
+
+    #[test]
+    fn append_rewritten_rejects_statistics_of_other_columns() {
+        let mut block = legacy_block();
+        let before = block.clone();
+        assert!(
+            block
+                .append_rewritten_column_group(group("d1", &[A]), col_stats(&[(B, 1)]))
+                .is_err()
+        );
+        assert_eq!(block, before);
     }
 
     #[test]

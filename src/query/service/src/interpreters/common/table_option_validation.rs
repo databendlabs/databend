@@ -39,6 +39,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
@@ -109,6 +110,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
     r.insert(FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP);
+    r.insert(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
@@ -236,6 +238,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
     r.insert(OPT_KEY_S3_STORAGE_CLASS);
+    r.insert(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
@@ -519,6 +522,12 @@ pub fn is_valid_fuse_parquet_dictionary_opt(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
     is_valid_bool_opt(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, options)
+}
+
+pub fn is_valid_fuse_partial_update_opt(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    is_valid_bool_opt(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE, options)
 }
 
 pub fn is_valid_fuse_virtual_column_opt(

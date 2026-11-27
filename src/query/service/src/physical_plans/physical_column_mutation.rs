@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
@@ -51,6 +52,10 @@ pub struct ColumnMutation {
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
     pub udf_col_num: usize,
+    /// The fields of `schema_with_stream()` a partial UPDATE writes, sorted. `None` writes
+    /// whole blocks.
+    #[serde(default)]
+    pub partial_update_fields: Option<Vec<FieldIndex>>,
 }
 
 #[typetag::serde]
@@ -98,6 +103,7 @@ impl IPhysicalPlan for ColumnMutation {
             has_filter_column: self.has_filter_column,
             table_meta_timestamps: self.table_meta_timestamps,
             udf_col_num: self.udf_col_num,
+            partial_update_fields: self.partial_update_fields.clone(),
         })
     }
 
@@ -165,7 +171,8 @@ impl IPhysicalPlan for ColumnMutation {
 
             // Keep only table fields in their schema order. Mutation input may
             // carry derived UDF argument/result columns that must not be
-            // serialized back into the table.
+            // serialized back into the table. For a partial UPDATE, the map holds only the
+            // fields it writes.
             let mut projection = field_id_to_schema_index.iter().collect::<Vec<_>>();
             projection.sort_by_key(|(field_id, _)| *field_id);
             let projection = projection
@@ -187,6 +194,20 @@ impl IPhysicalPlan for ColumnMutation {
             .ctx
             .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+
+        if let Some(fields) = &self.partial_update_fields {
+            return builder.main_pipeline.add_transform(|input, output| {
+                TransformSerializeBlock::try_create_for_column_group(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    table,
+                    fields,
+                    self.table_meta_timestamps,
+                )?
+                .into_processor()
+            });
+        }
 
         let block_thresholds = table.get_block_thresholds();
         let cluster_stats_gen = if matches!(self.mutation_kind, MutationKind::Delete) {

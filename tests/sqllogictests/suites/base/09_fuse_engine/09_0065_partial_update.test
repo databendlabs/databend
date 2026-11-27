@@ -1,0 +1,95 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0065
+
+statement ok
+CREATE DATABASE db_09_0065
+
+statement ok
+USE db_09_0065
+
+# ---------------------------------------------------------------------------
+# An UPDATE of a table with enable_partial_update writes only the columns it
+# sets, into a new column group file of each block it changes. The other
+# columns stay in the files they are in. `t_ref` takes the same statements and
+# rewrites whole blocks.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t(id INT NOT NULL, a INT, s STRING, c STRING) ROW_PER_BLOCK = 100 ENABLE_PARTIAL_UPDATE = true
+
+statement ok
+CREATE TABLE t_ref(id INT NOT NULL, a INT, s STRING, c STRING) ROW_PER_BLOCK = 100
+
+statement ok
+INSERT INTO t SELECT number, number, 's' || number::STRING, 'c' || number::STRING FROM numbers(300)
+
+statement ok
+INSERT INTO t_ref SELECT * FROM t
+
+statement ok
+UPDATE t SET a = a + 1000, s = 'u' || id::STRING WHERE id % 7 = 0
+
+statement ok
+UPDATE t_ref SET a = a + 1000, s = 'u' || id::STRING WHERE id % 7 = 0
+
+statement ok
+UPDATE t SET a = a + 1 WHERE id < 50
+
+statement ok
+UPDATE t_ref SET a = a + 1 WHERE id < 50
+
+# Each block has its legacy file, which serves id and c, and the group file of
+# the last UPDATE of a. The group file of the first UPDATE serves only s in the
+# blocks the second UPDATE changed.
+query B
+SELECT count(DISTINCT block_location) > (SELECT count(*) FROM fuse_block('db_09_0065', 't')) FROM fuse_column('db_09_0065', 't')
+----
+1
+
+query I
+SELECT count(*) FROM (SELECT * FROM t EXCEPT SELECT * FROM t_ref)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM t_ref EXCEPT SELECT * FROM t)
+----
+0
+
+# Pruning sees the new values.
+query IIT
+SELECT id, a, s FROM t WHERE a = 1001
+----
+0 1001 u0
+
+query IT
+SELECT id, s FROM t WHERE s = 'u287'
+----
+287 u287
+
+query I
+SELECT count(*) FROM t WHERE s = 's287'
+----
+0
+
+query III
+SELECT count(*), sum(a), count(DISTINCT s) FROM t
+----
+300 87900 300
+
+# An UPDATE of every column rewrites whole blocks: each block has one file.
+statement ok
+UPDATE t SET id = id, a = a, s = s, c = c
+
+query B
+SELECT count(DISTINCT block_location) = (SELECT count(*) FROM fuse_block('db_09_0065', 't')) FROM fuse_column('db_09_0065', 't')
+----
+1
+
+query I
+SELECT count(*) FROM (SELECT * FROM t EXCEPT SELECT * FROM t_ref)
+----
+0
+
+statement ok
+DROP DATABASE db_09_0065

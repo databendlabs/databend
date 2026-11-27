@@ -16,6 +16,7 @@ databend_common_tracing::register_module_tag!("[FUSE-MUTATION]");
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
@@ -52,6 +53,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use itertools::Itertools;
@@ -70,6 +73,7 @@ use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
+use crate::operations::common::RewrittenColumnGroup;
 use crate::operations::common::SnapshotChanges;
 use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockIndex;
@@ -109,6 +113,46 @@ impl PendingSegmentBlock {
             top_n: block.top_n,
             virtual_input: VirtualBlockInput::Existing { schema },
         })
+    }
+
+    /// Records the column group file a partial UPDATE wrote for this block. The per-block HLL
+    /// and top-n of the rewritten columns describe their old values: the HLL takes the new
+    /// ones, the top-n drops them, as an UPDATE that rewrites the whole block does.
+    fn append_rewritten_column_group(&mut self, column_group: RewrittenColumnGroup) -> Result<()> {
+        let RewrittenColumnGroup {
+            group,
+            col_stats,
+            column_hlls,
+        } = column_group;
+        let rewritten = group
+            .leaf_column_metas
+            .keys()
+            .copied()
+            .collect::<HashSet<_>>();
+        Arc::make_mut(&mut self.block_meta).append_rewritten_column_group(group, col_stats)?;
+
+        let mut hll = self
+            .hll
+            .as_ref()
+            .map(decode_column_hll)
+            .transpose()?
+            .flatten()
+            .unwrap_or_default();
+        hll.retain(|id, _| !rewritten.contains(id));
+        match column_hlls {
+            Some(BlockHLLState::Deserialized(new)) => hll.extend(new),
+            Some(BlockHLLState::Serialized(new)) => {
+                hll.extend(decode_column_hll(&new)?.unwrap_or_default())
+            }
+            None => {}
+        }
+        self.hll = (!hll.is_empty())
+            .then(|| encode_column_hll(&hll))
+            .transpose()?;
+        if let Some(top_n) = &mut self.top_n {
+            top_n.retain(|id, _| !rewritten.contains(id));
+        }
+        Ok(())
     }
 }
 
@@ -360,6 +404,17 @@ impl TableMutationAggregator {
                 }
                 self.accumulate_top_n(block_meta.column_top_n.clone())?;
                 self.merged_blocks.push(block_meta);
+            }
+            MutationLogEntry::AppendColumnGroup {
+                index,
+                column_group,
+            } => {
+                BlockHLLState::merge_column_hll(&mut self.hll, &column_group.column_hlls);
+                self.mutations
+                    .entry(index.segment_idx)
+                    .or_default()
+                    .appended_column_groups
+                    .push((index.block_idx, *column_group));
             }
             MutationLogEntry::DeletedBlock { index } => {
                 self.extended_mutations
@@ -691,6 +746,16 @@ impl TableMutationAggregator {
                         }
                         block_editor.insert(idx, new_meta);
                     }
+                    for (idx, column_group) in segment_mutation.appended_column_groups {
+                        block_editor
+                            .get_mut(&idx)
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(format!(
+                                    "column group of missing block {idx} of segment {index}"
+                                ))
+                            })?
+                            .append_rewritten_column_group(column_group)?;
+                    }
                     for idx in segment_mutation.deleted_blocks {
                         block_editor.remove(&idx);
                     }
@@ -881,6 +946,7 @@ impl ExtendedBlockMutations {
 #[derive(Default)]
 struct BlockMutations {
     replaced_blocks: Vec<(BlockIndex, PendingSegmentBlock)>,
+    appended_column_groups: Vec<(BlockIndex, RewrittenColumnGroup)>,
     deleted_blocks: Vec<BlockIndex>,
 }
 
@@ -888,6 +954,7 @@ impl BlockMutations {
     fn new_replacement(block_idx: BlockIndex, replacement: PendingSegmentBlock) -> Self {
         BlockMutations {
             replaced_blocks: vec![(block_idx, replacement)],
+            appended_column_groups: vec![],
             deleted_blocks: vec![],
         }
     }
@@ -895,6 +962,7 @@ impl BlockMutations {
     fn new_deletion(block_idx: BlockIndex) -> Self {
         BlockMutations {
             replaced_blocks: vec![],
+            appended_column_groups: vec![],
             deleted_blocks: vec![block_idx],
         }
     }

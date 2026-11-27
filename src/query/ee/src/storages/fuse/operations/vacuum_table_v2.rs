@@ -260,8 +260,11 @@ pub async fn do_vacuum2(
         for segment in segments {
             let blocks = segment?.block_metas()?;
             for block in &blocks {
-                if block.location.0.starts_with(target_block_prefix) {
-                    gc_root_blocks.insert(block_path_hash(&block.location.0));
+                // Every group file of a split block holds columns of the block.
+                for file in block.data_files() {
+                    if file.location.starts_with(target_block_prefix) {
+                        gc_root_blocks.insert(block_path_hash(file.location));
+                    }
                 }
                 protected_vector_locations.extend(
                     block

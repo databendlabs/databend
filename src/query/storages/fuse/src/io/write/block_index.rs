@@ -225,6 +225,18 @@ pub fn create_block_index_specs(
     Ok(specs)
 }
 
+/// The indexes of a column group file that a partial UPDATE writes: the ordinary Bloom filters
+/// of the columns of `schema`. Partial UPDATE does not maintain the other indexes.
+pub fn create_column_group_index_specs(
+    table: &FuseTable,
+    schema: TableSchemaRef,
+) -> Result<Vec<Arc<dyn BlockIndexSpec>>> {
+    let columns = table
+        .bloom_index_cols
+        .bloom_index_fields(schema, BloomIndex::supported_type)?;
+    Ok(vec![Arc::new(BloomIndexWriteSpec::new(columns, vec![]))])
+}
+
 pub trait BlockIndexSpec: Send + Sync {
     fn index_name(&self) -> Option<&str> {
         None

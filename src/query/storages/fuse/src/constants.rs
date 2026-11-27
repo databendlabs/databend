@@ -27,6 +27,8 @@ pub const FUSE_OPT_KEY_ENABLE_AUTO_VACUUM: &str = "enable_auto_vacuum";
 pub const FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE: &str = "enable_auto_analyze";
 pub const FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP: &str = "enable_segment_zone_map";
 pub const FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN: &str = "enable_virtual_column";
+/// Lets an eligible UPDATE write only the columns it changes, into a new column group file.
+pub const FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE: &str = "enable_partial_update";
 pub const FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS: &str =
     "virtual_column_max_direct_columns";
 pub const FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS: &str =

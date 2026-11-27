@@ -218,7 +218,7 @@ impl PhysicalPlanBuilder {
                 self.build_mutation(s_expr, mutation, required).await
             }
             PhysicalRelOperator::MutationSource(mutation_source) => {
-                self.build_mutation_source(mutation_source).await
+                self.build_mutation_source(mutation_source, required).await
             }
             PhysicalRelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
             PhysicalRelOperator::MaterializedCTE(materialized_cte) => {
@@ -509,6 +509,8 @@ pub struct MutationBuildInfo {
     pub partitions: Partitions,
     pub statistics: PartStatistics,
     pub table_meta_timestamps: TableMetaTimestamps,
+    /// Set when a Direct UPDATE writes only the columns it changes.
+    pub partial_update: bool,
 }
 
 #[cfg(test)]

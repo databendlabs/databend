@@ -266,6 +266,7 @@ pub async fn build_mutation_info(
         partitions,
         statistics,
         table_meta_timestamps,
+        partial_update: false,
     })
 }
 
