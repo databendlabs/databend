@@ -322,6 +322,7 @@ mod tests {
             stat_info: None,
             left,
             right,
+            cte_runtime_filters: vec![],
             meta: PhysicalPlanMeta::new("Sequence"),
         })
     }
