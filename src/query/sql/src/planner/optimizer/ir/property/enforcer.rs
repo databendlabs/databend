@@ -17,18 +17,17 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::wrap_cast;
 use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::property::Distribution;
 use crate::optimizer::ir::property::PhysicalProperty;
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RequiredProperty;
+use crate::plans::CastExpr;
 use crate::plans::Exchange;
 use crate::plans::PhysicalRelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::join_keys_common_type;
 
 /// Enforcer is a trait that can enforce the physical property
 pub trait Enforcer: std::fmt::Debug + Send + Sync {
@@ -145,27 +144,28 @@ impl PropertyEnforcer {
             };
 
             if let Some((probe_keys, build_keys)) = keys {
-                let cast_rules = BUILTIN_FUNCTIONS.comparison_cast_rules();
                 for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
                     let probe_key_data_type = probe_key.data_type().into_owned();
                     let build_key_data_type = build_key.data_type().into_owned();
-                    let common_data_type = common_super_type(
-                        probe_key_data_type.clone(),
-                        build_key_data_type.clone(),
-                        cast_rules,
-                    )
-                    .ok_or_else(|| {
-                        ErrorCode::IllegalDataType(format!(
-                            "Cannot find common type for probe key {:?} and build key {:?}",
-                            probe_key, build_key
-                        ))
-                    })?;
-                    for (key, data_type) in [
-                        (probe_key, probe_key_data_type),
-                        (build_key, build_key_data_type),
+                    let (common_data_type, probe_narrows, build_narrows) =
+                        join_keys_common_type(&probe_key_data_type, &build_key_data_type)
+                            .ok_or_else(|| {
+                                ErrorCode::IllegalDataType(format!(
+                                    "Cannot find common type for probe key {:?} and build key {:?}",
+                                    probe_key, build_key
+                                ))
+                            })?;
+                    for (key, data_type, narrows) in [
+                        (probe_key, probe_key_data_type, probe_narrows),
+                        (build_key, build_key_data_type, build_narrows),
                     ] {
                         if data_type != common_data_type {
-                            *key = wrap_cast(key, &common_data_type);
+                            *key = ScalarExpr::CastExpr(CastExpr {
+                                span: key.span(),
+                                is_try: narrows,
+                                argument: Box::new(key.clone()),
+                                target_type: Box::new(common_data_type.clone()),
+                            });
                         }
                     }
                 }

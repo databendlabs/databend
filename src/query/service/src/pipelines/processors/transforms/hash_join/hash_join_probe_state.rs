@@ -47,6 +47,7 @@ use super::PendingProbe;
 use super::ProbeState;
 use super::ProcessState;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
@@ -223,17 +224,19 @@ impl HashJoinProbeState {
                     .into())
             })
             .collect::<Result<_>>()?;
+        let in_range = HashJoinDesc::in_range_rows(
+            &evaluator,
+            &keys_entries,
+            &self.hash_join_state.hash_join_desc.probe_key_inputs,
+            input_num_rows,
+        )?;
 
-        if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark
-            && self
-                .hash_join_state
-                .hash_join_desc
-                .other_predicate
-                .is_none()
-        {
+        let desc = &self.hash_join_state.hash_join_desc;
+        if desc.join_type == JoinType::RightMark && desc.mark_nulls_from_key {
             self.hash_join_state.init_markers(
                 (&keys_entries).into(),
                 input_num_rows,
+                in_range.as_ref(),
                 probe_state.markers.as_mut().unwrap(),
             );
         }
@@ -261,6 +264,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
+        let valids = and_validities(valids, in_range);
 
         keys_entries
             .iter_mut()
@@ -271,17 +275,6 @@ impl HashJoinProbeState {
             });
         let probe_keys = (&keys_entries).into();
 
-        let probe_has_null = if self.join_type() == JoinType::LeftMark {
-            match input.get_by_offset(0) {
-                BlockEntry::Const(scalar, _, _) => scalar.is_null(),
-                BlockEntry::Column(column) => column
-                    .as_nullable()
-                    .map(|c| c.validity().null_count() > 0)
-                    .unwrap_or(false),
-            }
-        } else {
-            false
-        };
         input = input.project(&self.probe_projections);
 
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
@@ -335,7 +328,6 @@ impl HashJoinProbeState {
 
                 probe_state.pending = Some(PendingProbe::Hash(ProcessState {
                     input,
-                    probe_has_null,
                     keys_state,
                     next_idx: 0,
                 }));
@@ -741,5 +733,22 @@ impl HashJoinProbeState {
 
     pub(crate) fn join_type(&self) -> JoinType {
         self.hash_join_state.hash_join_desc.join_type
+    }
+
+    /// A left mark join is NULL, rather than false, for a build row without match when the
+    /// probe key has a NULL anywhere. Every probe block is recorded as it is received, before
+    /// any build row is marked: a spilled block is only probed in the round of its partition,
+    /// after the build rows of other partitions are marked.
+    pub(crate) fn record_mark_nulls(&self, data_block: &DataBlock) -> Result<()> {
+        let desc = &self.hash_join_state.hash_join_desc;
+        if desc.join_type != JoinType::LeftMark {
+            return Ok(());
+        }
+        desc.record_mark_nulls(
+            data_block,
+            &desc.probe_keys,
+            &desc.probe_key_inputs,
+            &self.func_ctx,
+        )
     }
 }

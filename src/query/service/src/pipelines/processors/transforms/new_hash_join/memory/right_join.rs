@@ -127,13 +127,11 @@ impl Join for OuterRightHashJoin {
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         self.basic_hash_join.finalize_chunks();
 
-        let mut probe_keys = {
+        let (mut probe_keys, valids) = {
             let nullable_block = wrap_nullable_block(&data);
-            let probe_keys = self.desc.probe_key(&nullable_block, &self.function_ctx)?;
-            DataBlock::new(probe_keys, data.num_rows())
+            let (probe_keys, valids) = self.desc.probe_key(&nullable_block, &self.function_ctx)?;
+            (DataBlock::new(probe_keys, data.num_rows()), valids)
         };
-
-        let valids = self.desc.build_valids_by_keys(&probe_keys)?;
 
         self.desc.remove_keys_nullable(&mut probe_keys);
         let probe_block = data.project(&self.desc.probe_projection);

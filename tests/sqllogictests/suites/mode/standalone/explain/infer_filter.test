@@ -752,12 +752,12 @@ explain SELECT * FROM t1 inner JOIN t2 on t1.id = t2.id where t2.id = 869550529;
 HashJoin
 ├── output columns: [t1.id (#0), t2.id (#1)]
 ├── join type: INNER
-├── build keys: [CAST(t2.id (#1) AS Int64 NULL)]
+├── build keys: [TRY_CAST(t2.id (#1) AS Int64 NULL)]
 ├── probe keys: [CAST(t1.id (#0) AS Int64 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:CAST(t2.id (#1) AS Int64 NULL), probe targets:[CAST(t1.id (#0) AS Int64 NULL)@scan0], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:TRY_CAST(t2.id (#1) AS Int64 NULL), probe targets:[CAST(t1.id (#0) AS Int64 NULL)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2

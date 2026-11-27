@@ -46,18 +46,6 @@ impl HashJoinProbeState {
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
-        // `probe_column` is the subquery result column.
-        // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        // Check if there is any null in the probe column.
-        if process_state.probe_has_null {
-            let mut has_null = self
-                .hash_join_state
-                .hash_join_desc
-                .marker_join_desc
-                .has_null
-                .write();
-            *has_null = true;
-        }
 
         let mutable_indexes = &mut probe_state.mutable_indexes;
         let build_indexes = &mut mutable_indexes.build_indexes;
@@ -142,18 +130,6 @@ impl HashJoinProbeState {
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
-        // `probe_column` is the subquery result column.
-        // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        // Check if there is any null in the probe column.
-        if process_state.probe_has_null {
-            let mut has_null = self
-                .hash_join_state
-                .hash_join_desc
-                .marker_join_desc
-                .has_null
-                .write();
-            *has_null = true;
-        }
         let mutable_indexes = &mut probe_state.mutable_indexes;
         let probe_indexes = &mut mutable_indexes.probe_indexes;
         let build_indexes = &mut mutable_indexes.build_indexes;
@@ -257,18 +233,6 @@ impl HashJoinProbeState {
                     )?;
                 }
             }
-        }
-
-        if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
-            // In the following, if value is Null and Marker is False, we'll set the marker to Null
-            let mut has_null = self
-                .hash_join_state
-                .hash_join_desc
-                .marker_join_desc
-                .has_null
-                .write();
-            *has_null = false;
         }
 
         if matched_idx > 0 {

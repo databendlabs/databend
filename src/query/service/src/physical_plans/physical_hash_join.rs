@@ -27,9 +27,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::type_check::check_cast;
-use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
@@ -44,6 +44,7 @@ use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
+use databend_common_sql::plans::join_keys_common_type;
 use tokio::sync::Barrier;
 
 use super::PhysicalPlanCast;
@@ -76,6 +77,8 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
+    Vec<bool>,
+    Vec<bool>,
     Vec<((usize, bool), usize)>,
 );
 
@@ -107,11 +110,17 @@ pub struct HashJoin {
     pub probe: PhysicalPlan,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
+    // By key, whether the key is a TRY_CAST that narrows it to the type of the other key, see
+    // `join_keys_common_type`. Unlike a NULL of the key, the NULL it makes of an out of range value
+    // equals nothing, also where NULL is equal, and does not make a mark join NULL.
+    pub narrowed_build_keys: Vec<bool>,
+    pub narrowed_probe_keys: Vec<bool>,
     pub is_null_equal: Vec<bool>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<Symbol>,
-    pub from_correlated_subquery: bool,
+    // See `mark_nulls_from_key`.
+    pub mark_nulls_from_key: bool,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
@@ -238,11 +247,13 @@ impl IPhysicalPlan for HashJoin {
 
             build_keys: self.build_keys.clone(),
             probe_keys: self.probe_keys.clone(),
+            narrowed_build_keys: self.narrowed_build_keys.clone(),
+            narrowed_probe_keys: self.narrowed_probe_keys.clone(),
             is_null_equal: self.is_null_equal.clone(),
             non_equi_conditions: self.non_equi_conditions.clone(),
             join_type: self.join_type,
             marker_index: self.marker_index,
-            from_correlated_subquery: self.from_correlated_subquery,
+            mark_nulls_from_key: self.mark_nulls_from_key,
             probe_to_build: self.probe_to_build.clone(),
             output_schema: self.output_schema.clone(),
             stat_info: self.stat_info.clone(),
@@ -301,6 +312,26 @@ impl IPhysicalPlan for HashJoin {
             .main_pipeline
             .resize(builder.main_pipeline.output_len(), true)
     }
+}
+
+/// Whether the NULLs of the keys of a mark join make marks NULL, rather than false: a NULL in the
+/// first key of the subquery side the mark of every row without match, a NULL key of the other
+/// side the mark of its row.
+///
+/// It does for `x IN (subquery)` without correlation, the only mark join whose key is the IN
+/// comparison. The other mark joins find NULL marks by pair, in their other conditions, or never
+/// have one. The planner does not record which subquery a mark join comes from, so it is told by
+/// the shape of the join as decorrelation makes it:
+/// - a correlated EXISTS or ANY subquery (`from_correlated_subquery`) joins on the correlation;
+/// - an ANY subquery with other conditions compares in them, `x > ANY (subquery)` for example;
+/// - a row value IN subquery joins on two keys or more, or has other conditions.
+///
+/// This relies on the optimizer keeping the conditions of a mark join as decorrelation makes them.
+fn mark_nulls_from_key(join: &Join) -> bool {
+    join.join_type.is_mark_join()
+        && !join.from_correlated_subquery
+        && join.non_equi_conditions.is_empty()
+        && join.equi_conditions.len() == 1
 }
 
 impl HashJoin {
@@ -648,7 +679,6 @@ impl PhysicalPlanBuilder {
             return Ok(());
         };
 
-        let cast_rules = BUILTIN_FUNCTIONS.comparison_cast_rules();
         for (probe_key, build_key) in probe_exchange
             .keys
             .iter_mut()
@@ -656,20 +686,18 @@ impl PhysicalPlanBuilder {
         {
             let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
             let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
-            let common_ty = common_super_type(
-                probe_expr.data_type().clone(),
-                build_expr.data_type().clone(),
-                cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::IllegalDataType(format!(
-                    "Cannot find common type for probe key {:?} and build key {:?}",
-                    probe_expr, build_expr
-                ))
-            })?;
+            let (common_ty, probe_narrows, build_narrows) =
+                join_keys_common_type(probe_expr.data_type(), build_expr.data_type()).ok_or_else(
+                    || {
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for probe key {:?} and build key {:?}",
+                            probe_expr, build_expr
+                        ))
+                    },
+                )?;
             *probe_key = check_cast(
                 probe_expr.span(),
-                false,
+                probe_narrows,
                 probe_expr,
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
@@ -677,7 +705,7 @@ impl PhysicalPlanBuilder {
             .as_remote_expr();
             *build_key = check_cast(
                 build_expr.span(),
-                false,
+                build_narrows,
                 build_expr,
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
@@ -767,10 +795,11 @@ impl PhysicalPlanBuilder {
     ) -> Result<JoinConditionsResult> {
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut narrowed_left_keys = Vec::new();
+        let mut narrowed_right_keys = Vec::new();
         let mut is_null_equal = Vec::new();
         let mut probe_to_build_index = Vec::new();
 
-        let cast_rules = BUILTIN_FUNCTIONS.comparison_cast_rules();
         for condition in join.equi_conditions.iter() {
             let original_left_condition = &condition.left;
             let original_right_condition = &condition.right;
@@ -800,8 +829,8 @@ impl PhysicalPlanBuilder {
             // Unify the data types of the left and right expressions
             let left_type = left_expr.data_type();
             let right_type = right_expr.data_type();
-            let common_ty = common_super_type(left_type.clone(), right_type.clone(), cast_rules)
-                .ok_or_else(|| {
+            let (common_ty, left_narrows, right_narrows) =
+                join_keys_common_type(left_type, right_type).ok_or_else(|| {
                     ErrorCode::IllegalDataType(format!(
                         "Cannot find common type for {:?} and {:?}",
                         left_type, right_type
@@ -810,7 +839,7 @@ impl PhysicalPlanBuilder {
 
             let left_expr = check_cast(
                 left_expr.span(),
-                false,
+                left_narrows,
                 left_expr,
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
@@ -818,7 +847,7 @@ impl PhysicalPlanBuilder {
 
             let right_expr = check_cast(
                 right_expr.span(),
-                false,
+                right_narrows,
                 right_expr,
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
@@ -830,6 +859,11 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(Cow::Owned(right_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
 
+            // Folding can drop the TRY_CAST, for example of a constant in range.
+            let is_try_cast = |expr: &Expr| matches!(expr, Expr::Cast(cast) if cast.is_try);
+            narrowed_left_keys.push(left_narrows && is_try_cast(&left_expr));
+            narrowed_right_keys.push(right_narrows && is_try_cast(&right_expr));
+
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
@@ -839,6 +873,8 @@ impl PhysicalPlanBuilder {
         Ok((
             left_join_conditions,
             right_join_conditions,
+            narrowed_left_keys,
+            narrowed_right_keys,
             is_null_equal,
             probe_to_build_index,
         ))
@@ -1152,14 +1188,20 @@ impl PhysicalPlanBuilder {
         let probe_schema = self.prepare_probe_schema(join.join_type, &probe_side)?;
 
         // Step 5: Process join conditions
-        let (left_join_conditions, right_join_conditions, is_null_equal, mut probe_to_build_index) =
-            self.process_equi_conditions(
-                join,
-                &probe_schema,
-                &build_schema,
-                &column_projections,
-                &mut pre_column_projections,
-            )?;
+        let (
+            left_join_conditions,
+            right_join_conditions,
+            narrowed_left_keys,
+            narrowed_right_keys,
+            is_null_equal,
+            mut probe_to_build_index,
+        ) = self.process_equi_conditions(
+            join,
+            &probe_schema,
+            &build_schema,
+            &column_projections,
+            &mut pre_column_projections,
+        )?;
 
         // Step 6: Prepare projections and cache info
         let (probe_projections, mut build_projections, build_side_cache_info) = self
@@ -1223,11 +1265,13 @@ impl PhysicalPlanBuilder {
             join_type: join.join_type,
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
+            narrowed_build_keys: narrowed_right_keys,
+            narrowed_probe_keys: narrowed_left_keys,
             is_null_equal,
             non_equi_conditions,
             marker_index: join.marker_index,
             meta: PhysicalPlanMeta::new("HashJoin"),
-            from_correlated_subquery: join.from_correlated_subquery,
+            mark_nulls_from_key: mark_nulls_from_key(join),
             probe_to_build,
             output_schema,
             stat_info: Some(stat_info),
@@ -1276,11 +1320,13 @@ mod tests {
             probe: scan("probe"),
             build_keys: vec![],
             probe_keys: vec![],
+            narrowed_build_keys: vec![],
+            narrowed_probe_keys: vec![],
             is_null_equal: vec![],
             non_equi_conditions: vec![],
             join_type: JoinType::Cross,
             marker_index: None,
-            from_correlated_subquery: false,
+            mark_nulls_from_key: false,
             probe_to_build: vec![],
             output_schema: DataSchemaRefExt::create(vec![DataField::new("build", int64_type())]),
             stat_info: None,
@@ -1307,6 +1353,8 @@ mod tests {
                 };
                 join.probe_keys = vec![key.clone()];
                 join.build_keys = vec![key];
+                join.narrowed_probe_keys = vec![false];
+                join.narrowed_build_keys = vec![false];
             },
             |join| join.single_to_inner = Some(JoinType::LeftSingle),
             |join| join.build_side_cache_info = Some((0, HashMap::new())),

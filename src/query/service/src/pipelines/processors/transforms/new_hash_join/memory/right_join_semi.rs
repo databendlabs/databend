@@ -124,10 +124,8 @@ impl Join for SemiRightHashJoin {
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         self.basic_hash_join.finalize_chunks();
 
-        let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
+        let (probe_keys, valids) = self.desc.probe_key(&data, &self.function_ctx)?;
         let mut probe_keys = DataBlock::new(probe_keys, data.num_rows());
-
-        let valids = self.desc.build_valids_by_keys(&probe_keys)?;
 
         self.desc.remove_keys_nullable(&mut probe_keys);
         let probe_block = data.project(&self.desc.probe_projection);

@@ -122,10 +122,9 @@ impl Join for InnerHashJoin {
 
         self.basic_hash_join.finalize_chunks();
 
-        let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
+        let (probe_keys, valids) = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
-        let valids = self.desc.build_valids_by_keys(&keys)?;
 
         self.desc.remove_keys_nullable(&mut keys);
         let probe_block = data.project(&self.desc.probe_projection);
