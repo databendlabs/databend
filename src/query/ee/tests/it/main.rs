@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod attach_table;
 mod data_sharing;
 mod license;
 mod materialized_view;
