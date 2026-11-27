@@ -87,6 +87,7 @@ use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::check_materialized_view_source_without_policy;
 use crate::expand_materialized_view_star;
 use crate::materialized_view_ident;
+use crate::materialized_view_star_queries;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::planner::semantic::MaterializedViewChecker;
@@ -735,13 +736,26 @@ impl Binder {
             source_database.clone(),
             self.name_resolution_ctx.clone(),
         ))?;
+        // Expand each star target by binding it alone against the same source, which applies
+        // its qualification and EXCLUDE/COLUMNS filter exactly as an ordinary query does.
         if checker.has_star() {
-            let column_names = original_bind_context
-                .columns
-                .iter()
-                .map(|column| column.column_name.clone())
-                .collect::<Vec<_>>();
-            expand_materialized_view_star(&mut original_query, &column_names)?;
+            let mut expansions = Vec::new();
+            for star_query in materialized_view_star_queries(&original_query)? {
+                let Plan::Query { bind_context, .. } = self.as_query_plan(&star_query).await?
+                else {
+                    return Err(ErrorCode::Internal(
+                        "materialized view star expansion must produce a Query plan",
+                    ));
+                };
+                expansions.push(
+                    bind_context
+                        .columns
+                        .iter()
+                        .map(|column| column.column_name.clone())
+                        .collect(),
+                );
+            }
+            expand_materialized_view_star(&mut original_query, &expansions)?;
         }
         // Persist the top-N order with the direction and NULLS placement resolved under the
         // creating session, so later sessions with other defaults keep the same rows.

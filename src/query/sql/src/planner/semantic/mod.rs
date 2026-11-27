@@ -37,6 +37,7 @@ pub use materialized_view_rewriter::MaterializedViewTopN;
 pub use materialized_view_rewriter::check_materialized_view_source_without_policy;
 pub use materialized_view_rewriter::expand_materialized_view_star;
 pub use materialized_view_rewriter::materialized_view_ident;
+pub use materialized_view_rewriter::materialized_view_star_queries;
 pub use materialized_view_rewriter::parse_materialized_view_query;
 pub use materialized_view_rewriter::validate_materialized_view_source;
 pub use name_resolution::IdentifierNormalizer;

@@ -56,9 +56,6 @@ create materialized view mv_limit_zero as select id from events order by id limi
 statement error 1065
 create materialized view mv_aggregate_top_n as select id, count(*) as n from events group by id order by id limit 3
 
-statement error 1065
-create materialized view mv_star_exclude as select * exclude payload from events
-
 statement error 2328
 create materialized view mv_hidden_key as select id from events order by ts limit 3
 
@@ -277,6 +274,99 @@ select * from mv_all_events order by id limit 2
 ----
 10 2023-11-14 22:13:30.000000 p10
 11 2023-11-14 22:13:31.000000 p11
+
+# Star targets may be qualified, filtered, or mixed with expressions. CREATE
+# expands each one in place to the columns it means in an ordinary query.
+statement ok
+create materialized view mv_qualified_star as select events.* from events where id >= 15
+
+statement ok
+create materialized view mv_star_exclude as
+select * exclude payload from events order by ts desc limit 3
+
+statement ok
+create materialized view mv_star_mixed as
+select id + 1 as next_id, * exclude (id, ts) from events where id >= 18
+
+statement ok
+create materialized view mv_columns as select columns('^(id|ts)$') from events where id >= 18
+
+query TT
+show create materialized view mv_qualified_star
+----
+mv_qualified_star CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_qualified_star` (`id`, `ts`, `payload`) AS SELECT id, ts, payload FROM test_mv_top_n.events WHERE id >= 15
+
+query TT
+show create materialized view mv_star_exclude
+----
+mv_star_exclude CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_star_exclude` (`id`, `ts`) AS SELECT id, ts FROM test_mv_top_n.events ORDER BY ts DESC NULLS LAST LIMIT 3
+
+query TT
+show create materialized view mv_star_mixed
+----
+mv_star_mixed CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_star_mixed` (`next_id`, `payload`) AS SELECT id + 1 AS next_id, payload FROM test_mv_top_n.events WHERE id >= 18
+
+query TT
+show create materialized view mv_columns
+----
+mv_columns CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_columns` (`id`, `ts`) AS SELECT id, ts FROM test_mv_top_n.events WHERE id >= 18
+
+# Expanded columns are storage columns and must have unique names.
+statement error 1065
+create materialized view mv_star_duplicate as select *, id from events
+
+statement error 1025
+create materialized view mv_star_unknown_table as select other.* from events
+
+statement error 1065
+create materialized view mv_star_aggregate as select *, count(*) as n from events
+
+statement ok
+refresh materialized view mv_star_exclude
+
+statement ok
+refresh materialized view mv_star_mixed
+
+statement ok
+insert into events values (300, '2050-01-01 00:00:00', 'latest')
+
+statement ok
+refresh materialized view mv_star_exclude
+
+statement ok
+refresh materialized view mv_star_mixed
+
+query IT
+select * from mv_star_exclude order by ts desc
+----
+300 2050-01-01 00:00:00.000000
+19 2023-11-14 22:13:39.000000
+18 2023-11-14 22:13:38.000000
+
+query IT
+select * from mv_star_mixed order by next_id
+----
+19 p18
+20 p19
+102 oldest
+301 latest
+
+# The expansion is fixed at CREATE. A later source column is not added.
+statement ok
+alter table events add column extra int
+
+statement ok
+insert into events values (301, '2051-01-01 00:00:00', 'after', 1)
+
+statement ok
+refresh materialized view mv_star_exclude
+
+query IT
+select * from mv_star_exclude order by ts desc
+----
+301 2051-01-01 00:00:00.000000
+300 2050-01-01 00:00:00.000000
+19 2023-11-14 22:13:39.000000
 
 statement ok
 drop database test_mv_top_n
