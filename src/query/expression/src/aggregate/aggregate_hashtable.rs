@@ -42,6 +42,7 @@ use crate::ProjectedBlock;
 use crate::aggregate::aggregate_function::AggregateCallRef;
 use crate::aggregate::aggregate_function::AggregateStateSet;
 use crate::types::DataType;
+use crate::types::EncodedColumn;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
@@ -56,21 +57,31 @@ struct GroupKeyState {
     code_places: Vec<StateAddr>,
 }
 
+/// Codes alone identify values only if a nullable key has no NULL rows. Keep
+/// the wrapper on the actual group key (including when probing representatives).
+fn group_key_by_codes(entry: &BlockEntry) -> Option<&EncodedColumn> {
+    let column = match entry.as_column()? {
+        Column::Nullable(nullable) if nullable.validity().null_count() == 0 => nullable.column(),
+        column => column,
+    };
+    match column {
+        Column::Encoded(encoded) => Some(encoded),
+        _ => None,
+    }
+}
+
 impl GroupKeyState {
     fn init_codes(&mut self, group_columns: ProjectedBlock, row_count: usize) {
         let mut code_space = 1usize;
         for (index, entry) in group_columns.iter().enumerate() {
-            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
+            let Some(encoded) = group_key_by_codes(entry) else {
                 return;
             };
             let (codes, count) = encoded.codes();
             // Dictionary projections retain their input keys. Check sharing once per block.
             if self.code_columns.iter().any(|(column, _)| {
-                matches!(
-                    &group_columns[*column],
-                    BlockEntry::Column(Column::Encoded(other))
-                        if codes.shares_storage(other.codes().0)
-                )
+                group_key_by_codes(&group_columns[*column])
+                    .is_some_and(|other| codes.shares_storage(other.codes().0))
             }) {
                 continue;
             }
@@ -562,7 +573,7 @@ impl AggregateHashTable {
         // Code of a row = mixed radix number of its independent keys' codes.
         let mut row_codes = vec![0u32; row_count];
         for &(column, stride) in &group_state.code_columns {
-            let (codes, _) = group_columns[column].as_column()?.as_encoded()?.codes();
+            let (codes, _) = group_key_by_codes(&group_columns[column])?.codes();
             for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
                 *row_code += (code as usize * stride) as u32;
             }
