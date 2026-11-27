@@ -483,7 +483,12 @@ impl VectorIndexPruner {
         let blocks_before = metas.len();
         let (metas, block_modes) =
             filter_blocks(column_filter, &self.pruning_ctx, metas, move |rows| {
-                BlockSearchMode::try_create(rows, candidate_limit, BRUTE_FORCE_PERCENT)
+                BlockSearchMode::try_create(
+                    rows,
+                    candidate_limit,
+                    BRUTE_FORCE_PERCENT,
+                    MIN_GRAPH_SEARCH_ROWS,
+                )
             })
             .await?;
         let (mut graph_blocks, mut brute_force_blocks) = (0, 0);
@@ -842,6 +847,13 @@ impl VectorIndexPruner {
 /// search (ACORN) up to about 20% and loses beyond 25%.
 const BRUTE_FORCE_PERCENT: usize = 20;
 
+/// Blocks passing at most this many rows are scored row by row, whatever their
+/// share. Scoring them is cheap (tens of microseconds at 768 dimensions), while
+/// the graph of a few rows is often poorly connected: equidistant vectors keep
+/// one link each, and a filtered search that cannot cross a rejected row stops
+/// before the nearest passing ones.
+const MIN_GRAPH_SEARCH_ROWS: usize = 1000;
+
 /// How a block is searched, from the rows that pass the column filters.
 enum BlockSearchMode {
     /// Every row passes.
@@ -854,11 +866,13 @@ enum BlockSearchMode {
 
 impl BlockSearchMode {
     /// `None` without passing rows. Brute force when the passing rows are at
-    /// most `brute_force_percent` of the block or `candidate_limit` rows.
+    /// most `brute_force_percent` of the block, or at most `candidate_limit`
+    /// or `min_graph_rows` rows.
     fn try_create(
         rows: BlockRows,
         candidate_limit: usize,
         brute_force_percent: usize,
+        min_graph_rows: usize,
     ) -> Option<Self> {
         let bitmap = match rows {
             BlockRows::All => return Some(Self::Unfiltered),
@@ -871,7 +885,8 @@ impl BlockSearchMode {
         if passed == bitmap.len() {
             return Some(Self::Unfiltered);
         }
-        let scan = passed <= candidate_limit || passed * 100 <= bitmap.len() * brute_force_percent;
+        let scan = passed <= candidate_limit.max(min_graph_rows)
+            || passed * 100 <= bitmap.len() * brute_force_percent;
         Some(if scan {
             Self::BruteForce(bitmap)
         } else {
@@ -1091,6 +1106,8 @@ mod tests {
     use databend_common_expression::type_check::check_function;
     use databend_common_expression::types::F64;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::VectorColumn;
+    use databend_storages_common_index::HNSWIndex;
     use databend_storages_common_table_meta::meta::Compression;
 
     use super::*;
@@ -1150,55 +1167,92 @@ mod tests {
         let bitmap = |passed: usize, rows: usize| -> BlockRows {
             BlockRows::Rows((0..rows).map(|i| i < passed).collect())
         };
+        // `min_graph_rows` is 0 below, until its own cases.
         assert!(matches!(
-            BlockSearchMode::try_create(BlockRows::All, 10, 25),
+            BlockSearchMode::try_create(BlockRows::All, 10, 25, 0),
             Some(BlockSearchMode::Unfiltered)
         ));
-        assert!(BlockSearchMode::try_create(bitmap(0, 100), 10, 25).is_none());
+        assert!(BlockSearchMode::try_create(bitmap(0, 100), 10, 25, 0).is_none());
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(100, 100), 10, 25),
+            BlockSearchMode::try_create(bitmap(100, 100), 10, 25, 0),
             Some(BlockSearchMode::Unfiltered)
         ));
         // At most the percent of the rows: brute force.
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(25, 100), 10, 25),
+            BlockSearchMode::try_create(bitmap(25, 100), 10, 25, 0),
             Some(BlockSearchMode::BruteForce(_))
         ));
         // No more rows than the candidates: brute force, the graph would return
         // them all; one more row is searched through the graph.
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(30, 100), 30, 25),
+            BlockSearchMode::try_create(bitmap(30, 100), 30, 25, 0),
             Some(BlockSearchMode::BruteForce(_))
         ));
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(31, 100), 30, 25),
+            BlockSearchMode::try_create(bitmap(31, 100), 30, 25, 0),
             Some(BlockSearchMode::Graph(_))
         ));
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(99, 100), 10, 25),
+            BlockSearchMode::try_create(bitmap(99, 100), 10, 25, 0),
             Some(BlockSearchMode::Graph(_))
         ));
         // Percent 0 scans only the blocks with no more passing rows than candidates.
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(11, 100), 10, 0),
+            BlockSearchMode::try_create(bitmap(11, 100), 10, 0, 0),
             Some(BlockSearchMode::Graph(_))
         ));
         // Percent 100 scans every partially passing block.
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(99, 100), 10, 100),
+            BlockSearchMode::try_create(bitmap(99, 100), 10, 100, 0),
             Some(BlockSearchMode::BruteForce(_))
         ));
         // The percent in use.
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(20, 100), 10, BRUTE_FORCE_PERCENT),
+            BlockSearchMode::try_create(bitmap(20, 100), 10, BRUTE_FORCE_PERCENT, 0),
             Some(BlockSearchMode::BruteForce(_))
         ));
         assert!(matches!(
-            BlockSearchMode::try_create(bitmap(21, 100), 10, BRUTE_FORCE_PERCENT),
+            BlockSearchMode::try_create(bitmap(21, 100), 10, BRUTE_FORCE_PERCENT, 0),
             Some(BlockSearchMode::Graph(_))
         ));
+        // At most `min_graph_rows` passing rows: brute force, whatever their share;
+        // one more row is searched through the graph.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(1000, 2000), 10, 20, 1000),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(1001, 2000), 10, 20, 1000),
+            Some(BlockSearchMode::Graph(_))
+        ));
+        // A larger candidate limit still wins.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(1500, 2000), 1500, 20, 1000),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        // The values in use: 3 of 4 rows pass, above the percent and the 1
+        // candidate, and are scored row by row, not through the graph of 4 rows.
+        assert!(matches!(
+            BlockSearchMode::try_create(
+                bitmap(3, 4),
+                1,
+                BRUTE_FORCE_PERCENT,
+                MIN_GRAPH_SEARCH_ROWS
+            ),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        // Every row passing is still unfiltered.
+        assert!(matches!(
+            BlockSearchMode::try_create(
+                bitmap(4, 4),
+                1,
+                BRUTE_FORCE_PERCENT,
+                MIN_GRAPH_SEARCH_ROWS
+            ),
+            Some(BlockSearchMode::Unfiltered)
+        ));
         // The bitmap is kept as the rows to search.
-        match BlockSearchMode::try_create(bitmap(26, 100), 10, 25) {
+        match BlockSearchMode::try_create(bitmap(26, 100), 10, 25, 0) {
             Some(BlockSearchMode::Graph(rows)) => assert_eq!(rows.true_count(), 26),
             other => panic!("expected a graph search, got {}", match other {
                 None => "none",
@@ -1207,6 +1261,58 @@ mod tests {
                 Some(BlockSearchMode::Graph(_)) => unreachable!(),
             }),
         }
+    }
+
+    /// A block passing more than `MIN_GRAPH_SEARCH_ROWS` rows, above
+    /// `BRUTE_FORCE_PERCENT` and the candidates, is searched through the graph,
+    /// and that search with the passing rows finds their nearest rows: the same
+    /// SQ8 scores as scoring the passing rows one by one.
+    #[test]
+    fn test_filtered_graph_search_of_block() -> Result<()> {
+        let (rows, dim, limit) = (2000, 4, 10);
+        // Distinct vectors from the row number, the same on every run.
+        let vector = |i: usize| {
+            let i = i as f32;
+            [i.sin(), (1.3 * i).cos(), (0.7 * i).sin(), (2.1 * i).cos()]
+        };
+        let values: Vec<F32> = (0..rows).flat_map(vector).map(F32::from).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        let (_, entries) = HNSWIndex::build(16, 64, 0, column, DistanceType::L2)?;
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let index = HNSWIndex::open(DistanceType::L2, dim, rows, &components, None)?;
+
+        // 1333 of the 2000 rows pass: more than `MIN_GRAPH_SEARCH_ROWS` and 20%.
+        let filter: Bitmap = (0..rows).map(|i| i % 3 != 0).collect();
+        assert!(filter.true_count() > MIN_GRAPH_SEARCH_ROWS);
+        let Some(BlockSearchMode::Graph(passing)) = BlockSearchMode::try_create(
+            BlockRows::Rows(filter.clone()),
+            limit,
+            BRUTE_FORCE_PERCENT,
+            MIN_GRAPH_SEARCH_ROWS,
+        ) else {
+            panic!("expected a graph search");
+        };
+
+        // An ef of every row explores all passing rows reachable in the graph.
+        let query = [0.3, -0.2, 0.5, 0.1];
+        let found = index.search_with_ef(limit, Some(rows), &query, false, Some(&passing))?;
+        assert_eq!(found.len(), limit);
+        assert!(found.iter().all(|point| filter.get_bit(point.idx as usize)));
+
+        // Compare scores, not rows: two rows may share an SQ8 score.
+        let sorted = |mut points: Vec<ScoredPointOffset>| -> Vec<f32> {
+            points.sort_by(|a, b| a.score.total_cmp(&b.score));
+            points.into_iter().map(|point| point.score).collect()
+        };
+        let mut scanned = sorted(index.generate_scores(rows as u32, &query, Some(&passing))?);
+        assert_eq!(scanned.len(), filter.true_count());
+        scanned.truncate(limit);
+        assert_eq!(sorted(found), scanned);
+        Ok(())
     }
 
     #[test]
