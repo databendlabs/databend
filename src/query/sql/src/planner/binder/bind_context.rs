@@ -64,6 +64,7 @@ use crate::binder::select_clauses::SelectItemExpr;
 use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
 /// SELECT items that a name may resolve to by alias.
@@ -477,6 +478,48 @@ pub struct GroupingKeyScope {
     /// Input symbols owned by this SELECT, excluding later lambda parameters.
     /// Known from the SELECT list on.
     pub input_columns: crate::ColumnSet,
+    /// The keys and all their parts, known from the SELECT list on, if the
+    /// keys keep their structure. `None` for keys that fold, of which a part
+    /// need not appear in the folded key.
+    pub key_parts: Option<Arc<GroupingKeyParts>>,
+}
+
+/// The pre-aggregate expressions of the keys of grouping sets and of every
+/// expression in them, which matching looks the forms of function calls up
+/// in, see `type_check/grouping_key.rs`.
+#[derive(Debug, Default)]
+pub struct GroupingKeyParts {
+    parts: HashSet<ScalarExpr>,
+    /// The function calls among the parts, by name.
+    calls: HashMap<String, Vec<FunctionCall>>,
+}
+
+impl GroupingKeyParts {
+    /// Add a part, returning whether it is new.
+    pub(crate) fn insert(&mut self, part: &ScalarExpr) -> bool {
+        if !self.parts.insert(part.clone()) {
+            return false;
+        }
+        if let ScalarExpr::FunctionCall(call) = part {
+            self.calls
+                .entry(call.func_name.clone())
+                .or_default()
+                .push(call.clone());
+        }
+        true
+    }
+
+    pub(crate) fn contains(&self, expr: &ScalarExpr) -> bool {
+        self.parts.contains(expr)
+    }
+
+    /// The part that calls `func_name` over `arguments`.
+    pub(crate) fn call(&self, func_name: &str, arguments: &[ScalarExpr]) -> Option<&FunctionCall> {
+        self.calls
+            .get(func_name)?
+            .iter()
+            .find(|call| call.arguments == arguments)
+    }
 }
 
 #[derive(Clone, Debug, Default)]

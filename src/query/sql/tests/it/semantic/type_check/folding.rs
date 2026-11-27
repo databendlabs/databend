@@ -39,6 +39,7 @@ fn resolve_with_policy(
         state: GroupingScopeState::GroupBy,
         folding_policy: policy,
         input_columns: Default::default(),
+        key_parts: None,
     });
     let tokens = tokenize_sql(sql)?;
     let expr = parse_expr(&tokens, adapter.sql_dialect()?)?;

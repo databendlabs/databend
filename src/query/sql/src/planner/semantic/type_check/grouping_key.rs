@@ -75,14 +75,35 @@
 //! the binding of the parameter; the other nodes, e.g. `a + 1` in
 //! `x -> x + (a + 1)`, match keys like any other.
 //!
-//! Trying every node would bind each node once per enclosing node, which is
-//! quadratic in the depth of the expression. Instead, the pre-aggregate form
-//! of a node for a scope is bound once: it is memoized while the form of an
-//! enclosing node is bound, and reused when the node itself is tried. The
-//! eligibility of subtrees is memoized as well. Each form retains its reported
-//! type and folding facts, so memo hits do not derive facts by walking the
-//! expression again. Cloning and hashing the owned scalar trees still traverse
-//! subtrees; the memo bounds repeated binding, not all expression work.
+//! The type checker matches in a mode of its own, see [`GroupingKeyMode`].
+//! In `Bind` it binds the expression: when it reaches a node, before the
+//! node's children, it marks the node, i.e. finds the key the node matches,
+//! if any, and binds a marked node to the key output; the other nodes bind as
+//! usual, with normal folding. In `Match` it binds the pre-aggregate forms of
+//! nodes for a scope. A node is marked by computing its forms in `Match` with
+//! the state that `Bind` has set where the node is, e.g. the lambda
+//! parameters in scope or the aliases of `grouping()` arguments, so matching
+//! needs no rules of its own for where the keys are matched. Marks and forms
+//! are memoized by node and scope: the forms computed to mark a node are
+//! reused to mark its children, so each form is computed once, rather than
+//! once per enclosing node. The eligibility of subtrees is memoized as well.
+//!
+//! The keys of grouping sets and their forms keep their structure, so the
+//! form of most function calls is a call of the same name over the forms of
+//! its arguments, see `call_over_argument_forms`. Such a call is a key, or a
+//! part of one, only if its arguments are and the keys, with all their parts,
+//! include a call of that name over their forms, see `GroupingKeyParts`. Its
+//! form is then that part, which is found without type checking the call.
+//! So a call that is no part of a key is not type checked before the
+//! aggregate: under `ROLLUP(a)`, `bit_shift_left(1, length(f) - 1)` is no
+//! part of a key, as its argument `1` is none, and only binds after the
+//! aggregate, where its shift amount folds to a UInt8 literal. Unfolded, it
+//! would be Int64, which no overload takes. An async `sleep()` is no part of
+//! a key either if its argument is none. The forms of the other nodes, of
+//! the calls that binding rewrites and of all nodes for ordinary keys, which
+//! fold, are bound, and an error in them fails the query. Each form retains
+//! its reported type and folding facts, so memo hits do not derive facts by
+//! walking the expression again.
 //!
 //! The memo, [`GroupingKeyMemo`], is owned by the type checker, apart from
 //! the arena, which only holds the lowered expressions: the forms are binding
@@ -108,21 +129,26 @@
 //! [`GroupingKeyScope`]: crate::binder::GroupingKeyScope
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use smallvec::SmallVec;
 use smallvec::smallvec;
 
 use super::CoreExpr;
 use super::CoreExprArena;
+use super::CoreExprArgs;
 use super::CoreExprId;
 use super::TypeCheckAdapter;
 use super::TypeChecker;
+use super::async_functions::CoreAsyncFunction;
 use super::scalar_fold::BoundScalar;
+use super::variant::is_static_variant_access_call;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Visibility;
@@ -132,46 +158,70 @@ use crate::binder::Any;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::Finder;
+use crate::binder::GroupingKeyParts;
 use crate::binder::GroupingKeyScope;
 use crate::binder::GroupingScopeState;
 use crate::binder::SetReturningAnalyzer;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
 
-/// Which side of a grouping boundary is being bound.
-#[derive(Clone, Copy, Debug, Default)]
-enum GroupingKeyPhase {
+/// How a type checker binds with respect to grouping keys. The modes share
+/// the binding functions, but are driven differently and own their state, see
+/// the module documentation.
+#[derive(Clone, Debug, Default)]
+pub(super) enum GroupingKeyMode {
+    /// Binds expressions. A node marked as a key of an active scope binds to
+    /// the output of the key, see `try_resolve_grouping_key`.
     #[default]
-    Output,
-    /// The pre-aggregate form for this context-chain position (0 is local).
-    /// Keys of this scope and scopes nested inside it are not matched.
-    Input { scope: usize },
+    Bind,
+    /// Binds the pre-aggregate forms of nodes for a scope, which are compared
+    /// with its keys, or stand for SELECT items before the aggregate.
+    Match(MatchState),
 }
 
-impl GroupingKeyPhase {
-    fn input_scope(self) -> Option<usize> {
-        match self {
-            Self::Output => None,
-            Self::Input { scope } => Some(scope),
+/// The state of binding a pre-aggregate form for a scope.
+#[derive(Clone, Debug)]
+pub(super) struct MatchState {
+    /// The position of the scope in the context chain, 0 for the local one.
+    /// Keys of this scope and of the scopes nested in it are not matched.
+    scope: usize,
+    /// Set if the form refers to an alias whose item has no pre-aggregate
+    /// form; the node is then not matched.
+    input_unavailable: bool,
+    /// The first error deferred while binding the form.
+    deferred_error: Option<ErrorCode>,
+}
+
+impl MatchState {
+    fn new(scope: usize) -> Self {
+        Self {
+            scope,
+            input_unavailable: false,
+            deferred_error: None,
+        }
+    }
+
+    /// Take over the flags of a form that the form being bound contains.
+    fn add(&mut self, form: &PreAggregateForm) {
+        self.input_unavailable |= form.input_unavailable;
+        if self.deferred_error.is_none() {
+            self.deferred_error = form.deferred_error.clone();
         }
     }
 }
 
-/// The grouping-key matching in progress in a type checker. Folding policy
-/// is kept separately so phase changes do not implicitly change scalar facts.
+/// The grouping-key state of a type checker. Folding policy is kept
+/// separately so mode changes do not implicitly change scalar facts.
 #[derive(Clone, Debug, Default)]
 pub(super) struct GroupingKeyState {
-    phase: GroupingKeyPhase,
-    /// Set while binding a pre-aggregate form if it refers to an alias whose
-    /// item has no pre-aggregate form; the node is then not matched.
-    input_unavailable: bool,
-    /// The first error deferred while binding a pre-aggregate form.
-    deferred_error: Option<ErrorCode>,
+    mode: GroupingKeyMode,
     /// Whether the arguments of `grouping()` are being bound, which must be
-    /// keys of this SELECT.
+    /// keys of this SELECT. It holds in both modes: an alias in them names
+    /// the pre-aggregate form of an item, which a matched node binds too.
     in_grouping_arguments: bool,
 }
 
@@ -181,9 +231,21 @@ pub(super) struct GroupingKeyState {
 pub(super) struct GroupingKeyMemo {
     /// The eligibility of subtrees, by node.
     eligibility: HashMap<usize, Eligibility>,
-    /// The pre-aggregate forms of candidate nodes, by node and position of the
-    /// scope in the context chain.
-    forms: HashMap<(usize, usize), PreAggregateForm>,
+    /// The key output that a node binds to, or `None` if it matches no key,
+    /// by node and the first position of the scopes whose keys are matched:
+    /// 0 when binding, and one past the scope of the form when matching.
+    marks: HashMap<(usize, usize), Option<BoundScalar>>,
+    /// The pre-aggregate forms of candidate nodes, by node and position of
+    /// the scope in the context chain.
+    forms: HashMap<(usize, usize), Form>,
+}
+
+#[derive(Clone)]
+enum Form {
+    Bound(Box<PreAggregateForm>),
+    /// No key of the scope and no part of one, known without binding the
+    /// node.
+    NoKeyPart,
 }
 
 #[derive(Clone, Copy)]
@@ -221,10 +283,29 @@ pub(super) struct PhaseEffects {
     set_returning_functions: usize,
 }
 
+/// The pre-aggregate form of a node for a scope.
+#[derive(Clone)]
 struct PreAggregateForm {
     bound: BoundScalar,
     input_unavailable: bool,
     deferred_error: Option<ErrorCode>,
+}
+
+impl PreAggregateForm {
+    fn new(bound: BoundScalar, state: MatchState) -> Self {
+        Self {
+            bound,
+            input_unavailable: state.input_unavailable,
+            deferred_error: state.deferred_error,
+        }
+    }
+
+    /// Whether the form can be compared with keys: one that refers to an
+    /// alias without form, or to an ungrouped input column of an enclosing
+    /// scope, which no key of this scope does, matches none.
+    fn is_comparable(&self) -> bool {
+        !self.input_unavailable && self.deferred_error.is_none()
+    }
 }
 
 impl CoreExprArena<'_> {
@@ -553,28 +634,37 @@ where A: TypeCheckAdapter
 
     /// The position of the scope whose pre-aggregate form is being bound.
     pub(super) fn grouping_key_input_scope(&self) -> Option<usize> {
-        self.grouping_key.phase.input_scope()
+        match &self.grouping_key.mode {
+            GroupingKeyMode::Bind => None,
+            GroupingKeyMode::Match(state) => Some(state.scope),
+        }
     }
 
-    /// Bind a pre-aggregate form for the scope at `scope`, restoring the
-    /// phase even on error. The form is bound with the folding policy of the
-    /// scope, see `scalar_folding_policy`. The returned state records
-    /// availability/deferred errors.
-    fn with_grouping_key_input<R>(
+    fn match_state(&mut self) -> Option<&mut MatchState> {
+        match &mut self.grouping_key.mode {
+            GroupingKeyMode::Bind => None,
+            GroupingKeyMode::Match(state) => Some(state),
+        }
+    }
+
+    /// Run `bind` in the match mode for the scope at `scope`, restoring the
+    /// mode even on error, and return the state it ends with. The form is
+    /// bound with the folding policy of the scope, see `scalar_folding_policy`.
+    fn with_match_mode<R>(
         &mut self,
         scope: usize,
         bind: impl FnOnce(&mut Self) -> Result<R>,
-    ) -> (Result<R>, GroupingKeyState) {
-        // The arguments of `grouping()` stay so: an alias in them names the
-        // pre-aggregate form of an item, which a matched node binds too.
-        let in_grouping_arguments = self.grouping_key.in_grouping_arguments;
-        let state = std::mem::replace(&mut self.grouping_key, GroupingKeyState {
-            phase: GroupingKeyPhase::Input { scope },
-            in_grouping_arguments,
-            ..Default::default()
-        });
+    ) -> (Result<R>, MatchState) {
+        let mode = std::mem::replace(
+            &mut self.grouping_key.mode,
+            GroupingKeyMode::Match(MatchState::new(scope)),
+        );
         let result = bind(self);
-        (result, std::mem::replace(&mut self.grouping_key, state))
+        let GroupingKeyMode::Match(state) = std::mem::replace(&mut self.grouping_key.mode, mode)
+        else {
+            unreachable!("the match mode is only left here");
+        };
+        (result, state)
     }
 
     /// Stop matching the keys of this SELECT, e.g. inside the arguments of
@@ -701,8 +791,9 @@ where A: TypeCheckAdapter
         !self.matched_scopes().is_empty()
     }
 
-    /// Resolve the node to the output of the grouping key it matches. The
-    /// scopes are tried from the innermost.
+    /// Resolve the node to the output of the grouping key it matches, from
+    /// the marks of the node, see the module documentation. The scopes are
+    /// tried from the innermost.
     pub(super) fn try_resolve_grouping_key(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -712,6 +803,35 @@ where A: TypeCheckAdapter
         if scopes.is_empty() {
             return Ok(None);
         }
+        let first = self
+            .grouping_key_input_scope()
+            .map_or(0, |position| position + 1);
+        if let Some(mark) = self.grouping_key_memo.marks.get(&(id.index, first)) {
+            return Ok(mark.clone());
+        }
+        #[cfg(debug_assertions)]
+        let effects = self.phase_effects();
+        let mark = self.mark_grouping_key(arena, id, &scopes);
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(
+            effects,
+            self.phase_effects(),
+            "matching a node to grouping keys must not have phase-sensitive effects"
+        );
+        let mark = mark?;
+        self.grouping_key_memo
+            .marks
+            .insert((id.index, first), mark.clone());
+        Ok(mark)
+    }
+
+    /// The output of the key that the node matches among those of `scopes`.
+    fn mark_grouping_key(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+        scopes: &[usize],
+    ) -> Result<Option<BoundScalar>> {
         let eligibility = self.grouping_key_eligibility(arena, id);
         // A literal, or a tuple of them, which calls no function.
         let literal = eligibility.eligible && !eligibility.has_column && !eligibility.has_call;
@@ -723,7 +843,7 @@ where A: TypeCheckAdapter
             return Ok(None);
         };
 
-        for position in scopes {
+        for &position in scopes {
             // Set-returning functions are only keys of this SELECT.
             if is_srf && position != 0 {
                 break;
@@ -736,9 +856,17 @@ where A: TypeCheckAdapter
             if literal && !grouping_sets_here {
                 return Ok(None);
             }
-            let Some(input) = self.resolve_grouping_key_input(arena, id, position)? else {
+            // A set-returning function is compared with the keys over its
+            // output, so its form is bound as a whole.
+            let form = if is_srf {
+                Some(self.bind_form(arena, id, position)?)
+            } else {
+                self.key_part_form(arena, id, position)?
+            };
+            let Some(input) = form.filter(PreAggregateForm::is_comparable) else {
                 continue;
             };
+            let input = input.bound;
             let context = context_chain(self.bind_context).nth(position).unwrap();
             let constant = input.facts.column_free && input.facts.deterministic;
             if !is_srf && constant && !eligibility.has_column && !grouping_sets_here {
@@ -761,29 +889,196 @@ where A: TypeCheckAdapter
         Ok(None)
     }
 
-    /// Bind the pre-aggregate form of the node for the scope at `position`, or
-    /// `None` if it refers to an alias whose item has no pre-aggregate form.
-    /// Binding errors are returned as is.
-    fn resolve_grouping_key_input(
+    /// The keys of the scope at `scope` and all their parts, if the keys keep
+    /// their structure.
+    fn grouping_key_parts(&self, scope: usize) -> Option<Arc<GroupingKeyParts>> {
+        context_chain(self.bind_context)
+            .nth(scope)?
+            .grouping_key_scope
+            .as_ref()?
+            .key_parts
+            .clone()
+    }
+
+    /// The pre-aggregate form of the node for the scope at `scope` if it may
+    /// be a key of the scope or a part of one, see the module documentation.
+    /// Without the parts of the keys, which fold, every form is bound.
+    #[recursive::recursive]
+    fn key_part_form(
         &mut self,
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
-        position: usize,
-    ) -> Result<Option<BoundScalar>> {
-        #[cfg(debug_assertions)]
-        let effects = self.phase_effects();
-        let (result, input) =
-            self.with_grouping_key_input(position, |checker| checker.resolve_core_bound(arena, id));
-        let bound = result?;
-        #[cfg(debug_assertions)]
-        debug_assert_eq!(
-            effects,
-            self.phase_effects(),
-            "matching a node to grouping keys must not have phase-sensitive effects"
+        scope: usize,
+    ) -> Result<Option<PreAggregateForm>> {
+        let Some(parts) = self.grouping_key_parts(scope) else {
+            return self.bind_form(arena, id, scope).map(Some);
+        };
+        match self.grouping_key_memo.forms.get(&(id.index, scope)) {
+            Some(Form::Bound(form)) => {
+                return Ok(parts
+                    .contains(&form.bound.scalar)
+                    .then(|| form.as_ref().clone()));
+            }
+            Some(Form::NoKeyPart) => return Ok(None),
+            None => {}
+        }
+        if !self.is_grouping_key_eligible(arena, id) {
+            return Ok(None);
+        }
+        let expr = arena.get(id);
+        let form = match Self::call_over_argument_forms(arena, expr) {
+            Some((span, func_name, args)) => {
+                self.key_part_call_form(arena, id, scope, &parts, span, func_name, args)?
+            }
+            None => {
+                // The output of `sleep()` contains its argument.
+                let arguments = match expr {
+                    CoreExpr::AsyncFunction {
+                        function: function @ CoreAsyncFunction::Sleep(_),
+                        ..
+                    } => function.args(),
+                    _ => vec![],
+                };
+                let mut no_part = false;
+                for arg in arguments {
+                    if self.key_part_form(arena, arg, scope)?.is_none() {
+                        no_part = true;
+                        break;
+                    }
+                }
+                if !no_part {
+                    let form = self.bind_form(arena, id, scope)?;
+                    return Ok(parts.contains(&form.bound.scalar).then_some(form));
+                }
+                Form::NoKeyPart
+            }
+        };
+        if self.is_grouping_key_candidate(arena, id) {
+            self.grouping_key_memo
+                .forms
+                .insert((id.index, scope), form.clone());
+        }
+        Ok(match form {
+            Form::Bound(form) => Some(*form),
+            Form::NoKeyPart => None,
+        })
+    }
+
+    /// The form of a call over the forms of its arguments for the scope at
+    /// `scope`, which is the part of a key that calls the same function over
+    /// the same forms: the call is not bound.
+    #[allow(clippy::too_many_arguments)]
+    fn key_part_call_form(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+        scope: usize,
+        parts: &GroupingKeyParts,
+        span: Span,
+        func_name: &str,
+        args: &CoreExprArgs,
+    ) -> Result<Form> {
+        // The node may be a key of an enclosing scope, whose output is then
+        // its form.
+        let (outer, state) =
+            self.with_match_mode(scope, |checker| checker.try_resolve_grouping_key(arena, id));
+        if let Some(bound) = outer? {
+            return Ok(Form::Bound(Box::new(PreAggregateForm::new(bound, state))));
+        }
+        let mut arguments = Vec::with_capacity(args.len());
+        for arg in args {
+            match self.key_part_form(arena, *arg, scope)? {
+                Some(form) => arguments.push(form),
+                None => return Ok(Form::NoKeyPart),
+            }
+        }
+        let scalars = arguments
+            .iter()
+            .map(|form| form.bound.scalar.clone())
+            .collect::<Vec<_>>();
+        let Some(call) = parts.call(func_name, &scalars) else {
+            return Ok(Form::NoKeyPart);
+        };
+        let facts = self.call_facts(
+            span,
+            func_name,
+            &call.params,
+            &arguments
+                .iter()
+                .map(|form| (&form.bound.scalar, &form.bound.facts))
+                .collect::<Vec<_>>(),
         );
-        // A form with a deferred error refers to an ungrouped input column of
-        // an enclosing scope, which no key of this scope does.
-        Ok((!input.input_unavailable && input.deferred_error.is_none()).then_some(bound))
+        let mut state = MatchState::new(scope);
+        for form in &arguments {
+            state.add(form);
+        }
+        let bound = BoundScalar {
+            scalar: FunctionCall {
+                span,
+                func_name: call.func_name.clone(),
+                params: call.params.clone(),
+                arguments: scalars,
+                return_type: call.return_type.clone(),
+            }
+            .into(),
+            data_type: (*call.return_type).clone(),
+            facts,
+        };
+        Ok(Form::Bound(Box::new(PreAggregateForm::new(bound, state))))
+    }
+
+    /// The span, name and arguments of a call whose pre-aggregate form, which
+    /// is not folded, is a call of that name over the forms of its arguments.
+    /// That is the form of most calls, but binding rewrites some: a cast
+    /// function such as `to_date` may become a cast or its argument, `eq`
+    /// moves a constant argument to the right, a static variant access may
+    /// become a virtual column and a vector distance an internal column, and
+    /// the start of `substr` and the precision of `as_decimal` are rewritten.
+    fn call_over_argument_forms<'e>(
+        arena: &CoreExprArena<'_>,
+        expr: &'e CoreExpr<'_>,
+    ) -> Option<(Span, &'static str, &'e CoreExprArgs)> {
+        let CoreExpr::Call {
+            span,
+            func_name,
+            args,
+        } = expr
+        else {
+            return None;
+        };
+        let name = BUILTIN_FUNCTIONS
+            .aliases
+            .get(*func_name)
+            .map_or(*func_name, String::as_str);
+        let rewritten = matches!(name, "eq" | "noteq" | "substr" | "substring" | "as_decimal")
+            || name.starts_with("to_")
+            || name.starts_with("try_to_")
+            || Self::is_vector_function(func_name)
+            || is_static_variant_access_call(arena, func_name, args);
+        (!rewritten).then_some((*span, *func_name, args))
+    }
+
+    /// Bind the pre-aggregate form of the node for the scope at `scope`. The
+    /// form of a candidate node is memoized, so that the forms of the nodes in
+    /// it are bound only once.
+    fn bind_form(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+        scope: usize,
+    ) -> Result<PreAggregateForm> {
+        if let Some(Form::Bound(form)) = self.grouping_key_memo.forms.get(&(id.index, scope)) {
+            return Ok(form.as_ref().clone());
+        }
+        let (result, state) =
+            self.with_match_mode(scope, |checker| checker.resolve_core_bound_node(arena, id));
+        let form = PreAggregateForm::new(result?, state);
+        if self.is_grouping_key_candidate(arena, id) {
+            self.grouping_key_memo
+                .forms
+                .insert((id.index, scope), Form::Bound(Box::new(form.clone())));
+        }
+        Ok(form)
     }
 
     /// Bind the pre-aggregate form of the node for the current scope, as the
@@ -795,49 +1090,28 @@ where A: TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
     ) -> Result<Option<ScalarExpr>> {
-        let (result, input) =
-            self.with_grouping_key_input(0, |checker| checker.resolve_checked_core(arena, id));
+        let (result, state) =
+            self.with_match_mode(0, |checker| checker.resolve_checked_core(arena, id));
         let deref!((scalar, _)) = result?;
-        if let Some(err) = input.deferred_error {
+        if let Some(err) = state.deferred_error {
             return Err(err);
         }
-        Ok((!input.input_unavailable).then_some(scalar))
+        Ok((!state.input_unavailable).then_some(scalar))
     }
 
-    /// Resolve a node while binding a pre-aggregate form for the scope at
-    /// `position`. The form of a candidate node is memoized, so that binding
-    /// the form of an enclosing node and trying the node itself bind it only
-    /// once.
-    pub(super) fn resolve_grouping_key_input_node(
+    /// Resolve a node in the match mode for the scope at `scope`, as a part of
+    /// the form being bound, see `bind_form`.
+    pub(super) fn resolve_grouping_key_form_node(
         &mut self,
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
-        position: usize,
+        scope: usize,
     ) -> Result<BoundScalar> {
-        let key = (id.index, position);
-        if let Some(form) = self.grouping_key_memo.forms.get(&key) {
-            self.grouping_key.input_unavailable |= form.input_unavailable;
-            if self.grouping_key.deferred_error.is_none() {
-                self.grouping_key.deferred_error = form.deferred_error.clone();
-            }
-            return Ok(form.bound.clone());
+        let form = self.bind_form(arena, id, scope)?;
+        if let Some(state) = self.match_state() {
+            state.add(&form);
         }
-        let (result, node) = self.with_grouping_key_input(position, |checker| {
-            checker.resolve_core_bound_node(arena, id)
-        });
-        self.grouping_key.input_unavailable |= node.input_unavailable;
-        if self.grouping_key.deferred_error.is_none() {
-            self.grouping_key.deferred_error = node.deferred_error.clone();
-        }
-        let resolved = result?;
-        if self.is_grouping_key_candidate(arena, id) {
-            self.grouping_key_memo.forms.insert(key, PreAggregateForm {
-                bound: resolved.clone(),
-                input_unavailable: node.input_unavailable,
-                deferred_error: node.deferred_error,
-            });
-        }
-        Ok(resolved)
+        Ok(form.bound)
     }
 
     /// Resolve an alias of the SELECT item at `position`, whose form after the
@@ -865,7 +1139,9 @@ where A: TypeCheckAdapter
         match self.pre_aggregate_form(position)? {
             Some(form) => Ok(form),
             None => {
-                self.grouping_key.input_unavailable |= matching;
+                if let Some(state) = self.match_state() {
+                    state.input_unavailable = true;
+                }
                 if !matching
                     && scalar.used_columns().iter().any(|index| {
                         self.bind_context
@@ -918,11 +1194,13 @@ where A: TypeCheckAdapter
             ))
         }
         .set_span(span);
-        if self.grouping_key_input_scope().is_none() {
-            return Err(err);
+        match self.match_state() {
+            Some(state) => {
+                state.deferred_error.get_or_insert(err);
+                Ok(())
+            }
+            None => Err(err),
         }
-        self.grouping_key.deferred_error.get_or_insert(err);
-        Ok(())
     }
 }
 
@@ -998,16 +1276,14 @@ mod tests {
     use crate::Metadata;
     use crate::NameResolutionContext;
     use crate::Symbol;
+    use crate::binder::Binder;
     use crate::binder::GroupingKeyScope;
     use crate::binder::GroupingScopeState;
     use crate::binder::ScalarFoldingPolicy;
     use crate::planner::semantic::type_check::persisted::PersistedTypeCheckAdapter;
+    use crate::plans::ScalarItem;
 
-    fn with_checker(
-        check: impl FnOnce(&mut TypeChecker<'_, PersistedTypeCheckAdapter>) -> Result<()>,
-    ) -> Result<()> {
-        let settings = Settings::create(Tenant::new_literal("default"));
-        let adapter = PersistedTypeCheckAdapter::new(&settings, FunctionContext::default())?;
+    fn number_context() -> BindContext {
         let mut context = BindContext::new();
         context.add_column_binding(
             ColumnBindingBuilder::new(
@@ -1022,16 +1298,88 @@ mod tests {
             state: GroupingScopeState::Suspended,
             folding_policy: ScalarFoldingPolicy::PreserveStructure,
             input_columns: context.column_set(),
+            key_parts: None,
         });
+        context
+    }
+
+    fn with_checker(
+        check: impl FnOnce(&mut TypeChecker<'_, PersistedTypeCheckAdapter>) -> Result<()>,
+    ) -> Result<()> {
+        with_context_checker(&mut number_context(), check)
+    }
+
+    fn with_context_checker<R>(
+        context: &mut BindContext,
+        check: impl FnOnce(&mut TypeChecker<'_, PersistedTypeCheckAdapter>) -> Result<R>,
+    ) -> Result<R> {
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let adapter = PersistedTypeCheckAdapter::new(&settings, FunctionContext::default())?;
         let names = NameResolutionContext::default();
         let mut checker = TypeChecker::try_create_with_adapter(
-            &mut context,
+            context,
             adapter,
             &names,
             RwLock::new(Metadata::default()).into(),
             &[],
         )?;
         check(&mut checker)
+    }
+
+    // Integration tests cannot see which forms matching binds.
+    #[test]
+    fn calls_are_matched_by_the_parts_of_the_keys() -> Result<()> {
+        // The key `number + 1`, bound as GROUP BY binds keys of grouping sets.
+        let mut context = number_context();
+        let scope = context.grouping_key_scope.as_mut().unwrap();
+        scope.state = GroupingScopeState::GroupBy;
+        let key = with_context_checker(&mut context, |checker| {
+            let tokens = tokenize_sql("number + 1")?;
+            let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+            Ok(checker.resolve(&expr)?.0)
+        })?;
+        let output = Symbol::new(1);
+        context.aggregate_info.replace_group_items(vec![ScalarItem {
+            scalar: key,
+            index: output,
+        }]);
+        Binder::prepare_grouping_scope(&mut context)?;
+        with_context_checker(&mut context, |checker| {
+            for (sql, is_part) in [
+                // The key, which is the part of a key that calls `plus` over
+                // the forms of its arguments.
+                ("number + 1", true),
+                // The shift amount is no part of the key, so neither is the
+                // call, which is not type checked before the aggregate:
+                // unfolded, its shift amount would be Int64, which it does
+                // not accept. After the aggregate, the amount folds to UInt8.
+                ("bit_shift_left(1, length(['x', 'y']) - 1)", false),
+                // The literal `2` is no part of the key; `number + 1` in the
+                // call is the key.
+                ("(number + 1) * 2", false),
+            ] {
+                let tokens = tokenize_sql(sql)?;
+                let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                let mut arena = checker.core_expr_arena();
+                let root = arena.lower_ast_expr(&expr)?;
+                let (bound, form) = checker.with_own_grouping_key_memo(|checker| {
+                    let bound = checker.resolve_core_bound(&arena, root)?;
+                    let form = checker
+                        .grouping_key_memo
+                        .forms
+                        .get(&(root.index, 0))
+                        .cloned();
+                    Ok::<_, ErrorCode>((bound, form))
+                })?;
+                assert_eq!(matches!(form, Some(Form::Bound(_))), is_part, "{sql}");
+                assert_eq!(matches!(form, Some(Form::NoKeyPart)), !is_part, "{sql}");
+                let reads_key = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::BoundColumnRef(column) if column.column.index == output);
+                let mut finder = Finder::new(&reads_key);
+                finder.visit(&bound.scalar)?;
+                assert_eq!(finder.scalars().is_empty(), sql.starts_with("bit"), "{sql}");
+            }
+            Ok(())
+        })
     }
 
     // Integration tests cannot inspect the private input memo or its facts.
@@ -1042,8 +1390,8 @@ mod tests {
             let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
             let mut arena = checker.core_expr_arena();
             let root = arena.lower_ast_expr(&expr)?;
-            let (result, _) = checker
-                .with_grouping_key_input(0, |checker| checker.resolve_core_bound(&arena, root));
+            let (result, _) =
+                checker.with_match_mode(0, |checker| checker.resolve_core_bound(&arena, root));
             let first = result?;
             // Preserving structure does not compute the call's domain. Deriving
             // facts again would infer the singleton false from the input type.
@@ -1053,16 +1401,15 @@ mod tests {
 
             // A producer's declared type need not equal scalar.data_type().
             let reported_type = DataType::Boolean.wrap_nullable();
-            let form = checker
-                .grouping_key_memo
-                .forms
-                .get_mut(&(root.index, 0))
-                .unwrap();
+            let Some(Form::Bound(form)) = checker.grouping_key_memo.forms.get_mut(&(root.index, 0))
+            else {
+                panic!("the form of a candidate is memoized");
+            };
             form.bound.data_type = reported_type.clone();
             form.input_unavailable = true;
             form.deferred_error = Some(ErrorCode::SemanticError("deferred input error"));
-            let (result, input) = checker
-                .with_grouping_key_input(0, |checker| checker.resolve_core_bound(&arena, root));
+            let (result, input) =
+                checker.with_match_mode(0, |checker| checker.resolve_core_bound(&arena, root));
             let cached = result?;
             assert!(input.input_unavailable);
             assert_eq!(
@@ -1117,13 +1464,14 @@ mod tests {
     }
 
     #[test]
-    fn input_phase_restores_after_nested_errors_and_policy_follows_scope() -> Result<()> {
+    fn match_mode_restores_after_nested_errors_and_policy_follows_scope() -> Result<()> {
         with_checker(|checker| {
             let ordinary = BindContext {
                 grouping_key_scope: Some(GroupingKeyScope {
                     state: GroupingScopeState::Active,
                     folding_policy: ScalarFoldingPolicy::Normal,
                     input_columns: Default::default(),
+                    key_parts: None,
                 }),
                 ..BindContext::new()
             };
@@ -1132,18 +1480,19 @@ mod tests {
                     state: GroupingScopeState::Active,
                     folding_policy: ScalarFoldingPolicy::PreserveStructure,
                     input_columns: Default::default(),
+                    key_parts: None,
                 }),
                 parent: Some(Box::new(ordinary)),
                 ..BindContext::new()
             };
             checker.bind_context.parent = Some(Box::new(grouping_sets));
-            let (result, _) = checker.with_grouping_key_input(1, |checker| {
+            let (result, _) = checker.with_match_mode(1, |checker| {
                 assert_eq!(checker.grouping_key_input_scope(), Some(1));
                 assert_eq!(
                     checker.scalar_folding_policy(),
                     ScalarFoldingPolicy::PreserveStructure
                 );
-                let (nested, _) = checker.with_grouping_key_input(2, |checker| {
+                let (nested, _) = checker.with_match_mode(2, |checker| {
                     assert_eq!(checker.grouping_key_input_scope(), Some(2));
                     assert_eq!(checker.scalar_folding_policy(), ScalarFoldingPolicy::Normal);
                     Err::<(), _>(ErrorCode::SemanticError("nested binding failed"))
