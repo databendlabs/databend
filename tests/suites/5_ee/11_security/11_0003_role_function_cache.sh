@@ -32,7 +32,10 @@ cleanup() {
 	root_sql "DROP TABLE IF EXISTS rc_mask_t" || true
 	root_sql "DROP TABLE IF EXISTS rc_user_mask_t" || true
 	root_sql "DROP TABLE IF EXISTS rc_role_mask_t" || true
-	root_sql "DROP ROW ACCESS POLICY IF EXISTS rc_rap_policy" || true
+	root_sql "
+SET enable_experimental_row_access_policy = 1;
+DROP ROW ACCESS POLICY IF EXISTS rc_rap_policy;
+" || true
 	root_sql "DROP MASKING POLICY IF EXISTS rc_mask_policy" || true
 	root_sql "DROP MASKING POLICY IF EXISTS rc_user_mask_policy" || true
 	root_sql "DROP MASKING POLICY IF EXISTS rc_role_mask_policy" || true
@@ -58,7 +61,6 @@ cache_status() {
 }
 
 comment "setup"
-root_sql "SET GLOBAL enable_experimental_row_access_policy = 1"
 cleanup
 root_sql "CREATE ROLE ${ADMIN_ROLE}"
 root_sql "CREATE ROLE ${READER_ROLE}"
@@ -70,8 +72,12 @@ root_sql "GRANT ROLE ${ADMIN_ROLE} TO ${USER_A}"
 
 root_sql "CREATE TABLE rc_rap_t(id INT, region STRING)"
 root_sql "INSERT INTO rc_rap_t VALUES (1, 'public'), (2, 'private')"
-root_sql "CREATE ROW ACCESS POLICY rc_rap_policy AS (region STRING) RETURNS BOOLEAN -> IS_ROLE_IN_SESSION('${ADMIN_ROLE}') OR region = 'public'"
-root_sql "ALTER TABLE rc_rap_t ADD ROW ACCESS POLICY rc_rap_policy ON (region)"
+# The setting is needed for the policy DDL, not for queries against the table.
+root_sql "
+SET enable_experimental_row_access_policy = 1;
+CREATE ROW ACCESS POLICY rc_rap_policy AS (region STRING) RETURNS BOOLEAN -> IS_ROLE_IN_SESSION('${ADMIN_ROLE}') OR region = 'public';
+ALTER TABLE rc_rap_t ADD ROW ACCESS POLICY rc_rap_policy ON (region);
+"
 
 root_sql "CREATE TABLE rc_mask_t(id INT, secret STRING)"
 root_sql "INSERT INTO rc_mask_t VALUES (1, 'plain')"
@@ -174,4 +180,3 @@ user_query "${USER_B}" "${BOTH_CACHES} SELECT secret AS both_s FROM rc_role_mask
 
 comment "cleanup"
 cleanup
-root_sql "SET GLOBAL enable_experimental_row_access_policy = 0"
