@@ -3183,7 +3183,8 @@ pub struct CacheConfig {
 
     /// The meta-service data that this node watches, to read it from a local copy: names of
     /// [`MetaServiceCache`], such as `["user", "setting"]` in a config file or
-    /// `--cache-meta-service-caches user,setting`. Empty by default.
+    /// `--cache-meta-service-caches user,setting`. Defaults to `cluster_node` and `setting`.
+    /// Set `meta_service_caches = []` in the config file to disable the default watches.
     ///
     /// A watched copy may lag a change by the watch delay, a change made through this node
     /// included. Only the meta-service leader serves the watches: a copy can miss changes for up
@@ -3195,7 +3196,8 @@ pub struct CacheConfig {
         long = "cache-meta-service-caches",
         value_name = "VALUE",
         value_enum,
-        value_delimiter = ','
+        value_delimiter = ',',
+        default_values_t = DEFAULT_META_SERVICE_CACHES
     )]
     pub meta_service_caches: Vec<MetaServiceCache>,
 
@@ -3630,7 +3632,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
-            meta_service_caches: vec![],
+            meta_service_caches: DEFAULT_META_SERVICE_CACHES.to_vec(),
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
@@ -3702,6 +3704,9 @@ impl CacheConfig {
         )
     }
 }
+
+const DEFAULT_META_SERVICE_CACHES: [MetaServiceCache; 2] =
+    [MetaServiceCache::ClusterNode, MetaServiceCache::Setting];
 
 /// A watched copy of meta-service data, enabled by its snake_case name, such as
 /// `cluster_node`, in `cache.meta_service_caches`.

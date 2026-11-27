@@ -41,9 +41,21 @@ fn test_meta_service_caches_from_flag() {
 
     let unknown = ["databend-query", "--cache-meta-service-caches", "users"];
     assert!(Args::try_parse_from(unknown).is_err());
+}
 
-    let default = Args::try_parse_from(["databend-query"]).unwrap().config;
-    assert!(default.cache.meta_service_caches.is_empty());
+#[test]
+fn test_meta_service_cache_defaults() {
+    let expected = [MetaServiceCache::ClusterNode, MetaServiceCache::Setting];
+    let cli = Args::try_parse_from(["databend-query"]).unwrap().config;
+    let file: Config = toml::from_str("[cache]").unwrap();
+    for config in [Config::default(), cli, file] {
+        assert_eq!(config.cache.meta_service_caches, expected);
+        assert!(
+            !config
+                .cache
+                .is_meta_service_cache_enabled(MetaServiceCache::Ownership)
+        );
+    }
 }
 
 /// A config file lists the names in a TOML array, and fails to load with any other name.
@@ -53,6 +65,12 @@ fn test_meta_service_caches_from_file() {
     assert_eq!(config.cache.meta_service_caches, vec![
         MetaServiceCache::Setting
     ]);
+
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), "[cache]\nmeta_service_caches = []\n").unwrap();
+    let config = Args::try_parse_from(["databend-query"]).unwrap().config;
+    let config = config.merge(file.path().to_str().unwrap()).unwrap();
+    assert!(config.cache.meta_service_caches.is_empty());
 
     let unknown = toml::from_str::<Config>("[cache]\nmeta_service_caches = [\"users\"]\n");
     let err = unknown.unwrap_err().to_string();
@@ -84,9 +102,11 @@ fn test_meta_service_caches_ownership() {
     let deprecated: Config =
         toml::from_str("[cache]\nmeta_service_ownership_cache = true\n").unwrap();
     let cache = deprecated.cache;
-    assert!(cache.meta_service_caches.is_empty());
+    assert_eq!(
+        cache.meta_service_caches,
+        Config::default().cache.meta_service_caches
+    );
     assert!(cache.is_meta_service_cache_enabled(MetaServiceCache::Ownership));
-    assert!(!cache.is_meta_service_cache_enabled(MetaServiceCache::User));
 
     let cache = Args::try_parse_from(["databend-query"])
         .unwrap()
