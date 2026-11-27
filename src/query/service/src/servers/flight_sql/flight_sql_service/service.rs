@@ -78,7 +78,6 @@ use tonic::server::NamedService;
 use uuid::Uuid;
 
 use super::DoGetStream;
-use super::PreparedStatement;
 use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 
@@ -196,15 +195,15 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         info!("do_get_fallback with handle={handle}");
 
-        // Own the SQL without holding the cache read lock across await, so Close can remove the
-        // statement while it runs.
-        let query = self
+        // Own the execution plan without holding the cache read lock across await, so Close can
+        // remove the statement without releasing resources still used by this execution.
+        let (plan, extras) = self
             .statements
             .get(&handle)
-            .map(|entry| entry.value().query.clone())
+            .map(|entry| entry.value().clone())
             .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let stream = self
-            .execute_query(session, &query)
+            .execute_query(session, &plan, &extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let resp = Response::new(stream);
@@ -242,7 +241,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .statements
             .get(&handle)
             .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
-        let schema = handle_plan_ref.value().schema.as_ref().into();
+        let schema = handle_plan_ref.value().0.schema().as_ref().into();
         let loc = Location {
             uri: "grpc+tcp://127.0.0.1".to_string(),
         };
@@ -526,8 +525,12 @@ impl FlightSqlService for FlightSqlServiceImpl {
             format_sql_for_log(&query)
         );
 
+        let (plan, plan_extras) = self
+            .plan_sql(&session, &query)
+            .await
+            .map_err(|e| status!("Error getting result schema", e))?;
         let res = self
-            .execute_update(&session, &query)
+            .execute_update(session, &plan, &plan_extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         Ok(res)
@@ -546,13 +549,13 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         info!("do_put_prepared_statement_query with handle={handle}");
 
-        let query = self
+        let (plan, extras) = self
             .statements
             .get(&handle)
-            .map(|entry| entry.value().query.clone())
+            .map(|entry| entry.value().clone())
             .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let record_count = self
-            .execute_update(&session, &query)
+            .execute_update(session, &plan, &extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let result = DoPutUpdateResult { record_count };
@@ -579,13 +582,13 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         info!("do_put_prepared_statement_update with handle={handle}");
 
-        let query = self
+        let (plan, extras) = self
             .statements
             .get(&handle)
-            .map(|entry| entry.value().query.clone())
+            .map(|entry| entry.value().clone())
             .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let res = self
-            .execute_update(&session, &query)
+            .execute_update(session, &plan, &extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
 
@@ -602,28 +605,22 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let session = self.get_session(&request)?;
         let sql = query.query.clone();
         let handle = Uuid::new_v4();
-        // Bind once to validate the SQL and to get its result schema. The plan is dropped here,
-        // with any table lock binding took: each execution binds the SQL again.
-        let (_, plan, _) = self
+        let plan = self
             .plan_sql(&session, &sql)
             .await
             .map_err(|e| status!("Error getting result schema", e))?;
         // JDBC client use call put when schema.fields == 0
-        let data_schema = if plan.has_result_set() {
-            plan.schema()
+        let data_schema = if plan.0.has_result_set() {
+            plan.0.schema()
         } else {
             Arc::new(DataSchema::empty())
         };
-        drop(plan);
         info!(
             "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
             format_sql_for_log(&query.query)
         );
         let schema = (&*data_schema).into();
-        self.statements.insert(handle, PreparedStatement {
-            query: sql,
-            schema: data_schema,
-        });
+        self.statements.insert(handle, plan);
         let message = SchemaAsIpc::new(&schema, &IpcWriteOptions::default())
             .try_into()
             .map_err(|e| status!("Unable to serialize schema", e))?;

@@ -141,15 +141,12 @@ impl FlightSqlServiceImpl {
             .with_data_body(Bytes::from(progress)))
     }
 
-    /// Binds `query` in a new query context and returns the context with the plan. A plan must
-    /// run in the context it was bound in: binding adds to that context the values the result
-    /// cache key needs, such as the value of `current_user()`.
     #[async_backtrace::framed]
     pub async fn plan_sql(
         &self,
         session: &Arc<Session>,
         query: &str,
-    ) -> Result<(Arc<QueryContext>, Plan, PlanExtras)> {
+    ) -> Result<(Plan, PlanExtras)> {
         let context = session
             .create_query_context(self.version)
             .await
@@ -158,19 +155,26 @@ impl FlightSqlServiceImpl {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.perf_query_token = context.get_perf_query_token();
         let mut planner = Planner::new(context.clone());
-        let (plan, extras) = tracking_payload.tracking(planner.plan_sql(query)).await?;
-        Ok((context, plan, extras))
+        tracking_payload.tracking(planner.plan_sql(query)).await
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn execute_update(&self, session: &Arc<Session>, query: &str) -> Result<i64> {
-        let (context, plan, plan_extras) = self.plan_sql(session, query).await?;
+    pub(super) async fn execute_update(
+        &self,
+        session: Arc<Session>,
+        plan: &Plan,
+        plan_extras: &PlanExtras,
+    ) -> Result<i64> {
+        let context = session
+            .create_query_context(self.version)
+            .await
+            .map_err(|e| status!("Could not create_query_context", e))?;
 
         context.attach_query_str(
             get_query_kind(&plan_extras.statement),
             plan_extras.statement.to_mask_sql(),
         );
-        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
 
         let mut blocks = interpreter.execute(context.clone()).await?;
         while let Some(block) = blocks.next().await {
@@ -181,16 +185,24 @@ impl FlightSqlServiceImpl {
         Ok(affected_rows as i64)
     }
 
-    pub async fn execute_query(&self, session: Arc<Session>, query: &str) -> Result<DoGetStream> {
+    pub async fn execute_query(
+        &self,
+        session: Arc<Session>,
+        plan: &Plan,
+        plan_extras: &PlanExtras,
+    ) -> Result<DoGetStream> {
         let is_native_client = session.get_status().read().is_native_client;
 
-        let (context, plan, plan_extras) = self.plan_sql(&session, query).await?;
+        let context = session
+            .create_query_context(self.version)
+            .await
+            .map_err(|e| status!("Could not create_query_context", e))?;
 
         context.attach_query_str(
             get_query_kind(&plan_extras.statement),
             plan_extras.statement.to_mask_sql(),
         );
-        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
 
         let data_schema = plan.schema();
         let data_stream = interpreter.execute(context.clone()).await?;
