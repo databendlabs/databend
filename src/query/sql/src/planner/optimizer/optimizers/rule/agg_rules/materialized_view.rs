@@ -212,39 +212,7 @@ fn try_build_replacement(
         .map(|replacement| (replacement, false)));
     }
 
-    let mut outputs = HashMap::with_capacity(definition_info.output_cols().len());
-    for definition_output in definition_info.output_cols() {
-        let Some(position) = candidate
-            .definition_output_columns
-            .iter()
-            .position(|column| *column == definition_output.index)
-        else {
-            continue;
-        };
-        let read_output = candidate.read_output_columns[position];
-        let display_name = format_scalar(&definition_output.scalar, definition_info.column_map());
-        let replacement = ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span: None,
-            column: ColumnBindingBuilder::new(
-                metadata.column(read_output).name(),
-                read_output,
-                Box::new(metadata.column(read_output).data_type()),
-                Visibility::Visible,
-            )
-            .build(),
-        });
-        // Aggregate MVs expose finalized logical aggregate values. The
-        // first implementation supports only equal-granularity aggregate
-        // matching; the shared matcher rejects use as an ordinary scalar.
-        let is_aggregate = definition_info.aggregate.as_ref().is_some_and(|aggregate| {
-            aggregate
-                .aggregate_functions
-                .iter()
-                .any(|item| item.index == definition_output.index)
-        });
-        outputs.insert(display_name, (replacement, is_aggregate));
-    }
-
+    let outputs = candidate_outputs(metadata, candidate, &definition_info);
     let view_info = ViewInfo::new(
         table_index,
         table_name,
@@ -321,6 +289,215 @@ fn try_build_replacement(
     }
     replacement = apply_post_aggregate_filter(replacement, &post_aggregate_predicates);
     Ok(Some((replacement, requires_aggregate_rollup)))
+}
+
+/// Map each logical expression exposed by a candidate to the read-plan column producing it.
+fn candidate_outputs(
+    metadata: &Metadata,
+    candidate: &MaterializedViewCandidate,
+    definition_info: &QueryInfo,
+) -> HashMap<String, (ScalarExpr, bool)> {
+    let mut outputs = HashMap::with_capacity(definition_info.output_cols().len());
+    for definition_output in definition_info.output_cols() {
+        let Some(position) = candidate
+            .definition_output_columns
+            .iter()
+            .position(|column| *column == definition_output.index)
+        else {
+            continue;
+        };
+        let read_output = candidate.read_output_columns[position];
+        let display_name = format_scalar(&definition_output.scalar, definition_info.column_map());
+        // Aggregate MVs expose finalized logical aggregate values. The
+        // first implementation supports only equal-granularity aggregate
+        // matching; the shared matcher rejects use as an ordinary scalar.
+        let is_aggregate = definition_info.aggregate.as_ref().is_some_and(|aggregate| {
+            aggregate
+                .aggregate_functions
+                .iter()
+                .any(|item| item.index == definition_output.index)
+        });
+        outputs.insert(
+            display_name,
+            (column_ref(metadata, read_output), is_aggregate),
+        );
+    }
+    outputs
+}
+
+/// A top-N candidate keeps only the first rows of its definition. Its logical definition is
+/// bound as `Limit -> Sort -> ...`, while every other candidate is rooted at a projection.
+pub(crate) fn is_top_n_candidate(candidate: &MaterializedViewCandidate) -> bool {
+    matches!(candidate.definition.plan(), RelOperator::Limit(_))
+}
+
+/// Wrap `child` in a projection of `columns`, giving QueryInfo the projection root it requires.
+fn identity_projection(metadata: &Metadata, columns: &[Symbol], child: &SExpr) -> SExpr {
+    let items = columns
+        .iter()
+        .map(|index| ScalarItem {
+            index: *index,
+            scalar: column_ref(metadata, *index),
+        })
+        .collect();
+    SExpr::create_unary(
+        Arc::new(EvalScalar { items }.into()),
+        Arc::new(child.clone()),
+    )
+}
+
+/// Answer `ORDER BY ... LIMIT k OFFSET o` (or a bare `LIMIT`) from a top-N MV.
+///
+/// A candidate keeping the first `n` rows under keys `K` with predicate `P` answers the query
+/// when `k + o <= n`, the query's predicate is exactly `P`, the query's keys are a prefix of `K`,
+/// and the query has no aggregate. The query's Sort and Limit stay above the MV read, which
+/// replaces the source scan and everything between.
+pub(crate) fn try_rewrite_top_n(
+    table_index: IndexType,
+    table_name: &str,
+    metadata: &Metadata,
+    s_expr: &SExpr,
+    candidates: &[MaterializedViewCandidate],
+    required_output_columns: &HashSet<Symbol>,
+    stat_context: &StatContext,
+) -> Result<Option<(SExpr, u64)>> {
+    let RelOperator::Limit(limit) = s_expr.plan() else {
+        return Ok(None);
+    };
+    let Some(required_rows) = limit
+        .limit
+        .and_then(|limit_rows| limit_rows.checked_add(limit.offset))
+    else {
+        return Ok(None);
+    };
+    let child = s_expr.child(0)?;
+    let mut sort = None;
+    let mut current = child;
+    loop {
+        match current.plan() {
+            RelOperator::Sort(current_sort) => {
+                if sort.is_some()
+                    || current_sort.window_partition.is_some()
+                    || current_sort.pre_projection.is_some()
+                {
+                    return Ok(None);
+                }
+                sort = Some(current_sort.clone());
+            }
+            RelOperator::EvalScalar(_) | RelOperator::Filter(_) => {}
+            RelOperator::Scan(_) => break,
+            _ => return Ok(None),
+        }
+        current = current.child(0)?;
+    }
+
+    let child_outputs = child.derive_relational_prop()?.output_columns.clone();
+    let mut query_outputs = required_output_columns
+        .iter()
+        .copied()
+        .filter(|column| child_outputs.contains(column))
+        .collect::<Vec<_>>();
+    query_outputs.sort_unstable();
+    let query_info = QueryInfo::new(
+        table_index,
+        table_name,
+        metadata.columns_by_table_index(table_index),
+        &identity_projection(metadata, &query_outputs, child),
+    )?;
+    if query_info.aggregate.is_some() {
+        return Ok(None);
+    }
+    let matcher = ViewMatcher::new(query_info).with_exact_predicates();
+
+    let source_cost = estimate_rewrite_cost(s_expr, metadata, stat_context);
+    let mut best: Option<RewriteCandidate> = None;
+    for candidate in candidates {
+        let RelOperator::Limit(definition_limit) = candidate.definition.plan() else {
+            continue;
+        };
+        if definition_limit.offset != 0
+            || definition_limit
+                .limit
+                .is_none_or(|limit_rows| limit_rows < required_rows)
+            || candidate.definition_output_columns.len() != candidate.read_output_columns.len()
+        {
+            continue;
+        }
+        let definition = identity_projection(
+            metadata,
+            &candidate.definition_output_columns,
+            candidate.definition.child(0)?,
+        );
+        let definition_info = QueryInfo::new(
+            table_index,
+            table_name,
+            metadata.columns_by_table_index(table_index),
+            &definition,
+        )?;
+        if definition_info.aggregate.is_some() {
+            continue;
+        }
+        let outputs = candidate_outputs(metadata, candidate, &definition_info);
+        let view_info = ViewInfo::new(
+            table_index,
+            table_name,
+            metadata.columns_by_table_index(table_index),
+            &definition,
+            outputs,
+        )?;
+        if !matcher.sort_items_are_prefix_of(&view_info) {
+            continue;
+        }
+        let Some(matched) = matcher.try_match(&view_info)? else {
+            continue;
+        };
+        if !matched.predicates.is_empty() || !matched.post_aggregate_predicates.is_empty() {
+            continue;
+        }
+
+        let mut replacement = SExpr::create_unary(
+            Arc::new(
+                EvalScalar {
+                    items: matched.selection,
+                }
+                .into(),
+            ),
+            Arc::new(candidate.read_plan.clone()),
+        );
+        if let Some(sort) = &sort {
+            replacement = SExpr::create_unary(Arc::new(sort.clone().into()), Arc::new(replacement));
+        }
+        // Lazy columns name source columns fetched after the limit. The MV read supplies every
+        // output itself, so the replacement limit fetches nothing.
+        replacement = SExpr::create_unary(
+            Arc::new(limit.without_lazy_columns().into()),
+            Arc::new(replacement),
+        );
+
+        let cost = estimate_rewrite_cost(&replacement, metadata, stat_context);
+        if cost.partial_cmp(&source_cost) != Some(Ordering::Less) {
+            continue;
+        }
+        let current = RewriteCandidate {
+            replacement,
+            mv_table_id: candidate.mv_table_id,
+            cost,
+            read_mode: candidate.read_mode,
+            logical_sql: candidate.logical_sql.clone(),
+            requires_aggregate_rollup: false,
+        };
+        if best.as_ref().is_none_or(|best| current.is_better(best)) {
+            best = Some(current);
+        }
+    }
+
+    Ok(best.map(|best| {
+        info!(
+            "Use top-N materialized view {} (cost={}, source_cost={}): {}",
+            best.mv_table_id, best.cost, source_cost, best.logical_sql
+        );
+        (best.replacement, best.mv_table_id)
+    }))
 }
 
 /// A detail MV replaces rows below the aggregate, not the aggregate's results.

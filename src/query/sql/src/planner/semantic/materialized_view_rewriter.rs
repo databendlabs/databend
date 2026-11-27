@@ -25,6 +25,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
@@ -32,6 +33,7 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -51,6 +53,8 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableMeta;
 
 use crate::MetadataRef;
+use crate::NameResolutionContext;
+use crate::normalize_identifier;
 
 /// Parse persisted materialized-view SQL and require a query statement.
 ///
@@ -115,6 +119,102 @@ pub fn check_materialized_view_source_without_policy(
     Ok(())
 }
 
+/// Build an identifier for a name that materialized-view code writes into SQL or an AST.
+///
+/// MV definitions and refresh statements are serialized and parsed again, or planned with
+/// identifier normalization. An unquoted identifier is lowercased by both, so a name with
+/// uppercase letters or characters outside an unquoted identifier must keep a quote. The quote is
+/// the PostgreSQL one used to parse persisted MV SQL.
+pub fn materialized_view_ident(name: &str) -> Identifier {
+    Identifier::from_name_with_quoted(
+        None,
+        name,
+        ident_opt_quote(name, false, true, Dialect::PostgreSQL),
+    )
+}
+
+/// Build `SELECT <target> FROM <source>` for each star target of an MV definition, in
+/// select-list order.
+///
+/// Binding one of these queries yields exactly the columns its target expands to, including
+/// qualification, `EXCLUDE` and `COLUMNS(...)` filters, so the expansion matches what the target
+/// means in an ordinary query.
+pub fn materialized_view_star_queries(query: &Query) -> Result<Vec<Query>> {
+    let SetExpr::Select(select) = &query.body else {
+        return Err(ErrorCode::Internal(
+            "materialized view definition must be a SELECT",
+        ));
+    };
+    Ok(select
+        .select_list
+        .iter()
+        .filter(|target| matches!(target, SelectTarget::StarColumns { .. }))
+        .map(|target| Query {
+            span: None,
+            with: None,
+            body: SetExpr::Select(Box::new(SelectStmt {
+                span: None,
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: vec![target.clone()],
+                from: select.from.clone(),
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            })),
+            order_by: vec![],
+            limit: vec![],
+            offset: None,
+            ignore_result: false,
+        })
+        .collect())
+}
+
+/// Replace every star target of an MV definition with the columns it expands to.
+///
+/// `expansions` holds the column names of each star target in select-list order, as produced by
+/// binding [`materialized_view_star_queries`]. Persisting explicit columns keeps the MV schema
+/// fixed when the source changes later.
+pub fn expand_materialized_view_star(query: &mut Query, expansions: &[Vec<String>]) -> Result<()> {
+    let SetExpr::Select(select) = &mut query.body else {
+        return Err(ErrorCode::Internal(
+            "materialized view definition must be a SELECT",
+        ));
+    };
+    let mut expansions = expansions.iter();
+    let mut select_list = Vec::with_capacity(select.select_list.len());
+    for target in std::mem::take(&mut select.select_list) {
+        if !matches!(target, SelectTarget::StarColumns { .. }) {
+            select_list.push(target);
+            continue;
+        }
+        let names = expansions.next().ok_or_else(|| {
+            ErrorCode::Internal("materialized view star expansion is missing a target")
+        })?;
+        select_list.extend(names.iter().map(|name| SelectTarget::AliasedExpr {
+            expr: Box::new(Expr::ColumnRef {
+                span: None,
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(materialized_view_ident(name)),
+                },
+            }),
+            alias: None,
+        }));
+    }
+    if expansions.next().is_some() {
+        return Err(ErrorCode::Internal(
+            "materialized view star expansion has more entries than star targets",
+        ));
+    }
+    select.select_list = select_list;
+    Ok(())
+}
+
 /// Rewrites a user MV definition into its physical storage query and records
 /// physical names and logical definition expressions in their schema order.
 #[derive(Debug, Clone, Default)]
@@ -125,18 +225,23 @@ pub struct MaterializedViewRewriter {
     logical_names: Vec<String>,
     logical_define_exprs: Vec<String>,
     specified_columns: Vec<String>,
+    name_resolution_ctx: NameResolutionContext,
 }
 
 impl MaterializedViewRewriter {
+    /// `specified_columns` are the normalized names of the MV column list. Output names taken
+    /// from the SELECT list are normalized with `name_resolution_ctx`.
     pub fn new(
         is_aggregating: bool,
         source_database: impl Into<String>,
         specified_columns: Vec<String>,
+        name_resolution_ctx: NameResolutionContext,
     ) -> Self {
         Self {
             is_aggregating,
             source_database: source_database.into(),
             specified_columns,
+            name_resolution_ctx,
             ..Default::default()
         }
     }
@@ -175,16 +280,27 @@ impl MaterializedViewRewriter {
                     stmt.select_list.len()
                 )));
             }
-            return Ok(self.specified_columns.clone());
+            return Self::check_unique_output_names(self.specified_columns.clone());
         }
 
-        stmt.select_list
+        let names = stmt
+            .select_list
             .iter()
             .map(|target| match target {
+                // Output names follow identifier rules: a quoted name keeps its case, and an
+                // unquoted one is normalized like any other unquoted identifier.
                 SelectTarget::AliasedExpr {
                     alias: Some(alias), ..
-                } => Ok(alias.name.clone()),
+                } => Ok(normalize_identifier(alias, &self.name_resolution_ctx).name),
                 SelectTarget::AliasedExpr { expr, alias: None } => match expr.as_ref() {
+                    Expr::ColumnRef {
+                        column:
+                            ColumnRef {
+                                column: ColumnID::Name(column),
+                                ..
+                            },
+                        ..
+                    } => Ok(normalize_identifier(column, &self.name_resolution_ctx).name),
                     Expr::ColumnRef { column, .. } => Ok(column.column.name().to_string()),
                     _ => Err(ErrorCode::SemanticError(
                         "materialized view SELECT expressions must have aliases when no column list is specified"
@@ -195,7 +311,22 @@ impl MaterializedViewRewriter {
                     "materialized view does not support SELECT *".to_string(),
                 )),
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+        Self::check_unique_output_names(names)
+    }
+
+    /// MV outputs become storage columns, so their names must be unique. Expanding `*` next to
+    /// a source column, as in `SELECT *, id`, would otherwise produce two columns named `id`.
+    fn check_unique_output_names(names: Vec<String>) -> Result<Vec<String>> {
+        let mut seen = std::collections::HashSet::with_capacity(names.len());
+        for name in &names {
+            if !seen.insert(name) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "materialized view has duplicate output column '{name}'; use aliases or a column list to rename it"
+                )));
+            }
+        }
+        Ok(names)
     }
 
     fn rewrite_aggregate_expr(
@@ -224,7 +355,7 @@ impl MaterializedViewRewriter {
                     "materialized view does not support SELECT *".to_string(),
                 ));
             };
-            *alias = Some(Identifier::from_name(None, &name));
+            *alias = Some(materialized_view_ident(&name));
             self.physical_names.push(name.clone());
             self.logical_names.push(name.clone());
             self.logical_define_exprs.push(name);
@@ -315,7 +446,14 @@ impl MaterializedViewRewriter {
                     if matches!(target, SelectTarget::AliasedExpr { expr, .. }
                         if expr.to_string() == selected_expr_text)
                     {
-                        self.logical_define_exprs[output_index] = name.clone();
+                        // The first output is an identity projection of its physical column;
+                        // later outputs persist an expression referencing that column.
+                        self.logical_define_exprs[output_index] =
+                            if output_index == first_output_index {
+                                name.clone()
+                            } else {
+                                materialized_view_ident(&name).to_string()
+                            };
                     }
                 }
                 aggregate_targets.push(AggregateExprRewriter::target(
@@ -397,7 +535,7 @@ impl AggregateExprRewriter<'_> {
             column: ColumnRef {
                 database: None,
                 table: None,
-                column: ColumnID::Name(Identifier::from_name(None, name)),
+                column: ColumnID::Name(materialized_view_ident(name)),
             },
         }
     }
@@ -405,7 +543,7 @@ impl AggregateExprRewriter<'_> {
     fn target(expr: Expr, name: &str) -> SelectTarget {
         SelectTarget::AliasedExpr {
             expr: Box::new(expr),
-            alias: Some(Identifier::from_name(None, name)),
+            alias: Some(materialized_view_ident(name)),
         }
     }
 
@@ -560,10 +698,90 @@ impl VisitorMut for AggregateExprRewriter<'_> {
     }
 }
 
+/// One ORDER BY key of a persisted top-N physical definition, naming a physical output column.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterializedViewSortKey {
+    pub column: String,
+    pub asc: bool,
+    pub nulls_first: bool,
+}
+
+/// The `ORDER BY ... LIMIT n` of a top-N materialized view.
+///
+/// CREATE persists the physical definition with every ORDER BY key rewritten to a physical
+/// output column and with explicit direction and NULLS placement, so reads and refreshes can
+/// order MV storage rows without the source expressions or session defaults.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaterializedViewTopN {
+    pub keys: Vec<MaterializedViewSortKey>,
+    pub limit: u64,
+}
+
+impl MaterializedViewTopN {
+    /// Extract the top-N clause from a persisted physical definition, if it has one.
+    pub fn from_physical_query(query: &Query) -> Result<Option<Self>> {
+        if query.order_by.is_empty() && query.limit.is_empty() {
+            return Ok(None);
+        }
+        let invalid = || {
+            ErrorCode::InvalidMaterializedView(format!(
+                "invalid top-N materialized view physical definition: {query}"
+            ))
+        };
+        let [limit] = query.limit.as_slice() else {
+            return Err(invalid());
+        };
+        let Some(limit) = top_n_limit(limit) else {
+            return Err(invalid());
+        };
+        if query.order_by.is_empty() || query.offset.is_some() {
+            return Err(invalid());
+        }
+        let keys = query
+            .order_by
+            .iter()
+            .map(|item| match (&item.expr, item.asc, item.nulls_first) {
+                (
+                    Expr::ColumnRef {
+                        column:
+                            ColumnRef {
+                                database: None,
+                                table: None,
+                                column: ColumnID::Name(column),
+                            },
+                        ..
+                    },
+                    Some(asc),
+                    Some(nulls_first),
+                ) => Ok(MaterializedViewSortKey {
+                    column: column.name.clone(),
+                    asc,
+                    nulls_first,
+                }),
+                _ => Err(invalid()),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Some(Self { keys, limit }))
+    }
+}
+
+fn top_n_limit(expr: &Expr) -> Option<u64> {
+    match expr {
+        Expr::Literal {
+            value: Literal::UInt64(limit),
+            ..
+        } if *limit > 0 => Some(*limit),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct MaterializedViewChecker {
     has_aggregate: bool,
     has_group_by: bool,
+    has_order_by: bool,
+    has_limit: bool,
+    has_star: bool,
     not_supported: bool,
 }
 
@@ -578,11 +796,25 @@ impl MaterializedViewChecker {
         self.has_aggregate || self.has_group_by
     }
 
+    /// Whether the definition keeps only the first rows of `ORDER BY ... LIMIT n`.
+    pub fn is_top_n(&self) -> bool {
+        self.has_order_by && self.has_limit
+    }
+
+    /// Whether the select list has a star target, which CREATE expands to source columns.
+    pub fn has_star(&self) -> bool {
+        self.has_star
+    }
+
     pub fn is_supported(&self) -> bool {
         // A projection MV may materialize every row from its source table. A WHERE
         // clause, GROUP BY, or aggregate is not required for the definition to be
-        // useful or valid.
+        // useful or valid. ORDER BY and LIMIT are accepted only together, as a top-N
+        // projection: an ORDER BY alone does not change the stored rows, and a LIMIT
+        // alone would keep arbitrary rows.
         !self.not_supported
+            && self.has_order_by == self.has_limit
+            && !(self.is_aggregating() && (self.is_top_n() || self.has_star))
     }
 }
 
@@ -590,13 +822,21 @@ impl Visitor for MaterializedViewChecker {
     fn visit_query(&mut self, query: &Query) -> VisitResult {
         // An MV definition is deliberately limited to one SELECT query block.
         if query.with.is_some()
-            || !query.order_by.is_empty()
-            || !query.limit.is_empty()
             || query.offset.is_some()
             || query.ignore_result
             || !matches!(&query.body, SetExpr::Select(_))
         {
             self.not_supported = true;
+        }
+        if !query.order_by.is_empty() {
+            self.has_order_by = true;
+        }
+        if !query.limit.is_empty() {
+            self.has_limit = true;
+            // `LIMIT offset, count` and non-literal limits are not part of the top-N shape.
+            if !matches!(query.limit.as_slice(), [limit] if top_n_limit(limit).is_some()) {
+                self.not_supported = true;
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -613,6 +853,20 @@ impl Visitor for MaterializedViewChecker {
         // Keep the accepted shape explicit: SELECT expressions FROM one plain table, with only
         // optional WHERE and normal GROUP BY clauses. In particular, derived tables, joins,
         // table functions, stages and table decorators must not become refresh sources.
+        // Star targets (`*`, `t.*`, `* EXCLUDE ...`, `COLUMNS(...)`) may appear anywhere in the
+        // select list. CREATE expands them to source columns, so the persisted definition never
+        // depends on the source's later schema. A star must end its qualification; the binder
+        // validates any table or database qualifier against the single source.
+        let has_star = stmt
+            .select_list
+            .iter()
+            .any(|target| matches!(target, SelectTarget::StarColumns { .. }));
+        let stars_are_valid = stmt.select_list.iter().all(|target| match target {
+            SelectTarget::StarColumns { qualified, .. } => {
+                matches!(qualified.last(), Some(Indirection::Star(_)))
+            }
+            SelectTarget::AliasedExpr { .. } => true,
+        });
         if stmt.hints.is_some()
             || stmt.distinct
             || stmt.having.is_some()
@@ -621,13 +875,11 @@ impl Visitor for MaterializedViewChecker {
             || stmt.top_n.is_some()
             || !matches!(stmt.group_by, None | Some(GroupBy::Normal(_)))
             || !has_plain_source
-            || stmt
-                .select_list
-                .iter()
-                .any(|target| matches!(target, SelectTarget::StarColumns { .. }))
+            || !stars_are_valid
         {
             self.not_supported = true;
         }
+        self.has_star |= has_star;
         self.has_group_by |= stmt.group_by.is_some();
         Ok(VisitControl::Continue)
     }
@@ -689,7 +941,7 @@ impl VisitorMut for MaterializedViewRewriter {
             && let Some(TableReference::Table { table, .. }) = stmt.from.first_mut()
             && table.database.is_none()
         {
-            table.database = Some(Identifier::from_name(query.span, &self.source_database));
+            table.database = Some(materialized_view_ident(&self.source_database));
         }
         Ok(VisitControl::Continue)
     }
@@ -714,8 +966,12 @@ mod tests {
         let mut query =
             parse_materialized_view_query(sql, "test materialized view query must be a query")?;
         let checker = MaterializedViewChecker::check_query(&query);
-        let mut rewriter =
-            MaterializedViewRewriter::new(checker.is_aggregating(), "default", columns);
+        let mut rewriter = MaterializedViewRewriter::new(
+            checker.is_aggregating(),
+            "default",
+            columns,
+            NameResolutionContext::default(),
+        );
         rewriter.rewrite_query(&mut query)?;
         Ok((query, rewriter))
     }
@@ -747,9 +1003,33 @@ mod tests {
             "SELECT amount AS value FROM t WHERE amount > 0",
             "SELECT category, sum(amount) AS total FROM t WHERE amount > 0 GROUP BY category",
             "SELECT category, stddev(amount) AS deviation FROM t GROUP BY category",
+            "SELECT * FROM t WHERE amount > 0",
+            "SELECT *, amount + 1 AS next FROM t WHERE amount > 0",
+            "SELECT t.* FROM t WHERE amount > 0",
+            "SELECT default.t.* FROM default.t WHERE amount > 0",
+            "SELECT * EXCLUDE amount FROM t WHERE amount > 0",
+            "SELECT COLUMNS(* EXCLUDE (id, amount)) FROM t",
+            "SELECT COLUMNS('^a') FROM t",
+            "SELECT COLUMNS(name -> name = 'amount') FROM t WHERE amount > 0",
         ] {
             let checker = check_query(sql)?;
             assert!(checker.is_supported(), "should support: {sql}");
+            assert!(!checker.is_top_n(), "should not be top-N: {sql}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_materialized_view_checker_accepts_top_n_queries() -> Result<()> {
+        for sql in [
+            "SELECT amount FROM t ORDER BY amount LIMIT 10",
+            "SELECT id, amount FROM t WHERE amount > 0 ORDER BY amount DESC NULLS FIRST, id LIMIT 1",
+            "SELECT * FROM t ORDER BY ts DESC LIMIT 100",
+        ] {
+            let checker = check_query(sql)?;
+            assert!(checker.is_supported(), "should support: {sql}");
+            assert!(checker.is_top_n(), "should be top-N: {sql}");
+            assert!(!checker.is_aggregating(), "should not aggregate: {sql}");
         }
         Ok(())
     }
@@ -762,6 +1042,12 @@ mod tests {
             "SELECT amount FROM t WHERE amount > 0 ORDER BY amount",
             "SELECT amount FROM t WHERE amount > 0 LIMIT 1",
             "SELECT amount FROM t WHERE amount > 0 OFFSET 1",
+            "SELECT amount FROM t ORDER BY amount LIMIT 1 OFFSET 1",
+            "SELECT amount FROM t ORDER BY amount LIMIT 0",
+            "SELECT amount FROM t ORDER BY amount LIMIT 1, 2",
+            "SELECT amount FROM t ORDER BY now() LIMIT 1",
+            "SELECT category, sum(amount) AS total FROM t GROUP BY category ORDER BY category LIMIT 1",
+            "SELECT count(*) AS n FROM t ORDER BY n LIMIT 1",
             "SELECT amount FROM t1, t2 WHERE t1.id = t2.id",
             "SELECT t1.amount FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.amount > 0",
             "SELECT amount FROM (SELECT amount FROM t) AS s WHERE amount > 0",
@@ -775,8 +1061,9 @@ mod tests {
             "SELECT amount FROM t WHERE EXISTS (SELECT 1 FROM t2)",
             "SELECT amount FROM t WHERE amount IN (SELECT amount FROM t2)",
             "SELECT (SELECT max(amount) FROM t2) AS amount FROM t WHERE amount > 0",
-            "SELECT * FROM t WHERE amount > 0",
-            "SELECT COLUMNS(name -> name = 'amount') FROM t WHERE amount > 0",
+            "SELECT * FROM t GROUP BY amount",
+            "SELECT *, count(*) AS n FROM t",
+            "SELECT COLUMNS(name -> now() > name) FROM t",
             "SELECT amount FROM t GROUP BY CUBE(amount)",
             "SELECT amount FROM t WHERE amount > 0 HAVING amount > 1",
             "SELECT row_number() OVER (ORDER BY amount) AS rn FROM t WHERE amount > 0",
@@ -1005,6 +1292,173 @@ mod tests {
         assert!(physical_query.contains("sum_state(amount) AS avg$sys_facade$0"));
         assert!(physical_query.contains("count_state(amount) AS avg$sys_facade$1"));
         assert!(physical_query.contains("category AS category"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_top_n_from_physical_query() -> Result<()> {
+        let query = parse_materialized_view_query(
+            "SELECT ts AS ts, id AS id FROM default.t ORDER BY ts DESC NULLS LAST, id ASC NULLS FIRST LIMIT 5",
+            "test materialized view query must be a query",
+        )?;
+        assert_eq!(
+            MaterializedViewTopN::from_physical_query(&query)?,
+            Some(MaterializedViewTopN {
+                keys: vec![
+                    MaterializedViewSortKey {
+                        column: "ts".to_string(),
+                        asc: false,
+                        nulls_first: false,
+                    },
+                    MaterializedViewSortKey {
+                        column: "id".to_string(),
+                        asc: true,
+                        nulls_first: true,
+                    },
+                ],
+                limit: 5,
+            })
+        );
+
+        let query = parse_materialized_view_query(
+            "SELECT id AS id FROM default.t",
+            "test materialized view query must be a query",
+        )?;
+        assert_eq!(MaterializedViewTopN::from_physical_query(&query)?, None);
+
+        // Physical keys are always physical columns with an explicit direction and NULLS order.
+        for sql in [
+            "SELECT id AS id FROM default.t ORDER BY id LIMIT 5",
+            "SELECT id AS id FROM default.t ORDER BY id + 1 ASC NULLS LAST LIMIT 5",
+            "SELECT id AS id FROM default.t ORDER BY id ASC NULLS LAST",
+        ] {
+            let query =
+                parse_materialized_view_query(sql, "test materialized view query must be a query")?;
+            assert!(
+                MaterializedViewTopN::from_physical_query(&query).is_err(),
+                "should reject: {sql}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_expand_star_and_rewrite_top_n() -> Result<()> {
+        let mut query = parse_materialized_view_query(
+            "SELECT * FROM t ORDER BY ts DESC LIMIT 3",
+            "test materialized view query must be a query",
+        )?;
+        expand_materialized_view_star(&mut query, &[vec![
+            "id".to_string(),
+            "ts".to_string(),
+            "Payload".to_string(),
+        ]])?;
+        assert_eq!(
+            query.to_string(),
+            "SELECT id, ts, \"Payload\" FROM t ORDER BY ts DESC LIMIT 3"
+        );
+
+        let checker = MaterializedViewChecker::check_query(&query);
+        assert!(checker.is_supported() && checker.is_top_n() && !checker.has_star());
+        let mut rewriter = MaterializedViewRewriter::new(
+            false,
+            "default",
+            vec![],
+            NameResolutionContext::default(),
+        );
+        rewriter.rewrite_query(&mut query)?;
+        assert_eq!(rewriter.logical_names(), ["id", "ts", "Payload"]);
+        assert_eq!(rewriter.physical_names(), [
+            "id",
+            "ts",
+            "Payload",
+            MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
+        ]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_quotes_output_names() -> Result<()> {
+        let (query, rewriter) = rewrite_with_columns("SELECT id, amount FROM t", vec![
+            "Key".to_string(),
+            "my value".to_string(),
+        ])?;
+        assert_eq!(rewriter.physical_names(), [
+            "Key",
+            "my value",
+            MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
+        ]);
+        // Persisted SQL is parsed again, so names that an unquoted identifier would change must
+        // keep a quote.
+        assert_eq!(
+            query.to_string(),
+            "SELECT id AS \"Key\", amount AS \"my value\", change$row_id AS _mv_source_row_id FROM default.t"
+        );
+
+        let (query, rewriter) = rewrite_with_columns(
+            "SELECT category, category, avg(amount) FROM t GROUP BY category",
+            vec!["Group".to_string(), "Copy".to_string(), "Avg".to_string()],
+        )?;
+        assert_eq!(
+            query.to_string(),
+            "SELECT sum_state(amount) AS \"Avg$sys_facade$0\", count_state(amount) AS \"Avg$sys_facade$1\", category AS \"Group\" FROM default.t GROUP BY category"
+        );
+        assert_eq!(rewriter.logical_define_exprs()[0], "Group");
+        assert_eq!(rewriter.logical_define_exprs()[1], "\"Group\"");
+        assert!(rewriter.logical_define_exprs()[2].starts_with("\"Avg$sys_facade$0\" / "));
+
+        // Unquoted names follow the default rule and are lowercased; quoted names keep their
+        // case and their quote.
+        let (query, rewriter) =
+            rewrite("SELECT Id, amount AS Total, category AS \"Kind\", \"Region\" FROM t")?;
+        assert_eq!(rewriter.logical_names(), ["id", "total", "Kind", "Region"]);
+        assert_eq!(
+            query.to_string(),
+            "SELECT Id AS id, amount AS total, category AS \"Kind\", \"Region\" AS \"Region\", change$row_id AS _mv_source_row_id FROM default.t"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_expand_star_targets_in_place() -> Result<()> {
+        let mut query = parse_materialized_view_query(
+            "SELECT t.*, amount + 1 AS next, * EXCLUDE id FROM t WHERE amount > 0",
+            "test materialized view query must be a query",
+        )?;
+        let star_queries = materialized_view_star_queries(&query)?;
+        assert_eq!(
+            star_queries
+                .iter()
+                .map(|query| query.to_string())
+                .collect::<Vec<_>>(),
+            ["SELECT t.* FROM t", "SELECT * EXCLUDE (id) FROM t"]
+        );
+        expand_materialized_view_star(&mut query, &[
+            vec!["id".to_string(), "amount".to_string()],
+            vec!["amount".to_string()],
+        ])?;
+        assert_eq!(
+            query.to_string(),
+            "SELECT id, amount, amount + 1 AS next, amount FROM t WHERE amount > 0"
+        );
+        assert!(!MaterializedViewChecker::check_query(&query).has_star());
+
+        // Expanded names become storage columns and must stay unique.
+        let error = MaterializedViewRewriter::new(
+            false,
+            "default",
+            vec![],
+            NameResolutionContext::default(),
+        )
+        .rewrite_query(&mut query)
+        .unwrap_err();
+        assert!(error.message().contains("duplicate output column 'amount'"));
+
+        let mut query = parse_materialized_view_query(
+            "SELECT * FROM t",
+            "test materialized view query must be a query",
+        )?;
+        assert!(expand_materialized_view_star(&mut query, &[]).is_err());
         Ok(())
     }
 }

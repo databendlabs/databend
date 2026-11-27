@@ -19,7 +19,6 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InsertOperation;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::InsertStmt;
@@ -47,7 +46,9 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::MaterializedViewChecker;
+use databend_common_sql::MaterializedViewTopN;
 use databend_common_sql::Planner;
+use databend_common_sql::materialized_view_ident;
 use databend_common_sql::parse_materialized_view_query;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::validate_materialized_view_source;
@@ -65,6 +66,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
+use databend_storages_common_table_meta::table::FUSE_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
@@ -78,6 +80,8 @@ enum RefreshStrategy {
     Rebuild(Statement),
     Merge(Statement),
     Append(Statement),
+    /// Replace top-N storage with the first rows of persisted rows and appended rows.
+    MergeTopN(Statement),
 }
 
 pub struct MaterializedViewRefresh<'a> {
@@ -91,6 +95,7 @@ pub struct MaterializedViewRefresh<'a> {
     source_database: String,
     source_table_name: String,
     is_aggregating: bool,
+    is_top_n: bool,
     checkpoint: Option<(u64, Option<String>)>,
     source_seq: u64,
     end_snapshot: Option<String>,
@@ -224,7 +229,9 @@ impl<'a> MaterializedViewRefresh<'a> {
             &definition.data.original_query,
             "invalid materialized view logical query",
         )?;
-        let is_aggregating = MaterializedViewChecker::check_query(&logical_query).is_aggregating();
+        let checker = MaterializedViewChecker::check_query(&logical_query);
+        let is_aggregating = checker.is_aggregating();
+        let is_top_n = checker.is_top_n();
 
         let source_database_id = source_meta
             .data
@@ -288,6 +295,7 @@ impl<'a> MaterializedViewRefresh<'a> {
             source_database,
             source_table_name,
             is_aggregating,
+            is_top_n,
             checkpoint,
             source_seq,
             end_snapshot: source_snapshot_location,
@@ -395,8 +403,8 @@ impl<'a> MaterializedViewRefresh<'a> {
             span: None,
             column: ColumnRef {
                 database: None,
-                table: table.map(|name| Identifier::from_name(None, name)),
-                column: ColumnID::Name(Identifier::from_name(None, column)),
+                table: table.map(materialized_view_ident),
+                column: ColumnID::Name(materialized_view_ident(column)),
             },
         }
     }
@@ -471,7 +479,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         )?;
         Self::apply_changes_query(&mut deletes, changes_query.clone(), "DELETE")?;
 
-        let row_id = Identifier::from_name(None, MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN);
+        let row_id = materialized_view_ident(MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN);
         parse_materialized_view_query(
             &format!(
                 "WITH upserts AS ({upserts}), deletes AS ({deletes}) \
@@ -491,14 +499,14 @@ impl<'a> MaterializedViewRefresh<'a> {
         let update_list = fields
             .iter()
             .map(|field| MutationUpdateExpr {
-                table: Some(Identifier::from_name(None, "mv")),
-                name: Identifier::from_name(None, field.name()),
+                table: Some(materialized_view_ident("mv")),
+                name: materialized_view_ident(field.name()),
                 expr: Self::column_ref(Some("changes"), field.name()),
             })
             .collect();
         let columns = fields
             .iter()
-            .map(|field| Identifier::from_name(None, field.name()))
+            .map(|field| materialized_view_ident(field.name()))
             .collect();
         let values = fields
             .iter()
@@ -513,12 +521,12 @@ impl<'a> MaterializedViewRefresh<'a> {
 
         Statement::MergeInto(MergeIntoStmt {
             hints: None,
-            catalog: Some(Identifier::from_name(None, &self.catalog)),
-            database: Some(Identifier::from_name(None, &self.database)),
-            table_ident: Identifier::from_name(None, &self.view_name),
+            catalog: Some(materialized_view_ident(&self.catalog)),
+            database: Some(materialized_view_ident(&self.database)),
+            table_ident: materialized_view_ident(&self.view_name),
             source: Self::changes_source(source),
             target_alias: Some(TableAlias {
-                name: Identifier::from_name(None, "mv"),
+                name: materialized_view_ident("mv"),
                 columns: vec![],
                 keep_database_name: false,
             }),
@@ -562,7 +570,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         MutationSource::Select {
             query: Box::new(changes_query),
             source_alias: TableAlias {
-                name: Identifier::from_name(None, "changes"),
+                name: materialized_view_ident("changes"),
                 columns: vec![],
                 keep_database_name: false,
             },
@@ -574,9 +582,9 @@ impl<'a> MaterializedViewRefresh<'a> {
             hints: None,
             with: None,
             table: TableRef {
-                catalog: Some(Identifier::from_name(None, &self.catalog)),
-                database: Some(Identifier::from_name(None, &self.database)),
-                table: Identifier::from_name(None, &self.view_name),
+                catalog: Some(materialized_view_ident(&self.catalog)),
+                database: Some(materialized_view_ident(&self.database)),
+                table: materialized_view_ident(&self.view_name),
             },
             columns: vec![],
             source: InsertSource::Select {
@@ -646,16 +654,17 @@ impl<'a> MaterializedViewRefresh<'a> {
                 &start_snapshot,
                 format!(
                     "{}.{}",
-                    Identifier::from_name(None, source_database),
-                    Identifier::from_name(None, &changes_source_name)
+                    materialized_view_ident(source_database),
+                    materialized_view_ident(&changes_source_name)
                 ),
                 checkpoint_seq,
             )
             .await?;
 
-        // 4. Aggregate states cannot retract UPDATE/DELETE effects. Recompute globally merged states
-        // from the current source and replace all persisted state rows.
-        if self.is_aggregating && changes.mode == StreamMode::Standard {
+        // 4. Aggregate states cannot retract UPDATE/DELETE effects, and a top-N MV does not keep
+        // the rows that would replace a removed one. Recompute from the current source and
+        // replace all persisted rows.
+        if (self.is_aggregating || self.is_top_n) && changes.mode == StreamMode::Standard {
             self.attach_source(
                 &self.catalog,
                 source_database,
@@ -692,9 +701,83 @@ impl<'a> MaterializedViewRefresh<'a> {
             ));
         }
 
-        // 6. AppendOnly changes can be appended directly. Duplicate group keys left by
+        // 6. AppendOnly top-N changes can only push persisted rows out. Keep the first rows of
+        // the persisted rows and the appended rows that pass the definition.
+        if self.is_top_n {
+            let query = self.build_top_n_refresh_query(query).await?;
+            return Ok(RefreshStrategy::MergeTopN(self.target_insert(query, true)));
+        }
+
+        // 7. AppendOnly changes can be appended directly. Duplicate group keys left by
         // incremental aggregate appends are merged later when compact/recluster writes a new block.
         Ok(RefreshStrategy::Append(self.target_insert(query, false)))
+    }
+
+    /// Build `first n rows of (MV storage UNION ALL appended rows)` for a top-N refresh.
+    ///
+    /// Storage is read through a FUSE-engine alias of the MV table. Binding the MV itself would
+    /// read its logical output, which lacks the physical row-id column and would itself plan a
+    /// hybrid read of the source.
+    async fn build_top_n_refresh_query(&self, delta: Query) -> Result<Query> {
+        let physical = parse_materialized_view_query(
+            &self.physical_query,
+            "invalid materialized view physical query",
+        )?;
+        if MaterializedViewTopN::from_physical_query(&physical)?.is_none() {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {}.{} physical definition has no ORDER BY ... LIMIT",
+                self.database, self.view_name
+            )));
+        }
+
+        let mv_info = self.mv_table.get_table_info();
+        let storage_name = format!(
+            "_mv_storage_{}_{}",
+            self.mv_table.get_id(),
+            mv_info.ident.seq
+        );
+        let mut storage_info = mv_info.clone();
+        storage_info.name = storage_name.clone();
+        storage_info.meta.engine = FUSE_ENGINE.to_string();
+        let storage = self
+            .ctx
+            .get_catalog(&self.catalog)
+            .await?
+            .get_table_by_info(&storage_info)?;
+        self.attach_source(&self.catalog, &self.database, &storage_name, storage)?;
+
+        let columns = self
+            .mv_table
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| materialized_view_ident(field.name()).to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let order_by = physical
+            .order_by
+            .iter()
+            .map(|item| item.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let limit = physical
+            .limit
+            .iter()
+            .map(|limit| limit.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        parse_materialized_view_query(
+            &format!(
+                "SELECT {columns} FROM (\
+                 SELECT {columns} FROM {}.{} \
+                 UNION ALL \
+                 SELECT {columns} FROM ({delta}) AS _mv_delta\
+                 ) AS _mv_top_n ORDER BY {order_by} LIMIT {limit}",
+                materialized_view_ident(&self.database),
+                materialized_view_ident(&storage_name),
+            ),
+            "invalid materialized view top-N refresh query",
+        )
     }
 
     fn checkpoint_options(&self) -> HashMap<String, Option<String>> {
@@ -716,7 +799,8 @@ impl<'a> MaterializedViewRefresh<'a> {
             RefreshStrategy::CheckpointOnly => None,
             RefreshStrategy::Rebuild(statement)
             | RefreshStrategy::Merge(statement)
-            | RefreshStrategy::Append(statement) => Some(statement),
+            | RefreshStrategy::Append(statement)
+            | RefreshStrategy::MergeTopN(statement) => Some(statement),
         } {
             self.execute_statement(statement).await?;
         }

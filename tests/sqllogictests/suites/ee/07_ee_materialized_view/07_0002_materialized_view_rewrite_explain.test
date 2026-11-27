@@ -374,5 +374,45 @@ explain select id, amount from range_source where amount < 30
 ----
 <slt:ignore>table: default.explain_materialized_view_rewrite.mv_amount_lte_30<slt:ignore>
 
+# A column equality of the query that the MV does not guarantee is applied to
+# the MV rows. It needs both columns in the MV output.
+statement ok
+create table equal_source (a int, b int, c int)
+
+statement ok
+insert into equal_source select number % 5, number % 3, number from numbers(3000)
+
+statement ok
+create materialized view mv_equal_small as
+select a, b, c from equal_source where c < 1000
+
+statement ok
+refresh materialized view mv_equal_small
+
+query T
+explain select c from equal_source where c < 1000 and a = b
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_equal_small<slt:ignore>filters: [is_true(mv_equal_small.a (#<slt:ignore>) = mv_equal_small.b (#<slt:ignore>))]<slt:ignore>
+
+query II
+select count(*), sum(c) from (select c from equal_source where c < 1000 and a = b) t
+----
+201 99696
+
+statement ok
+create materialized view mv_equal_without_b as
+select a, c from equal_source where c < 1000
+
+statement ok
+refresh materialized view mv_equal_without_b
+
+statement ok
+drop materialized view mv_equal_small
+
+query T
+explain select c from equal_source where c < 1000 and a = b
+----
+<slt:ignore>table: default.explain_materialized_view_rewrite.equal_source<slt:ignore>
+
 statement ok
 drop database explain_materialized_view_rewrite

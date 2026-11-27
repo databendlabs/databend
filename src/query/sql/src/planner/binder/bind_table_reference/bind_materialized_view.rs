@@ -55,6 +55,7 @@ use log::warn;
 
 use crate::BindContext;
 use crate::LineageSourceRelation;
+use crate::MaterializedViewTopN;
 use crate::Metadata;
 use crate::QueryLineageRelationKind;
 use crate::ScalarExpr;
@@ -71,7 +72,10 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::Limit;
 use crate::plans::ScalarItem;
+use crate::plans::Sort;
+use crate::plans::SortItem;
 use crate::validate_materialized_view_source;
 
 /// Result of binding a materialized view reference, including the definition that was
@@ -292,6 +296,59 @@ impl Binder {
         Ok((s_expr, output_context))
     }
 
+    /// Keep the first rows of MV storage under the persisted top-N order. Fresh storage already
+    /// holds at most `limit` rows; a hybrid read appends the live delta and must cut it back.
+    fn build_materialized_view_top_n(
+        physical_context: &BindContext,
+        child: SExpr,
+        top_n: &MaterializedViewTopN,
+    ) -> Result<SExpr> {
+        let items = top_n
+            .keys
+            .iter()
+            .map(|key| {
+                let column = physical_context
+                    .columns
+                    .iter()
+                    .find(|column| column.column_name == key.column)
+                    .ok_or_else(|| {
+                        ErrorCode::InvalidMaterializedView(format!(
+                            "materialized view order column '{}' does not exist; drop and recreate it",
+                            key.column
+                        ))
+                    })?;
+                Ok(SortItem {
+                    index: column.index,
+                    asc: key.asc,
+                    nulls_first: key.nulls_first,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let limit = usize::try_from(top_n.limit).map_err(|_| {
+            ErrorCode::InvalidMaterializedView(format!(
+                "materialized view LIMIT {} is too large",
+                top_n.limit
+            ))
+        })?;
+        let sort = Sort {
+            items,
+            limit: None,
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: None,
+        };
+        let limit = Limit {
+            before_exchange: false,
+            limit: Some(limit),
+            offset: 0,
+            lazy_columns: Default::default(),
+        };
+        Ok(SExpr::create_unary(
+            Arc::new(limit.into()),
+            Arc::new(SExpr::create_unary(Arc::new(sort.into()), Arc::new(child))),
+        ))
+    }
+
     fn build_materialized_view_final_projection(
         &mut self,
         physical_context: &BindContext,
@@ -426,6 +483,7 @@ impl Binder {
         table_meta: Arc<dyn Table>,
         mv_definition: &MVDefinition,
         is_aggregating: bool,
+        top_n: Option<&MaterializedViewTopN>,
         source_table: Arc<dyn Table>,
         source_database: &str,
         checkpoint_seq: u64,
@@ -597,6 +655,10 @@ impl Binder {
         } else {
             (union_expr, union_context)
         };
+        let union_expr = match top_n {
+            Some(top_n) => Self::build_materialized_view_top_n(&union_context, union_expr, top_n)?,
+            None => union_expr,
+        };
         let (union_expr, mut logical_context) = self.build_materialized_view_final_projection(
             &union_context,
             &mv_definition.logical_schema,
@@ -696,6 +758,7 @@ impl Binder {
             table_meta.name(),
         )?;
         let is_aggregating = find_materialized_view_aggregate(&definition_expr).is_some();
+        let top_n = MaterializedViewTopN::from_physical_query(&query)?;
 
         let (source_table, source_database, source_seq, source_snapshot_location) = if let Some((
             source_table,
@@ -838,6 +901,7 @@ impl Binder {
                 table_meta.clone(),
                 &mv_definition.data,
                 is_aggregating,
+                top_n.as_ref(),
                 source_table,
                 &source_database,
                 checkpoint_seq,
@@ -906,6 +970,10 @@ impl Binder {
             self.build_materialized_view_state_merge(&physical_context, s_expr)?
         } else {
             (s_expr, physical_context)
+        };
+        let s_expr = match &top_n {
+            Some(top_n) => Self::build_materialized_view_top_n(&physical_context, s_expr, top_n)?,
+            None => s_expr,
         };
         let (s_expr, mut logical_context) = self.build_materialized_view_final_projection(
             &physical_context,

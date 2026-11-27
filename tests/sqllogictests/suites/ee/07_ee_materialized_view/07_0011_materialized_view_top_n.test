@@ -1,0 +1,372 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# Top-N materialized views keep the first rows of `ORDER BY ... LIMIT n`. A query
+# reads them when it needs no more rows, orders by a prefix of the MV keys, and
+# has exactly the MV predicate. INSERT refreshes merge the appended rows into the
+# stored rows; UPDATE and DELETE rebuild the MV from the source.
+
+statement ok
+create or replace database test_mv_top_n
+
+statement ok
+use test_mv_top_n
+
+statement ok
+create table events (id int, ts timestamp, payload string)
+
+statement ok
+insert into events
+select number, to_timestamp(1700000000 + number), concat('p', number::string)
+from numbers(20)
+
+statement ok
+create materialized view mv_latest as select * from events order by ts desc limit 5
+
+# SELECT * is persisted as the source columns, and the order is persisted with
+# explicit direction and NULLS placement.
+query TT
+show create materialized view mv_latest
+----
+mv_latest CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_latest` (`id`, `ts`, `payload`) AS SELECT id, ts, payload FROM test_mv_top_n.events ORDER BY ts DESC NULLS LAST LIMIT 5
+
+statement error 1065
+create materialized view mv_order_only as select id from events order by id
+
+statement error 1065
+create materialized view mv_limit_only as select id from events limit 3
+
+statement error 1065
+create materialized view mv_offset as select id from events order by id limit 3 offset 1
+
+statement error 1065
+create materialized view mv_limit_zero as select id from events order by id limit 0
+
+statement error 1065
+create materialized view mv_aggregate_top_n as select id, count(*) as n from events group by id order by id limit 3
+
+statement error 2328
+create materialized view mv_hidden_key as select id from events order by ts limit 3
+
+statement ok
+refresh materialized view mv_latest
+
+query ITT
+select * from mv_latest order by ts desc
+----
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+16 2023-11-14 22:13:36.000000 p16
+15 2023-11-14 22:13:35.000000 p15
+
+# A smaller LIMIT, with or without OFFSET, reads the MV.
+query T
+explain select * from events order by ts desc limit 3
+----
+<slt:ignore>table: default.test_mv_top_n.mv_latest<slt:ignore>
+
+query ITT
+select * from events order by ts desc limit 3
+----
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+
+query T
+explain select id from events order by ts desc limit 2 offset 3
+----
+<slt:ignore>table: default.test_mv_top_n.mv_latest<slt:ignore>
+
+query I
+select id from events order by ts desc limit 2 offset 3
+----
+16
+15
+
+# Any first rows answer a LIMIT without ORDER BY.
+query T
+explain select * from events limit 3
+----
+<slt:ignore>table: default.test_mv_top_n.mv_latest<slt:ignore>
+
+# More rows than stored, another order, or a stricter predicate need rows the MV
+# dropped. A query without LIMIT needs every row.
+query T
+explain select * from events order by ts desc limit 6
+----
+<slt:ignore>table: default.test_mv_top_n.events<slt:ignore>
+
+query T
+explain select * from events order by ts limit 3
+----
+<slt:ignore>table: default.test_mv_top_n.events<slt:ignore>
+
+query T
+explain select * from events where id > 3 order by ts desc limit 3
+----
+<slt:ignore>table: default.test_mv_top_n.events<slt:ignore>
+
+query T
+explain select * from events where id > 3
+----
+<slt:ignore>table: default.test_mv_top_n.events<slt:ignore>
+
+# Before refresh, a read combines the stored rows with the appended rows and
+# keeps the first rows of both.
+statement ok
+insert into events values (100, '2030-01-01 00:00:00', 'newest'), (101, '2000-01-01 00:00:00', 'oldest')
+
+query ITT
+select * from mv_latest order by ts desc
+----
+100 2030-01-01 00:00:00.000000 newest
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+16 2023-11-14 22:13:36.000000 p16
+
+query T
+explain select * from events order by ts desc limit 3
+----
+<slt:ignore>table: default.test_mv_top_n.mv_latest<slt:ignore>table: default.test_mv_top_n.events<slt:ignore>
+
+query ITT
+select * from events order by ts desc limit 3
+----
+100 2030-01-01 00:00:00.000000 newest
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+
+# An INSERT-only refresh keeps storage at the LIMIT.
+statement ok
+refresh materialized view mv_latest
+
+query ITT
+select * from mv_latest order by ts desc
+----
+100 2030-01-01 00:00:00.000000 newest
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+16 2023-11-14 22:13:36.000000 p16
+
+query I
+select sum(row_count) from fuse_block('test_mv_top_n', 'mv_latest')
+----
+5
+
+query T
+explain select * from events order by ts desc limit 3
+----
+<slt:ignore>table: default.test_mv_top_n.mv_latest<slt:ignore>
+
+# An UPDATE can move a row into the first rows, and a DELETE can remove one that
+# a dropped row must replace. Stale reads recompute from the source, and REFRESH
+# rebuilds the MV.
+statement ok
+update events set ts = '2040-01-01 00:00:00' where id = 3
+
+query ITT
+select * from mv_latest order by ts desc
+----
+3 2040-01-01 00:00:00.000000 p3
+100 2030-01-01 00:00:00.000000 newest
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+
+statement ok
+delete from events where id in (3, 100)
+
+statement ok
+refresh materialized view mv_latest
+
+query ITT
+select * from mv_latest order by ts desc
+----
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+16 2023-11-14 22:13:36.000000 p16
+15 2023-11-14 22:13:35.000000 p15
+
+query ITT
+select * from events order by ts desc limit 5
+----
+19 2023-11-14 22:13:39.000000 p19
+18 2023-11-14 22:13:38.000000 p18
+17 2023-11-14 22:13:37.000000 p17
+16 2023-11-14 22:13:36.000000 p16
+15 2023-11-14 22:13:35.000000 p15
+
+# Renamed columns, a predicate, and several keys. A query may order by a prefix
+# of the keys and compute expressions from the stored columns.
+statement ok
+create table scores (a int, b int null, c string)
+
+statement ok
+insert into scores
+select number % 4, if(number % 3 = 0, null, number), concat('c', number::string)
+from numbers(40)
+
+statement ok
+create materialized view mv_scores (x, y, z) as
+select a, b, c from scores where a > 0 order by a desc, b limit 6
+
+statement ok
+refresh materialized view mv_scores
+
+query IIT
+select * from mv_scores order by x desc, y
+----
+3 7 c7
+3 11 c11
+3 19 c19
+3 23 c23
+3 31 c31
+3 35 c35
+
+query T
+explain select a, b, c from scores where 0 < a order by a desc limit 4
+----
+<slt:ignore>table: default.test_mv_top_n.mv_scores<slt:ignore>
+
+query IT
+select a + 1 as p, c from scores where a > 0 order by a desc, b limit 4
+----
+4 c7
+4 c11
+4 c19
+4 c23
+
+query T
+explain select a + 1 as p, c from scores where a > 0 order by a desc, b limit 4
+----
+<slt:ignore>table: default.test_mv_top_n.mv_scores<slt:ignore>
+
+# NULLS placement is part of the order.
+query T
+explain select a, b from scores where a > 0 order by a desc, b nulls first limit 4
+----
+<slt:ignore>table: default.test_mv_top_n.scores<slt:ignore>
+
+# A plain projection MV also accepts SELECT *.
+statement ok
+create materialized view mv_all_events as select * from events where id >= 10
+
+statement ok
+refresh materialized view mv_all_events
+
+query ITT
+select * from mv_all_events order by id limit 2
+----
+10 2023-11-14 22:13:30.000000 p10
+11 2023-11-14 22:13:31.000000 p11
+
+# Star targets may be qualified, filtered, or mixed with expressions. CREATE
+# expands each one in place to the columns it means in an ordinary query.
+statement ok
+create materialized view mv_qualified_star as select events.* from events where id >= 15
+
+statement ok
+create materialized view mv_star_exclude as
+select * exclude payload from events order by ts desc limit 3
+
+statement ok
+create materialized view mv_star_mixed as
+select id + 1 as next_id, * exclude (id, ts) from events where id >= 18
+
+statement ok
+create materialized view mv_columns as select columns('^(id|ts)$') from events where id >= 18
+
+query TT
+show create materialized view mv_qualified_star
+----
+mv_qualified_star CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_qualified_star` (`id`, `ts`, `payload`) AS SELECT id, ts, payload FROM test_mv_top_n.events WHERE id >= 15
+
+query TT
+show create materialized view mv_star_exclude
+----
+mv_star_exclude CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_star_exclude` (`id`, `ts`) AS SELECT id, ts FROM test_mv_top_n.events ORDER BY ts DESC NULLS LAST LIMIT 3
+
+query TT
+show create materialized view mv_star_mixed
+----
+mv_star_mixed CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_star_mixed` (`next_id`, `payload`) AS SELECT id + 1 AS next_id, payload FROM test_mv_top_n.events WHERE id >= 18
+
+query TT
+show create materialized view mv_columns
+----
+mv_columns CREATE MATERIALIZED VIEW `test_mv_top_n`.`mv_columns` (`id`, `ts`) AS SELECT id, ts FROM test_mv_top_n.events WHERE id >= 18
+
+# Expanded columns are storage columns and must have unique names.
+statement error 1065
+create materialized view mv_star_duplicate as select *, id from events
+
+statement error 1025
+create materialized view mv_star_unknown_table as select other.* from events
+
+statement error 1065
+create materialized view mv_star_aggregate as select *, count(*) as n from events
+
+statement ok
+refresh materialized view mv_star_exclude
+
+statement ok
+refresh materialized view mv_star_mixed
+
+statement ok
+insert into events values (300, '2050-01-01 00:00:00', 'latest')
+
+statement ok
+refresh materialized view mv_star_exclude
+
+statement ok
+refresh materialized view mv_star_mixed
+
+query IT
+select * from mv_star_exclude order by ts desc
+----
+300 2050-01-01 00:00:00.000000
+19 2023-11-14 22:13:39.000000
+18 2023-11-14 22:13:38.000000
+
+query IT
+select * from mv_star_mixed order by next_id
+----
+19 p18
+20 p19
+102 oldest
+301 latest
+
+# The expansion is fixed at CREATE. A later source column is not added.
+statement ok
+alter table events add column extra int
+
+statement ok
+insert into events values (301, '2051-01-01 00:00:00', 'after', 1)
+
+statement ok
+refresh materialized view mv_star_exclude
+
+query IT
+select * from mv_star_exclude order by ts desc
+----
+301 2051-01-01 00:00:00.000000
+300 2050-01-01 00:00:00.000000
+19 2023-11-14 22:13:39.000000
+
+statement ok
+drop database test_mv_top_n
