@@ -219,9 +219,10 @@ pub enum VectorFinalPlan {
     /// Rewrite every block once, together, so that the rows not mixed yet mix with
     /// the others. This is also the first clustering of a table.
     FullPass,
-    /// Rewrite nothing: the rows not mixed yet are fewer than
+    /// Rewrite no live block: the rows not mixed yet are fewer than
     /// `VECTOR_FULL_PASS_NEW_DATA_PERCENT` of all rows. They keep their level, so they
-    /// add up across statements until they reach the threshold.
+    /// add up across statements until they reach the threshold. With a TTL, the
+    /// rounds still drop the expired blocks of the scanned segments.
     Skip,
 }
 
@@ -496,6 +497,13 @@ impl FuseTable {
                     // A segment that expired as a whole forms no task.
                     ttl_scanned = probe_segments.clone();
                     probe_segments.retain(|(_, info)| !ttl.segment_expired(&info.summary));
+                }
+                if carry.ttl_only {
+                    // TTL-only rounds select no recluster task: the scanned segments
+                    // are only candidates to drop expired blocks from. LIMIT still
+                    // stops after this range.
+                    scan_had_compact_segments = !ttl_scanned.is_empty();
+                    probe_segments.clear();
                 }
 
                 let status = format!(

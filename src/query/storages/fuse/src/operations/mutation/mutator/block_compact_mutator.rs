@@ -28,7 +28,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -144,9 +143,6 @@ impl BlockCompactMutator {
         let mut is_end = false;
         let mut stop_after_next = false;
         let mut lazy_parts = Vec::new();
-        // Segments rewritten only to drop their expired blocks, bounded like the
-        // segments one recluster claim may protect.
-        let mut ttl_budget = MAX_SEGMENT_LOCATIONS_PER_CLAIM;
         let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
@@ -179,12 +175,12 @@ impl BlockCompactMutator {
             // Size of compacted segment should be in range R == [threshold, 2 * threshold]
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
                 // Like ClickHouse TTLDrop, a segment every row of which expired is
-                // dropped as a whole and does not enter the compaction groups.
+                // dropped as a whole and does not enter the compaction groups. The
+                // segments dropped from are those scanned before the limits stop the
+                // scan: TTL drops do not count toward them.
                 if let Some(ttl) = &self.ttl
-                    && ttl_budget > 0
                     && ttl.segment_expired(&compact_segment.summary)
                 {
-                    ttl_budget -= 1;
                     lazy_parts.push(CompactLazyPartInfo {
                         segment_indices: vec![segment_idx],
                         compact_segments: vec![compact_segment],
@@ -194,7 +190,7 @@ impl BlockCompactMutator {
                 let segments_vec = checker.add(segment_idx, compact_segment);
                 for segments in segments_vec {
                     let rejected = checker.generate_part(segments, &mut lazy_parts);
-                    self.ttl_only_part(rejected, &mut ttl_budget, &mut lazy_parts);
+                    self.ttl_only_part(rejected, &mut lazy_parts);
                 }
 
                 if stop_after_next {
@@ -236,7 +232,7 @@ impl BlockCompactMutator {
 
         // finalize the compaction.
         let rejected = checker.finalize(&mut lazy_parts);
-        self.ttl_only_part(rejected, &mut ttl_budget, &mut lazy_parts);
+        self.ttl_only_part(rejected, &mut lazy_parts);
 
         // Status.
         let elapsed_time = start.elapsed();
@@ -281,22 +277,18 @@ impl BlockCompactMutator {
     }
 
     /// A segment that needs no compaction is still rewritten when it may hold
-    /// expired blocks: building its tasks drops them, and keeps the rest.
+    /// expired blocks: building its tasks drops them, and keeps the rest. One
+    /// without an expired block builds no task and is left as it is.
     fn ttl_only_part(
         &self,
         rejected: Option<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>>,
-        ttl_budget: &mut usize,
         parts: &mut Vec<CompactLazyPartInfo>,
     ) {
         let (Some(ttl), Some(segments)) = (&self.ttl, rejected) else {
             return;
         };
         for (segment_idx, segment) in segments {
-            if *ttl_budget == 0 {
-                return;
-            }
             if ttl.segment_may_expire(&segment.summary) {
-                *ttl_budget -= 1;
                 parts.push(CompactLazyPartInfo {
                     segment_indices: vec![segment_idx],
                     compact_segments: vec![segment],

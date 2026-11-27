@@ -280,6 +280,10 @@ pub struct ReclusterFinalCarry {
     // data is mixed with older clustered blocks. Blocks written by this pass are not
     // in the set, which ends it.
     pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
+    // Rounds only drop the expired blocks of the scanned segments and select no
+    // recluster task: for a vector RECLUSTER FINAL that rewrites nothing (see
+    // `VectorFinalPlan::Skip`).
+    pub(crate) ttl_only: bool,
 }
 
 impl ReclusterFinalCarry {
@@ -290,11 +294,20 @@ impl ReclusterFinalCarry {
         self.vector_full_pass = Some(Arc::new(blocks));
     }
 
-    /// Forgets the scan state, keeping a started vector full pass.
+    /// Makes the rounds only drop expired blocks, scanning the table again from the
+    /// start.
+    pub fn start_ttl_only(&mut self) {
+        self.reset();
+        self.ttl_only = true;
+    }
+
+    /// Forgets the scan state, keeping a started vector full pass or TTL-only rounds.
     pub fn reset(&mut self) {
         let vector_full_pass = self.vector_full_pass.take();
+        let ttl_only = self.ttl_only;
         *self = Self::default();
         self.vector_full_pass = vector_full_pass;
+        self.ttl_only = ttl_only;
     }
 
     /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.

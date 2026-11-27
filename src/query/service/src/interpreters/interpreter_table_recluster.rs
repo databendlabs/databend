@@ -190,6 +190,11 @@ impl Interpreter for ReclusterTableInterpreter {
                 } else {
                     VectorFinalPlan::Rounds
                 };
+            if vector_plan == VectorFinalPlan::Skip && ttl.is_some() {
+                // Rows not mixed yet are below the full pass threshold, or none: they
+                // keep their level to add up. The expired blocks are still dropped.
+                linear_final_carry.start_ttl_only();
+            }
             let mut committed_rounds = 0;
             let mut zone_map_rounds = 0;
             let (result, stop_reason) = loop {
@@ -201,7 +206,7 @@ impl Interpreter for ReclusterTableInterpreter {
                     );
                     break (Err(err.with_context("failed to execute")), "aborted");
                 }
-                if vector_plan == VectorFinalPlan::Skip {
+                if vector_plan == VectorFinalPlan::Skip && ttl.is_none() {
                     // Rows not mixed yet are below the full pass threshold, or none:
                     // they keep their level to add up.
                     break (Ok(()), "vector rows not mixed below full pass threshold");

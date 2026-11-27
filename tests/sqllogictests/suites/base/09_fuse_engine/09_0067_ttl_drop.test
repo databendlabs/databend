@@ -272,6 +272,64 @@ SELECT id FROM t_recluster_final ORDER BY id
 ----
 2
 
+# COMPACT drops the expired blocks of every segment it scans before it stops:
+# segments that may hold expired rows but have no expired block do not crowd
+# out the expired segment scanned after them.
+statement ok
+CREATE TABLE t_compact_many (id INT, expires TIMESTAMP) TTL expires ROW_PER_BLOCK = 2 BLOCK_PER_SEGMENT = 1
+
+statement ok
+INSERT INTO t_compact_many VALUES (0, '2000-01-01 00:00:00')
+
+statement ok
+INSERT INTO t_compact_many SELECT number + 1, if(number % 2 = 0, '2000-01-01 00:00:00'::TIMESTAMP, '2099-01-01 00:00:00'::TIMESTAMP) FROM numbers(260)
+
+query II
+SELECT segment_count, block_count FROM fuse_snapshot('db_09_0067', 't_compact_many') LIMIT 1
+----
+131 131
+
+statement ok
+OPTIMIZE TABLE t_compact_many COMPACT
+
+query III
+SELECT count(*), min(id), max(id) FROM t_compact_many
+----
+260 1 260
+
+# A vector RECLUSTER FINAL whose rows not mixed yet are too few to rewrite
+# still drops the expired blocks, and leaves the other blocks as they are.
+statement ok
+CREATE TABLE t_vector (id INT, embedding VECTOR(2), expires TIMESTAMP, VECTOR INDEX idx(embedding) distance='l2') CLUSTER BY (embedding) TTL expires
+
+statement ok
+INSERT INTO t_vector SELECT number, [number, 0], '2099-01-01 00:00:00' FROM numbers(50)
+
+statement ok
+INSERT INTO t_vector SELECT number + 50, [0, number], '2099-01-01 00:00:00' FROM numbers(50)
+
+statement ok
+ALTER TABLE t_vector RECLUSTER FINAL
+
+statement ok
+INSERT INTO t_vector VALUES (100, [1, 1], '2000-01-01 00:00:00')
+
+statement ok
+CREATE TABLE t_vector_blocks AS SELECT block_location FROM fuse_block('db_09_0067', 't_vector')
+
+statement ok
+ALTER TABLE t_vector RECLUSTER FINAL
+
+query II
+SELECT count(*), max(id) FROM t_vector
+----
+100 99
+
+query I
+SELECT count(*) FROM fuse_block('db_09_0067', 't_vector') WHERE block_location NOT IN (SELECT block_location FROM t_vector_blocks)
+----
+0
+
 # Automatic compaction after a write drops as well.
 statement ok
 CREATE TABLE t_auto (id INT, expires TIMESTAMP) TTL expires
