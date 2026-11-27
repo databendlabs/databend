@@ -53,6 +53,8 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableMeta;
 
 use crate::MetadataRef;
+use crate::NameResolutionContext;
+use crate::normalize_identifier;
 
 /// Parse persisted materialized-view SQL and require a query statement.
 ///
@@ -168,18 +170,23 @@ pub struct MaterializedViewRewriter {
     logical_names: Vec<String>,
     logical_define_exprs: Vec<String>,
     specified_columns: Vec<String>,
+    name_resolution_ctx: NameResolutionContext,
 }
 
 impl MaterializedViewRewriter {
+    /// `specified_columns` are the normalized names of the MV column list. Output names taken
+    /// from the SELECT list are normalized with `name_resolution_ctx`.
     pub fn new(
         is_aggregating: bool,
         source_database: impl Into<String>,
         specified_columns: Vec<String>,
+        name_resolution_ctx: NameResolutionContext,
     ) -> Self {
         Self {
             is_aggregating,
             source_database: source_database.into(),
             specified_columns,
+            name_resolution_ctx,
             ..Default::default()
         }
     }
@@ -224,10 +231,20 @@ impl MaterializedViewRewriter {
         stmt.select_list
             .iter()
             .map(|target| match target {
+                // Output names follow identifier rules: a quoted name keeps its case, and an
+                // unquoted one is normalized like any other unquoted identifier.
                 SelectTarget::AliasedExpr {
                     alias: Some(alias), ..
-                } => Ok(alias.name.clone()),
+                } => Ok(normalize_identifier(alias, &self.name_resolution_ctx).name),
                 SelectTarget::AliasedExpr { expr, alias: None } => match expr.as_ref() {
+                    Expr::ColumnRef {
+                        column:
+                            ColumnRef {
+                                column: ColumnID::Name(column),
+                                ..
+                            },
+                        ..
+                    } => Ok(normalize_identifier(column, &self.name_resolution_ctx).name),
                     Expr::ColumnRef { column, .. } => Ok(column.column.name().to_string()),
                     _ => Err(ErrorCode::SemanticError(
                         "materialized view SELECT expressions must have aliases when no column list is specified"
@@ -874,8 +891,12 @@ mod tests {
         let mut query =
             parse_materialized_view_query(sql, "test materialized view query must be a query")?;
         let checker = MaterializedViewChecker::check_query(&query);
-        let mut rewriter =
-            MaterializedViewRewriter::new(checker.is_aggregating(), "default", columns);
+        let mut rewriter = MaterializedViewRewriter::new(
+            checker.is_aggregating(),
+            "default",
+            columns,
+            NameResolutionContext::default(),
+        );
         rewriter.rewrite_query(&mut query)?;
         Ok((query, rewriter))
     }
@@ -1259,7 +1280,12 @@ mod tests {
 
         let checker = MaterializedViewChecker::check_query(&query);
         assert!(checker.is_supported() && checker.is_top_n() && !checker.has_star());
-        let mut rewriter = MaterializedViewRewriter::new(false, "default", vec![]);
+        let mut rewriter = MaterializedViewRewriter::new(
+            false,
+            "default",
+            vec![],
+            NameResolutionContext::default(),
+        );
         rewriter.rewrite_query(&mut query)?;
         assert_eq!(rewriter.logical_names(), ["id", "ts", "Payload"]);
         assert_eq!(rewriter.physical_names(), [
@@ -1300,6 +1326,16 @@ mod tests {
         assert_eq!(rewriter.logical_define_exprs()[0], "Group");
         assert_eq!(rewriter.logical_define_exprs()[1], "\"Group\"");
         assert!(rewriter.logical_define_exprs()[2].starts_with("\"Avg$sys_facade$0\" / "));
+
+        // Unquoted names follow the default rule and are lowercased; quoted names keep their
+        // case and their quote.
+        let (query, rewriter) =
+            rewrite("SELECT Id, amount AS Total, category AS \"Kind\", \"Region\" FROM t")?;
+        assert_eq!(rewriter.logical_names(), ["id", "total", "Kind", "Region"]);
+        assert_eq!(
+            query.to_string(),
+            "SELECT Id AS id, amount AS total, category AS \"Kind\", \"Region\" AS \"Region\", change$row_id AS _mv_source_row_id FROM default.t"
+        );
         Ok(())
     }
 }

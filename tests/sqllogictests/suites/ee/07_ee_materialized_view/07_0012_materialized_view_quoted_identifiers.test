@@ -57,6 +57,21 @@ select "Id" % 2, "Id" % 2, avg("Amount") from source group by "Id" % 2
 statement ok
 create materialized view "MvTotal" as select sum("Amount") as "Total" from source
 
+# Unquoted output names follow the default rule and are lowercased, so they are
+# read back with any case. A quoted name keeps its case.
+statement ok
+create materialized view mv_unquoted ("Key", Val) as
+select "Id", "Amount" as Ignored from source order by "Id" desc limit 2
+
+query TT
+show create materialized view mv_unquoted
+----
+mv_unquoted CREATE MATERIALIZED VIEW `test_mv_quoted_ident`.`mv_unquoted` (`Key`, `val`) AS SELECT "Id", "Amount" AS Ignored FROM test_mv_quoted_ident.source ORDER BY "Id" DESC NULLS LAST LIMIT 2
+
+statement ok
+create materialized view mv_unquoted_alias as
+select "Id" as MyId, avg("Amount") as MyAvg from source group by "Id"
+
 statement ok
 refresh materialized view mv_top
 
@@ -73,7 +88,34 @@ statement ok
 refresh materialized view "MvTotal"
 
 statement ok
+refresh materialized view mv_unquoted
+
+statement ok
+refresh materialized view mv_unquoted_alias
+
+statement ok
 insert into source values (100, 100), (-1, -1)
+
+statement ok
+refresh materialized view mv_unquoted
+
+statement ok
+refresh materialized view mv_unquoted_alias
+
+query II
+select "Key", VAL from mv_unquoted order by "Key" desc
+----
+100 100
+9 9
+
+query IF
+select myid, MYAVG from mv_unquoted_alias where MyId in (-1, 100) order by MyId
+----
+-1 -1.0
+100 100.0
+
+statement error 1065
+select key from mv_unquoted
 
 statement ok
 refresh materialized view mv_top

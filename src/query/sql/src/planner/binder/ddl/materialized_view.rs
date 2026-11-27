@@ -771,6 +771,7 @@ impl Binder {
             checker.is_aggregating(),
             &source_database,
             specified_columns,
+            self.name_resolution_ctx.clone(),
         );
         physical_rewriter.rewrite_query(&mut physical_query)?;
         // Storage rows keep the same order keys as physical columns. Reads and refreshes then order
