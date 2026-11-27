@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 
@@ -137,8 +138,8 @@ pub struct HNSWIndex {
     validity: Option<Bitmap>,
 }
 
-/// Maximum selectivity of filters to enable ACORN: the share of the rows of a
-/// block that pass them. ACORN improves the recall of searches with
+/// Maximum selectivity of filters to enable ACORN: the share of the points of
+/// the graph (the non-NULL rows of a block) that pass them. ACORN improves the recall of searches with
 /// low-selectivity filters, at cost of performance. Qdrant's default; measured
 /// on 1M Cohere 768-dim rows in 66k-row blocks, ACORN keeps recall@100 at 0.994
 /// up to 25% of the rows and 0.975 at 40%, where the plain search gets 0.953 at
@@ -146,14 +147,19 @@ pub struct HNSWIndex {
 /// for 2 to 3 points of recall.
 pub const ACORN_MAX_SELECTIVITY: f64 = 0.4;
 
-/// The graph search algorithm for a filter: ACORN when the filter passes at most
-/// `max_selectivity` of the rows, as the links of the rows it rejects are then
-/// needed to reach the rows it passes.
-pub fn filtered_graph_algorithm(filter: &Bitmap, max_selectivity: f64) -> SearchAlgorithm {
-    let selectivity = if filter.is_empty() {
+/// The graph search algorithm for a filter that passes `passing` of the `points`
+/// of the graph: ACORN when it passes at most `max_selectivity` of them, as the
+/// links of the points it rejects are then needed to reach the points it passes.
+/// NULL rows are not points: not linked in the graph, they make no hole.
+pub fn filtered_graph_algorithm(
+    passing: usize,
+    points: usize,
+    max_selectivity: f64,
+) -> SearchAlgorithm {
+    let selectivity = if points == 0 {
         1.0
     } else {
-        filter.true_count() as f64 / filter.len() as f64
+        passing as f64 / points as f64
     };
     if selectivity <= max_selectivity {
         SearchAlgorithm::Acorn
@@ -233,9 +239,9 @@ impl HNSWIndex {
     /// search neither scores nor returns the others. A filter that passes few
     /// rows leaves the graph with holes, so the search then explores the links
     /// of the rejected rows too (ACORN, when the filter passes at most
-    /// [`ACORN_MAX_SELECTIVITY`] of the rows, see `filtered_graph_algorithm`);
+    /// [`ACORN_MAX_SELECTIVITY`] of the non-NULL rows, see `filtered_graph_algorithm`);
     /// callers score blocks with very few passing rows with `generate_scores`
-    /// instead.
+    /// instead. NULL rows are never found, even if `filter` passes them.
     pub fn search_with_ef(
         &self,
         limit: usize,
@@ -244,20 +250,75 @@ impl HNSWIndex {
         keep_ties: bool,
         filter: Option<&Bitmap>,
     ) -> Result<Vec<ScoredPointOffset>> {
-        let algorithm = filter.map_or(SearchAlgorithm::Hnsw, |filter| {
-            filtered_graph_algorithm(filter, ACORN_MAX_SELECTIVITY)
-        });
-        self.search_with_algorithm(limit, search_ef, query_values, keep_ties, filter, algorithm)
+        let rows = self.valid_rows(filter);
+        // Only a row filter takes ACORN: NULL rows are not linked in the graph, so
+        // leaving them out makes no hole to cross.
+        let algorithm = match (filter, rows.as_deref()) {
+            (Some(_), Some(rows)) => {
+                let nulls = self.validity.as_ref().map_or(0, Bitmap::null_count);
+                filtered_graph_algorithm(
+                    rows.true_count(),
+                    rows.len() - nulls,
+                    ACORN_MAX_SELECTIVITY,
+                )
+            }
+            _ => SearchAlgorithm::Hnsw,
+        };
+        self.search_valid_rows(
+            limit,
+            search_ef,
+            query_values,
+            keep_ties,
+            rows.as_deref(),
+            algorithm,
+        )
     }
 
-    /// [`Self::search_with_ef`] with the given search algorithm.
-    pub fn search_with_algorithm(
+    /// [`Self::search_with_ef`] with the given search algorithm, for tests that
+    /// compare the algorithms on one filter.
+    #[cfg(test)]
+    fn search_with_algorithm(
         &self,
         limit: usize,
         search_ef: Option<usize>,
         query_values: &[f32],
         keep_ties: bool,
         filter: Option<&Bitmap>,
+        algorithm: SearchAlgorithm,
+    ) -> Result<Vec<ScoredPointOffset>> {
+        let rows = self.valid_rows(filter);
+        self.search_valid_rows(
+            limit,
+            search_ef,
+            query_values,
+            keep_ties,
+            rows.as_deref(),
+            algorithm,
+        )
+    }
+
+    /// The rows that hold a vector among the rows of `filter`, or among every
+    /// row without one: the NULL rows are left out. `None` when every row passes.
+    fn valid_rows<'a>(&'a self, filter: Option<&'a Bitmap>) -> Option<Cow<'a, Bitmap>> {
+        match (filter, &self.validity) {
+            (Some(filter), Some(validity)) => Some(Cow::Owned(validity & filter)),
+            (Some(filter), None) => Some(Cow::Borrowed(filter)),
+            (None, Some(validity)) => Some(Cow::Borrowed(validity)),
+            (None, None) => None,
+        }
+    }
+
+    /// [`Self::search_with_ef`] with the given search algorithm, on `rows` from
+    /// `valid_rows`, which pass no NULL row. The search scores and returns rows
+    /// of `rows` only, and starts from its first rows when no entry point of the
+    /// graph passes it: a NULL row there would be scored by its placeholder vector.
+    fn search_valid_rows(
+        &self,
+        limit: usize,
+        search_ef: Option<usize>,
+        query_values: &[f32],
+        keep_ties: bool,
+        rows: Option<&Bitmap>,
         algorithm: SearchAlgorithm,
     ) -> Result<Vec<ScoredPointOffset>> {
         let query_encode = self.encoded_vectors.encode_query(query_values);
@@ -273,7 +334,7 @@ impl HNSWIndex {
         let ef = search_ef
             .unwrap_or_else(|| limit.saturating_mul(4))
             .max(limit);
-        let query_filter_scorer = FilteredScorer::new(&raw_scorer, filter);
+        let query_filter_scorer = FilteredScorer::new(&raw_scorer, rows);
 
         let is_stopped = AtomicBool::new(false);
         // To find the ties, return all `ef` rows: the search is the same as for
@@ -281,9 +342,9 @@ impl HNSWIndex {
         let top = if keep_ties { ef } else { limit };
         // When no entry point of the graph passes the filter, the search starts
         // from the first rows that do.
-        let filtered_points = filter.map(|filter| {
+        let filtered_points = rows.map(|rows| {
             move |n: usize| -> Vec<PointOffsetType> {
-                TrueIdxIter::new(filter.len(), Some(filter))
+                TrueIdxIter::new(rows.len(), Some(rows))
                     .take(n)
                     .map(|idx| idx as PointOffsetType)
                     .collect()
@@ -329,13 +390,8 @@ impl HNSWIndex {
         // NULL rows keep their slot, so `idx` is the block row; skip them here as
         // this path does not go through the graph. The bitmaps cover the whole
         // block, which is exactly `row_nums` rows.
-        let rows = match (&self.validity, filter) {
-            (Some(validity), Some(filter)) => Some(validity & filter),
-            (Some(validity), None) => Some(validity.clone()),
-            (None, Some(filter)) => Some(filter.clone()),
-            (None, None) => None,
-        };
-        let values = match &rows {
+        let rows = self.valid_rows(filter);
+        let values = match rows.as_deref() {
             Some(bitmap) => TrueIdxIter::new(row_nums as usize, Some(bitmap))
                 .map(|idx| score(idx as u32))
                 .collect(),
@@ -740,6 +796,73 @@ mod tests {
         Ok(())
     }
 
+    /// A filtered search never finds NULL rows, even when the filter passes them.
+    /// NULL rows are not linked in the graph, but a filter that no entry point
+    /// passes starts the search from its first rows, which may be NULL rows.
+    #[test]
+    fn test_filtered_search_skips_null_rows() -> Result<()> {
+        // Row i is at distance i from the query [0,0,0,0]; the NULL rows 0..8
+        // hold the placeholder [0,0,0,0], at distance 0.
+        let rows = 32;
+        let is_null = |row: usize| row < 8;
+        let values: Vec<F32> = (0..rows)
+            .flat_map(|row| {
+                let x = if is_null(row) { 0.0 } else { row as f32 };
+                [x, 0.0, 0.0, 0.0]
+            })
+            .map(F32::from)
+            .collect();
+        let validity: Bitmap = (0..rows).map(|row| !is_null(row)).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), 4)))
+            .wrap_nullable(Some(validity.clone()));
+        let (_, entries) = HNSWIndex::build(4, 16, 0, column, DistanceType::L2)?;
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let (validity_bytes, offset, _) = validity.as_slice();
+        assert_eq!(offset, 0);
+        let index = HNSWIndex::open(DistanceType::L2, 4, rows, &components, Some(validity_bytes))?;
+        let query = [0.0; 4];
+        let search = |filter: &Bitmap, algorithm| {
+            index.search_with_algorithm(5, Some(rows), &query, false, Some(filter), algorithm)
+        };
+
+        // Only NULL rows pass: no entry point passes, so the search would start
+        // from them, and nothing is found.
+        let nulls: Bitmap = (0..rows).map(is_null).collect();
+        for algorithm in [SearchAlgorithm::Hnsw, SearchAlgorithm::Acorn] {
+            assert!(search(&nulls, algorithm)?.is_empty(), "{algorithm:?}");
+        }
+        assert!(
+            index
+                .search_with_ef(5, Some(rows), &query, false, Some(&nulls))?
+                .is_empty()
+        );
+
+        // NULL rows and a few valid rows pass: only the valid ones are found.
+        let mixed: Bitmap = (0..rows).map(|row| is_null(row) || row >= 28).collect();
+        for algorithm in [SearchAlgorithm::Hnsw, SearchAlgorithm::Acorn] {
+            let found = search(&mixed, algorithm)?;
+            assert!(!found.is_empty(), "{algorithm:?}");
+            assert!(
+                found.iter().all(|point| !is_null(point.idx as usize)),
+                "{algorithm:?}: {found:?}"
+            );
+        }
+        let found = index.search_with_ef(5, Some(rows), &query, false, Some(&mixed))?;
+        assert!(!found.is_empty());
+        assert!(found.iter().all(|point| !is_null(point.idx as usize)));
+
+        // Without a filter, the nearest valid rows 8..13.
+        let found = index.search_with_ef(5, Some(rows), &query, false, None)?;
+        let mut ids: Vec<_> = found.iter().map(|point| point.idx).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, [8, 9, 10, 11, 12]);
+        Ok(())
+    }
+
     /// Blocks with few points build serially, without going through the pool.
     #[test]
     fn test_builds_in_parallel() {
@@ -911,17 +1034,31 @@ mod tests {
         // One row in ten passes.
         let filter: Bitmap = (0..num_points).map(|i| i % 10 == 0).collect();
         assert_eq!(
-            filtered_graph_algorithm(&filter, ACORN_MAX_SELECTIVITY),
+            filtered_graph_algorithm(filter.true_count(), num_points, ACORN_MAX_SELECTIVITY),
             SearchAlgorithm::Acorn
         );
         let dense: Bitmap = (0..num_points).map(|i| i % 2 == 0).collect();
         assert_eq!(
-            filtered_graph_algorithm(&dense, ACORN_MAX_SELECTIVITY),
+            filtered_graph_algorithm(dense.true_count(), num_points, ACORN_MAX_SELECTIVITY),
             SearchAlgorithm::Hnsw
         );
         assert_eq!(
-            filtered_graph_algorithm(&dense, 0.5),
+            filtered_graph_algorithm(dense.true_count(), num_points, 0.5),
             SearchAlgorithm::Acorn
+        );
+        // The selectivity is over the points of the graph, not the rows: a filter
+        // passing every non-NULL row of a block of 70% NULL rows rejects no point.
+        assert_eq!(
+            filtered_graph_algorithm(30, 30, ACORN_MAX_SELECTIVITY),
+            SearchAlgorithm::Hnsw
+        );
+        assert_eq!(
+            filtered_graph_algorithm(30, 100, ACORN_MAX_SELECTIVITY),
+            SearchAlgorithm::Acorn
+        );
+        assert_eq!(
+            filtered_graph_algorithm(0, 0, ACORN_MAX_SELECTIVITY),
+            SearchAlgorithm::Hnsw
         );
 
         let l2 =
