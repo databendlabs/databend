@@ -528,10 +528,10 @@ where A: TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
     ) -> Result<BoundScalar> {
-        if let Some(position) = self.grouping_key_input_scope() {
-            return self.resolve_grouping_key_input_node(arena, id, position);
+        match self.grouping_key_input_scope() {
+            Some(scope) => self.resolve_grouping_key_form_node(arena, id, scope),
+            None => self.resolve_core_bound_node(arena, id),
         }
-        self.resolve_core_bound_node(arena, id)
     }
 
     /// Bind below the input memo boundary, still matching enclosing scopes.
