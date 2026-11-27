@@ -420,12 +420,13 @@ impl Processor for TransformSerializeBlock {
                 }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
                     // compact extras
+                    let ttl_deleted_rows = compact_extras.ttl_deleted_rows;
                     let data_block = Self::mutation_logs(
                         MutationLogEntry::CompactExtras {
                             extras: compact_extras,
                         },
                         0,
-                        0,
+                        ttl_deleted_rows,
                     );
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)

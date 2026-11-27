@@ -45,6 +45,7 @@ use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::read::read_segment_stats;
 use crate::operations::CompactOptions;
+use crate::operations::TtlDrop;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
@@ -71,6 +72,8 @@ pub struct BlockCompactMutator {
     pub partition_key_count: usize,
     pub partition_key_id: Option<u32>,
     pub virtual_column_layout_policy: VirtualColumnLayoutPolicy,
+    /// Drop the blocks of the scanned segments that expired by the table TTL.
+    pub ttl: Option<Arc<TtlDrop>>,
 }
 
 impl BlockCompactMutator {
@@ -90,6 +93,7 @@ impl BlockCompactMutator {
             partition_key_count: 0,
             partition_key_id: None,
             virtual_column_layout_policy: Default::default(),
+            ttl: None,
         }
     }
 
@@ -170,9 +174,23 @@ impl BlockCompactMutator {
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold]
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
+                // Like ClickHouse TTLDrop, a segment every row of which expired is
+                // dropped as a whole and does not enter the compaction groups. The
+                // segments dropped from are those scanned before the limits stop the
+                // scan: TTL drops do not count toward them.
+                if let Some(ttl) = &self.ttl
+                    && ttl.segment_expired(&compact_segment.summary)
+                {
+                    lazy_parts.push(CompactLazyPartInfo {
+                        segment_indices: vec![segment_idx],
+                        compact_segments: vec![compact_segment],
+                    });
+                    continue;
+                }
                 let segments_vec = checker.add(segment_idx, compact_segment);
                 for segments in segments_vec {
-                    checker.generate_part(segments, &mut lazy_parts);
+                    let rejected = checker.generate_part(segments, &mut lazy_parts);
+                    self.ttl_only_part(rejected, &mut lazy_parts);
                 }
 
                 if stop_after_next {
@@ -213,7 +231,8 @@ impl BlockCompactMutator {
         }
 
         // finalize the compaction.
-        checker.finalize(&mut lazy_parts);
+        let rejected = checker.finalize(&mut lazy_parts);
+        self.ttl_only_part(rejected, &mut lazy_parts);
 
         // Status.
         let elapsed_time = start.elapsed();
@@ -239,6 +258,7 @@ impl BlockCompactMutator {
                         self.thresholds,
                         self.virtual_column_layout_policy,
                         lazy_parts,
+                        self.ttl.clone(),
                     )
                     .await?,
                 )
@@ -256,6 +276,27 @@ impl BlockCompactMutator {
         Ok(partitions)
     }
 
+    /// A segment that needs no compaction is still rewritten when it may hold
+    /// expired blocks: building its tasks drops them, and keeps the rest. One
+    /// without an expired block builds no task and is left as it is.
+    fn ttl_only_part(
+        &self,
+        rejected: Option<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>>,
+        parts: &mut Vec<CompactLazyPartInfo>,
+    ) {
+        let (Some(ttl), Some(segments)) = (&self.ttl, rejected) else {
+            return;
+        };
+        for (segment_idx, segment) in segments {
+            if ttl.segment_may_expire(&segment.summary) {
+                parts.push(CompactLazyPartInfo {
+                    segment_indices: vec![segment_idx],
+                    compact_segments: vec![segment],
+                });
+            }
+        }
+    }
+
     #[async_backtrace::framed]
     #[allow(clippy::too_many_arguments)]
     pub async fn build_compact_tasks(
@@ -267,6 +308,7 @@ impl BlockCompactMutator {
         thresholds: BlockThresholds,
         virtual_column_layout_policy: VirtualColumnLayoutPolicy,
         lazy_parts: Vec<CompactLazyPartInfo>,
+        ttl: Option<Arc<TtlDrop>>,
     ) -> Result<Vec<PartInfoPtr>> {
         let start = Instant::now();
 
@@ -291,6 +333,7 @@ impl BlockCompactMutator {
             let dal = dal.clone();
 
             let cluster_key_info = cluster_key_info.clone();
+            let ttl = ttl.clone();
             let batch = lazy_parts
                 .by_ref()
                 .take(current_batch_size)
@@ -307,6 +350,7 @@ impl BlockCompactMutator {
                         thresholds,
                         virtual_column_layout_policy,
                     );
+                    builder.ttl = ttl.clone();
                     let parts = builder
                         .build_tasks(
                             lazy_part.segment_indices,
@@ -456,23 +500,32 @@ impl SegmentCompactChecker {
         output
     }
 
+    /// Queue `segments` for compaction. Returns them if they need none.
     pub fn generate_part(
         &mut self,
         segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
         parts: &mut Vec<CompactLazyPartInfo>,
-    ) {
-        if !segments.is_empty() && self.check_for_compact(&segments) {
-            let (segment_indices, compact_segments) = segments.into_iter().unzip();
-            parts.push(CompactLazyPartInfo {
-                segment_indices,
-                compact_segments,
-            });
+    ) -> Option<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
+        if segments.is_empty() {
+            return None;
         }
+        if !self.check_for_compact(&segments) {
+            return Some(segments);
+        }
+        let (segment_indices, compact_segments) = segments.into_iter().unzip();
+        parts.push(CompactLazyPartInfo {
+            segment_indices,
+            compact_segments,
+        });
+        None
     }
 
-    pub fn finalize(&mut self, parts: &mut Vec<CompactLazyPartInfo>) {
+    pub fn finalize(
+        &mut self,
+        parts: &mut Vec<CompactLazyPartInfo>,
+    ) -> Option<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
         let final_segments = std::mem::take(&mut self.segments);
-        self.generate_part(final_segments, parts);
+        self.generate_part(final_segments, parts)
     }
 
     /// Check if compaction limit is reached.
@@ -518,6 +571,7 @@ struct CompactTaskBuilder {
     total_size: usize,
     total_compressed: usize,
     virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
+    ttl: Option<Arc<TtlDrop>>,
 }
 
 enum TailMergeSource {
@@ -549,6 +603,7 @@ impl CompactTaskBuilder {
             total_size: 0,
             total_compressed: 0,
             virtual_schemas: Vec::new(),
+            ttl: None,
         }
     }
 
@@ -739,6 +794,18 @@ impl CompactTaskBuilder {
             })
             .collect::<Vec<_>>();
         let mut blocks = blocks;
+        // Tasks are built on the blocks that survive: the expired ones are only
+        // collected, and dropped with the segments they leave.
+        let mut ttl_deleted_rows = 0;
+        if let Some(ttl) = &self.ttl {
+            blocks.retain(|block| {
+                let expired = ttl.block_expired(&block.block_meta);
+                if expired {
+                    ttl_deleted_rows += block.block_meta.row_count;
+                }
+                !expired
+            });
+        }
 
         if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
             let default_cluster_key = cluster_key_info.cluster_key_id();
@@ -832,7 +899,7 @@ impl CompactTaskBuilder {
             }
         }
 
-        if tasks.is_empty() {
+        if tasks.is_empty() && ttl_deleted_rows == 0 {
             let target_segments =
                 (unchanged_blocks.len() / self.thresholds.block_per_segment).max(1);
             if segment_indices.len() <= target_segments {
@@ -868,6 +935,7 @@ impl CompactTaskBuilder {
                 std::mem::take(&mut self.virtual_schemas),
                 removed_segment_indexes,
                 removed_segment_summary,
+                ttl_deleted_rows,
             ),
         ))));
         Ok(partitions)

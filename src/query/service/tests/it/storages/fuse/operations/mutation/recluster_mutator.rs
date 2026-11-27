@@ -818,6 +818,7 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
             ReclusterMode::Conservative,
             &mut carry,
             &claimed_segments,
+            None,
         )
         .await?
         .expect("recluster should read the later matching scan range");
@@ -1206,6 +1207,7 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
             ReclusterMode::Conservative,
             &mut ReclusterFinalCarry::default(),
             &HashSet::new(),
+            None,
         )
         .await?
         .expect("the obsolete cluster key requires one sort task");

@@ -914,7 +914,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 if let Some(expected) = &self.expected_ttl {
                     if self.table.get_table_info().meta.ttl.as_deref() != Some(expected.as_str()) {
                         return Err(ErrorCode::SemanticError(
-                            "TTL definition changed; retry MATERIALIZE TTL",
+                            "TTL definition changed; retry the statement",
                         ));
                     }
                 }

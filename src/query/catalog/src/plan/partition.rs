@@ -522,11 +522,17 @@ pub struct ReclusterParts {
     pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,
+    /// Rows of the blocks of the removed segments that expired by the TTL and
+    /// are dropped instead of carried.
+    pub ttl_deleted_rows: u64,
 }
 
 impl ReclusterParts {
     pub fn is_empty(&self) -> bool {
-        self.tasks.is_empty() && self.remained_blocks.is_empty()
+        // A round may only drop segments that expired as a whole.
+        self.tasks.is_empty()
+            && self.remained_blocks.is_empty()
+            && self.removed_segment_indexes.is_empty()
     }
 }
 
@@ -539,4 +545,7 @@ pub struct ReclusterInfoSideCar {
     /// Acquire the table lock only around refresh, sequence validation, and CAS publish.
     #[serde(default)]
     pub acquire_commit_lock: bool,
+    /// Rows the round dropped because they expired by the TTL.
+    #[serde(default)]
+    pub ttl_deleted_rows: u64,
 }

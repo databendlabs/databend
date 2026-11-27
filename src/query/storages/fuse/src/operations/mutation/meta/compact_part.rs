@@ -121,6 +121,9 @@ pub struct CompactExtraInfo {
     pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<SegmentIndex>,
     pub removed_segment_summary: Statistics,
+    /// Rows of the blocks dropped from the removed segments because they expired.
+    #[serde(default)]
+    pub ttl_deleted_rows: u64,
 }
 
 impl CompactExtraInfo {
@@ -130,6 +133,7 @@ impl CompactExtraInfo {
         virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
         removed_segment_indexes: Vec<SegmentIndex>,
         removed_segment_summary: Statistics,
+        ttl_deleted_rows: u64,
     ) -> Self {
         CompactExtraInfo {
             segment_index,
@@ -137,6 +141,7 @@ impl CompactExtraInfo {
             virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
+            ttl_deleted_rows,
         }
     }
 

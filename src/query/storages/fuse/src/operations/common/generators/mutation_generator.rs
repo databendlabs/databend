@@ -145,9 +145,10 @@ impl SnapshotGenerator for MutationGenerator {
                     ) && !is_materialized_view_engine(&table_info.meta.engine)
                     {
                         // for compaction, a basic but very important verification:
-                        // the number of rows should be the same
+                        // the number of rows should be the same, except the rows of
+                        // the blocks dropped because they expired by the table TTL.
                         assert_eq!(
-                            ctx.merged_statistics.row_count,
+                            ctx.merged_statistics.row_count + self.logical_change_delta.1,
                             ctx.removed_statistics.row_count
                         );
                     }
