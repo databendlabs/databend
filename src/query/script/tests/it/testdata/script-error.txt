@@ -103,6 +103,60 @@ error:
 
 
 ---------- Input ----------
+LET id := 1;
+LET y := (SELECT number FROM numbers(3) WHERE number = id);
+---------- Output ----------
+error: 
+  --> SQL:2:56
+  |
+1 | LET id := 1;
+2 | LET y := (SELECT number FROM numbers(3) WHERE number = id);
+  |                                                        ^^ `id` is ambiguous in a subquery: use `:id` for the script variable, or qualify the column with its table name
+
+
+---------- Input ----------
+LET number := 1;
+LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = number);
+---------- Output ----------
+error: 
+  --> SQL:2:65
+  |
+1 | LET number := 1;
+2 | LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = number);
+  |                                                                 ^^^^^^ `number` is ambiguous in a subquery: use `:number` for the script variable, or qualify the column with its table name
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT * FROM numbers(3);
+FOR r IN x DO
+    LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+END FOR;
+---------- Output ----------
+error: 
+  --> SQL:3:22
+  |
+1 | LET x RESULTSET := SELECT * FROM numbers(3);
+2 | FOR r IN x DO
+3 |     LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+  |                      ^^^^^^^^ `r.number` is ambiguous in a subquery: assign `r.number` to a variable and use it as `:var`, or use a table alias other than `r`
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT * FROM numbers(3);
+FOR r IN x DO
+    LET y := (SELECT number FROM numbers(3) AS t WHERE t.number = r.number);
+END FOR;
+---------- Output ----------
+error: 
+  --> SQL:3:67
+  |
+1 | LET x RESULTSET := SELECT * FROM numbers(3);
+2 | FOR r IN x DO
+3 |     LET y := (SELECT number FROM numbers(3) AS t WHERE t.number = r.number);
+  |                                                                   ^^^^^^^^ `r.number` is ambiguous in a subquery: assign `r.number` to a variable and use it as `:var`, or use a table alias other than `r`
+
+
+---------- Input ----------
 LET x := 1;
 FOR r IN x DO
     BREAK;

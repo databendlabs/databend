@@ -70,6 +70,7 @@ use databend_common_expression::IfPruning;
 use databend_common_expression::RangeConstraint;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::cast_plan::casts_through;
 use databend_common_expression::expr;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -491,20 +492,27 @@ where A: TypeCheckAdapter
         child: &ScalarExpr,
         facts: &ScalarFacts,
     ) -> ArgFacts {
-        let mut arg = self.wrapped_facts(checked, &child.data_type(), facts);
-        if arg.constant.is_none() && arg.deterministic {
-            arg.constant = if facts.column_free && facts.evaluable {
-                // A column-free child is lowered as a whole, so the checked
-                // argument can be evaluated directly.
+        // A column-free child is lowered as a whole, so the checked argument can be evaluated
+        // directly, once. A value that fails to evaluate is left for runtime.
+        let evaluable = facts.column_free && facts.evaluable;
+        if evaluable
+            && facts.deterministic
+            && checked.as_constant().is_none()
+            && let Some(constant) =
                 FoldRules::eval_constant(&self.func_ctx, &BUILTIN_FUNCTIONS, checked)
-            } else if arg.removable {
-                arg.domain.as_ref().and_then(Domain::as_singleton)
-            } else {
-                None
+        {
+            return ArgFacts {
+                domain: Some(constant.as_ref().domain(checked.data_type())),
+                constant: Some(constant),
+                removable: true,
+                deterministic: true,
             };
+        }
+        let mut arg = self.wrapped_facts(checked, &child.data_type(), facts);
+        if arg.constant.is_none() && arg.deterministic && !evaluable && arg.removable {
+            arg.constant = arg.domain.as_ref().and_then(Domain::as_singleton);
             if let Some(constant) = &arg.constant {
                 arg.domain = Some(constant.as_ref().domain(checked.data_type()));
-                arg.removable = true;
             }
         }
         arg
@@ -535,7 +543,6 @@ where A: TypeCheckAdapter
                     FoldRules::cast_domain(
                         &self.func_ctx,
                         &BUILTIN_FUNCTIONS,
-                        cast.span,
                         cast.expr.data_type(),
                         &cast.dest_type,
                         cast.is_try,
@@ -720,6 +727,40 @@ where A: TypeCheckAdapter
     }
 
     /// A call that type checking turned into a cast of its only argument.
+    /// Binds `cast`, a cast that a call was rewritten to, over `child`, the argument of the call.
+    /// The checked argument, `cast.expr`, keeps the casts that type checking added to `child`,
+    /// e.g. `to_date(x)` of a UInt8 `x` is `CAST(CAST(x AS Int64) AS Date)`. Two casts are bound
+    /// as one only when the plan of the outer cast runs the inner one first.
+    pub(super) fn bind_checked_cast(
+        &self,
+        cast: expr::Cast<usize>,
+        child: BoundScalar,
+    ) -> BoundScalar {
+        if cast.expr.data_type() == &child.data_type {
+            return self.fold_bound_cast(cast, child);
+        }
+        let EExpr::Cast(inner) = cast.expr.as_ref() else {
+            return self.fold_bound_cast(cast, child);
+        };
+        if !inner.is_try
+            && !cast.is_try
+            && casts_through(
+                inner.expr.data_type(),
+                &inner.dest_type,
+                &cast.dest_type,
+                &BUILTIN_FUNCTIONS,
+            )
+        {
+            let cast = expr::Cast {
+                expr: inner.expr.clone(),
+                ..cast
+            };
+            return self.bind_checked_cast(cast, child);
+        }
+        let inner = self.bind_checked_cast(inner.clone(), child);
+        self.fold_bound_cast(cast, inner)
+    }
+
     pub(super) fn fold_bound_cast(
         &self,
         cast: expr::Cast<usize>,

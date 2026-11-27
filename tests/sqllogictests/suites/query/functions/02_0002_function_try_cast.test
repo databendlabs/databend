@@ -123,6 +123,13 @@ select * from test having try_cast(b as boolean);
 statement error
 select * from test having try_cast(try_cast(b as timestamp null) as boolean);
 
+# A constant tuple folds to a literal typed by its values, `Tuple(UInt8, NULL)`, so its second
+# field casts from NULL, not from Int64, and the cast succeeds.
+query T
+SELECT TRY_CAST((1::INT32, CAST(NULL AS INT64 NULL)) AS TUPLE(INT32, ARRAY(INT32)))
+----
+(1,NULL)
+
 query ???
 select to_jsonb_binary(parse_json('{"data":"bend","test":100}')), to_jsonb_binary(parse_json('[1,2,3]')), to_jsonb_binary(parse_json('100'));
 ----

@@ -65,6 +65,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::WatchResponse;
@@ -503,7 +504,7 @@ impl TaskService {
             }
             TaskMessage::ExecuteTask(task) => {
                 if !task_mgr
-                    .accept(&task_key)
+                    .accept(&task_key, MatchSeq::Exact(message_seq))
                     .await
                     .map_err(meta_service_error)?
                 {
@@ -654,7 +655,7 @@ impl TaskService {
                     return Ok(());
                 }
                 if task_mgr
-                    .accept(&task_key)
+                    .accept(&task_key, MatchSeq::Exact(message_seq))
                     .await
                     .map_err(meta_service_error)?
                 {
@@ -668,17 +669,21 @@ impl TaskService {
                         .await?;
                     }
                 }
+                // The schedule message of the dropped task, whichever version it is.
                 task_mgr
-                    .accept(&TaskMessageIdent::new(
-                        tenant,
-                        TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
-                    ))
+                    .accept(
+                        &TaskMessageIdent::new(
+                            tenant,
+                            TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
+                        ),
+                        MatchSeq::GE(1),
+                    )
                     .await
                     .map_err(meta_service_error)?;
             }
             TaskMessage::AfterTask(task) => {
                 if !task_mgr
-                    .accept(&task_key)
+                    .accept(&task_key, MatchSeq::Exact(message_seq))
                     .await
                     .map_err(meta_service_error)?
                 {

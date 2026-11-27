@@ -471,7 +471,7 @@ pub fn bind_values(
                     match common_super_type(
                         common_type.clone(),
                         data_type.clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                        BUILTIN_FUNCTIONS.default_cast_rules(),
                     ) {
                         Some(new_common_type) => column_common_type[column_idx] = new_common_type,
                         None => {
@@ -649,7 +649,8 @@ pub fn bind_constant_scan(
     }
     let value_schema = DataSchema::new(value_fields);
 
-    let input = DataBlock::empty();
+    // Each VALUES cell is one scalar evaluation, including its cast to the column's common type.
+    let input = DataBlock::empty_with_rows(1);
     let func_ctx = ctx.get_function_context()?;
     let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
 

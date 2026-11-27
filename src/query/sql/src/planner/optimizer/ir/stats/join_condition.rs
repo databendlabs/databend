@@ -475,7 +475,7 @@ fn numeric_join_return_type(
     left_type: &DataType,
     right_type: &DataType,
 ) -> Option<NumericHistogramType> {
-    let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+    let cast_rules = BUILTIN_FUNCTIONS.comparison_cast_rules();
     let return_type = common_super_type(left_type.clone(), right_type.clone(), cast_rules)?;
 
     match return_type.remove_nullable() {

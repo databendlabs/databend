@@ -1049,6 +1049,40 @@ impl QueryContext {
         let receivers = receivers.get_mut(cte_name).unwrap();
         receivers.pop().unwrap()
     }
+
+    /// Marks materialized CTEs whose consumers are built after the query pipeline: the
+    /// recursive CTE source builds the pipelines of its steps when they run.
+    pub fn defer_materialized_cte_consumers(&self, cte_names: impl IntoIterator<Item = String>) {
+        self.shared
+            .deferred_materialized_cte_consumers
+            .lock()
+            .extend(cte_names);
+    }
+
+    /// Fails if a materialized CTE producer has a channel that no consumer took.
+    ///
+    /// Call it once every pipeline of the query on this node is built. Nobody reads such a
+    /// channel: a bounded one fills up and blocks the producer, and the query would hang
+    /// instead of failing. CTEs with deferred consumers are skipped, as those consumers
+    /// take their channels later.
+    pub fn check_materialized_cte_receivers_taken(&self) -> Result<()> {
+        let deferred = self.shared.deferred_materialized_cte_consumers.lock();
+        let receivers = self.shared.materialized_cte_receivers.lock();
+        let mut untaken = receivers
+            .iter()
+            .filter(|(name, receivers)| !receivers.is_empty() && !deferred.contains(*name))
+            .map(|(name, receivers)| format!("{name} ({})", receivers.len()))
+            .collect::<Vec<_>>();
+        if untaken.is_empty() {
+            return Ok(());
+        }
+
+        untaken.sort();
+        Err(ErrorCode::Internal(format!(
+            "Materialized CTE channels without a consumer: {}",
+            untaken.join(", ")
+        )))
+    }
 }
 
 impl QueryContext {

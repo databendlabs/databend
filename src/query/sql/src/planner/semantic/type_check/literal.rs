@@ -104,7 +104,7 @@ where A: super::TypeCheckAdapter
                         common_super_type(
                             current_ty.clone(),
                             data_type.clone(),
-                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                            BUILTIN_FUNCTIONS.default_cast_rules(),
                         )
                     } else {
                         Some(data_type.clone())

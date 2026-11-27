@@ -76,3 +76,53 @@ async fn test_session_context() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_update_query_ids_results() -> anyhow::Result<()> {
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let session_ctx = SessionContext::try_create(settings, SessionType::MySQL, None)?;
+
+    for qid in ["q1", "q2", "q3"] {
+        session_ctx.update_query_ids_results(qid.to_string(), None);
+    }
+    let ids = |ctx: &SessionContext| (0..3).map(|i| ctx.get_last_query_id(i)).collect::<Vec<_>>();
+    let expected_ids = vec![
+        Some("q1".to_string()),
+        Some("q2".to_string()),
+        Some("q3".to_string()),
+    ];
+
+    // Updating an existing entry changes that entry, wherever it is, and no other.
+    session_ctx.update_query_ids_results("q3".to_string(), Some("k3".to_string()));
+    session_ctx.update_query_ids_results("q1".to_string(), Some("k1".to_string()));
+
+    assert_eq!(ids(&session_ctx), expected_ids);
+    assert_eq!(session_ctx.get_last_query_id(3), None);
+    assert_eq!(
+        session_ctx.get_query_result_cache_key("q1"),
+        Some("k1".to_string())
+    );
+    assert_eq!(session_ctx.get_query_result_cache_key("q2"), None);
+    assert_eq!(
+        session_ctx.get_query_result_cache_key("q3"),
+        Some("k3".to_string())
+    );
+
+    // `None` keeps the value that is already set.
+    session_ctx.update_query_ids_results("q3".to_string(), None);
+    assert_eq!(ids(&session_ctx), expected_ids);
+    assert_eq!(
+        session_ctx.get_query_result_cache_key("q3"),
+        Some("k3".to_string())
+    );
+
+    // An unknown query id is appended.
+    session_ctx.update_query_ids_results("q4".to_string(), Some("k4".to_string()));
+    assert_eq!(session_ctx.get_last_query_id(-1), Some("q4".to_string()));
+    assert_eq!(
+        session_ctx.get_query_result_cache_key("q4"),
+        Some("k4".to_string())
+    );
+
+    Ok(())
+}

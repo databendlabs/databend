@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::auto_cast_rules::is_variant_auto_cast_target;
 use crate::type_check::common_super_type;
 use crate::types::DataType;
 use crate::types::Decimal;
@@ -126,12 +127,20 @@ pub fn classify_conversion(src: &DataType, dest: &DataType) -> ConversionClass {
         (DataType::String, dest) if is_value_dependent_string_target(dest) => {
             ConversionClass::ValueDependent
         }
-        (DataType::Variant, dest) if is_variant_try_cast_target(dest) => ConversionClass::TryOnly,
+        (DataType::Variant, dest) if is_variant_auto_cast_target(dest) => ConversionClass::TryOnly,
 
         _ => ConversionClass::Unsupported,
     }
 }
 
+/// The common type of `left` and `right` for reasoning about equality, with how each side
+/// converts to it.
+///
+/// Known divergence: this is not always the type that a comparison casts to. The comparison
+/// functions resolve their arguments with their auto cast rules, which include lossy number
+/// casts. For `UInt64` and `Int64`, this returns `Decimal(20, 0)`, lossless on both sides,
+/// while `a = b` casts `a` to `Int64` and fails on `u64::MAX`. The rules are kept apart for now;
+/// `test_comparison_and_conversion_common_types_differ` records the difference.
 pub fn common_super_type_with_conversion(
     left: impl Into<DataType>,
     right: impl Into<DataType>,
@@ -208,10 +217,10 @@ fn common_type_for_conversion(left: DataType, right: DataType) -> Option<DataTyp
                 (DataType::String, ty) if is_value_dependent_string_target(&ty) => Some(ty),
                 (ty, DataType::String) if is_value_dependent_string_target(&ty) => Some(ty),
 
-                (DataType::Variant, ty) if is_variant_try_cast_target(&ty) => {
+                (DataType::Variant, ty) if is_variant_auto_cast_target(&ty) => {
                     Some(ty.wrap_nullable())
                 }
-                (ty, DataType::Variant) if is_variant_try_cast_target(&ty) => {
+                (ty, DataType::Variant) if is_variant_auto_cast_target(&ty) => {
                     Some(ty.wrap_nullable())
                 }
 
@@ -327,18 +336,6 @@ fn is_value_dependent_string_target(ty: &DataType) -> bool {
         | DataType::Timestamp
         | DataType::TimestampTz
         | DataType::Interval => true,
-        _ => false,
-    }
-}
-
-fn is_variant_try_cast_target(ty: &DataType) -> bool {
-    match ty {
-        DataType::Nullable(ty) => is_variant_try_cast_target(ty),
-        DataType::Boolean
-        | DataType::Date
-        | DataType::Timestamp
-        | DataType::String
-        | DataType::Number(_) => true,
         _ => false,
     }
 }

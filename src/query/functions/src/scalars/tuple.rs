@@ -81,136 +81,149 @@ pub fn register(registry: &mut FunctionRegistry) {
     }));
     registry.register_function_factory("tuple", tuple);
 
-    let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
-        // Tuple index starts from 1
-        let idx = (params.first()?.get_i64()? as usize).checked_sub(1)?;
+    // The first factory takes non-nullable tuples only.
+    registry.register_nullable_variants(
+        |registry| {
+            let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
+                // Tuple index starts from 1
+                let idx = (params.first()?.get_i64()? as usize).checked_sub(1)?;
 
-        let fields_ty = match args_type.first()? {
-            DataType::Tuple(tys) => tys,
-            _ => return None,
-        };
-        if idx >= fields_ty.len() {
-            return None;
-        }
+                let fields_ty = match args_type.first()? {
+                    DataType::Tuple(tys) => tys,
+                    _ => return None,
+                };
+                if idx >= fields_ty.len() {
+                    return None;
+                }
 
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "get".to_string(),
-                args_type: vec![DataType::Tuple(
-                    (0..fields_ty.len()).map(DataType::Generic).collect(),
-                )],
-                return_type: DataType::Generic(idx),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: domain_evaluator(move |_, args_domain| {
-                    FunctionDomain::Domain(args_domain[0].as_tuple().unwrap()[idx].clone())
-                }),
-                eval: scalar_evaluator(move |args, _| match &args[0] {
-                    Value::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
-                    Value::Column(Column::Tuple(fields)) => Value::Column(fields[idx].to_owned()),
-                    _ => unreachable!(),
-                }),
-                derive_stat: None,
-            },
-        }))
-    }));
-    registry.register_function_factory("get", get);
-
-    let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
-        // Tuple index starts from 1
-        let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
-        let fields_ty = match args_type.first()? {
-            DataType::Nullable(deref!(DataType::Tuple(tys))) => tys,
-            _ => return None,
-        };
-        if idx >= fields_ty.len() {
-            return None;
-        }
-
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "get".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::Tuple(
-                    (0..fields_ty.len())
-                        .map(|idx| DataType::Nullable(Box::new(DataType::Generic(idx))))
-                        .collect(),
-                )))],
-                return_type: DataType::Nullable(Box::new(DataType::Generic(idx))),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: domain_evaluator(move |_, args_domain| {
-                    let NullableDomain { has_null, value } = args_domain[0].as_nullable().unwrap();
-                    match value {
-                        Some(value) => {
-                            let NullableDomain {
-                                has_null: field_has_null,
-                                value: field_value,
-                            } = value.as_tuple().unwrap()[idx].as_nullable().unwrap();
-                            FunctionDomain::Domain(Domain::Nullable(NullableDomain {
-                                has_null: *has_null || *field_has_null,
-                                value: field_value.clone(),
-                            }))
-                        }
-                        None => FunctionDomain::Domain(Domain::Nullable(NullableDomain {
-                            has_null: true,
-                            value: None,
-                        })),
-                    }
-                }),
-                eval: scalar_evaluator(move |args, _| match &args[0] {
-                    Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
-                    Value::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
-                    Value::Column(Column::Nullable(column)) => {
-                        let Column::Tuple(fields) = column.column() else {
-                            unreachable!()
-                        };
-                        Value::Column(
-                            fields[idx]
-                                .clone()
-                                .wrap_nullable(Some(column.validity().clone())),
-                        )
-                    }
-                    _ => unreachable!(),
-                }),
-                derive_stat: None,
-            },
-        }))
-    }));
-    registry.register_function_factory("get", get);
-
-    let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
-        // Tuple index starts from 1
-        let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
-        let fields_ty = match args_type.first()? {
-            DataType::Nullable(deref!(DataType::Tuple(tys))) => tys,
-            _ => return None,
-        };
-        if idx >= fields_ty.len() {
-            return None;
-        }
-
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "get".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::Tuple(
-                    (0..fields_ty.len())
-                        .map(|i| {
-                            if i == idx {
-                                DataType::Null
-                            } else {
-                                DataType::Generic(i)
+                Some(Arc::new(Function {
+                    signature: FunctionSignature {
+                        name: "get".to_string(),
+                        args_type: vec![DataType::Tuple(
+                            (0..fields_ty.len()).map(DataType::Generic).collect(),
+                        )],
+                        return_type: DataType::Generic(idx),
+                    },
+                    eval: FunctionEval::Scalar {
+                        calc_domain: domain_evaluator(move |_, args_domain| {
+                            FunctionDomain::Domain(args_domain[0].as_tuple().unwrap()[idx].clone())
+                        }),
+                        eval: scalar_evaluator(move |args, _| match &args[0] {
+                            Value::Scalar(Scalar::Tuple(fields)) => {
+                                Value::Scalar(fields[idx].to_owned())
                             }
-                        })
-                        .collect(),
-                )))],
-                return_type: DataType::Null,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(FunctionDomain::Full),
-                eval: scalar_evaluator(move |_, _| Value::Scalar(Scalar::Null)),
-                derive_stat: None,
-            },
-        }))
-    }));
-    registry.register_function_factory("get", get);
+                            Value::Column(Column::Tuple(fields)) => {
+                                Value::Column(fields[idx].to_owned())
+                            }
+                            _ => unreachable!(),
+                        }),
+                        derive_stat: None,
+                    },
+                }))
+            }));
+            registry.register_function_factory("get", get);
+        },
+        |registry| {
+            let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
+                // Tuple index starts from 1
+                let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
+                let fields_ty = match args_type.first()? {
+                    DataType::Nullable(deref!(DataType::Tuple(tys))) => tys,
+                    _ => return None,
+                };
+                if idx >= fields_ty.len() {
+                    return None;
+                }
+
+                Some(Arc::new(Function {
+                    signature: FunctionSignature {
+                        name: "get".to_string(),
+                        args_type: vec![DataType::Nullable(Box::new(DataType::Tuple(
+                            (0..fields_ty.len())
+                                .map(|idx| DataType::Nullable(Box::new(DataType::Generic(idx))))
+                                .collect(),
+                        )))],
+                        return_type: DataType::Nullable(Box::new(DataType::Generic(idx))),
+                    },
+                    eval: FunctionEval::Scalar {
+                        calc_domain: domain_evaluator(move |_, args_domain| {
+                            let NullableDomain { has_null, value } =
+                                args_domain[0].as_nullable().unwrap();
+                            match value {
+                                Some(value) => {
+                                    let NullableDomain {
+                                        has_null: field_has_null,
+                                        value: field_value,
+                                    } = value.as_tuple().unwrap()[idx].as_nullable().unwrap();
+                                    FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                                        has_null: *has_null || *field_has_null,
+                                        value: field_value.clone(),
+                                    }))
+                                }
+                                None => FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                                    has_null: true,
+                                    value: None,
+                                })),
+                            }
+                        }),
+                        eval: scalar_evaluator(move |args, _| match &args[0] {
+                            Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
+                            Value::Scalar(Scalar::Tuple(fields)) => {
+                                Value::Scalar(fields[idx].to_owned())
+                            }
+                            Value::Column(Column::Nullable(column)) => {
+                                let Column::Tuple(fields) = column.column() else {
+                                    unreachable!()
+                                };
+                                Value::Column(
+                                    fields[idx]
+                                        .clone()
+                                        .wrap_nullable(Some(column.validity().clone())),
+                                )
+                            }
+                            _ => unreachable!(),
+                        }),
+                        derive_stat: None,
+                    },
+                }))
+            }));
+            registry.register_function_factory("get", get);
+
+            let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
+                // Tuple index starts from 1
+                let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
+                let fields_ty = match args_type.first()? {
+                    DataType::Nullable(deref!(DataType::Tuple(tys))) => tys,
+                    _ => return None,
+                };
+                if idx >= fields_ty.len() {
+                    return None;
+                }
+
+                Some(Arc::new(Function {
+                    signature: FunctionSignature {
+                        name: "get".to_string(),
+                        args_type: vec![DataType::Nullable(Box::new(DataType::Tuple(
+                            (0..fields_ty.len())
+                                .map(|i| {
+                                    if i == idx {
+                                        DataType::Null
+                                    } else {
+                                        DataType::Generic(i)
+                                    }
+                                })
+                                .collect(),
+                        )))],
+                        return_type: DataType::Null,
+                    },
+                    eval: FunctionEval::Scalar {
+                        calc_domain: Box::new(FunctionDomain::Full),
+                        eval: scalar_evaluator(move |_, _| Value::Scalar(Scalar::Null)),
+                        derive_stat: None,
+                    },
+                }))
+            }));
+            registry.register_function_factory("get", get);
+        },
+    );
 }

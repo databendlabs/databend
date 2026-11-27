@@ -563,7 +563,7 @@ fn register_round_cast<
                 domain.overflow_cast()
             };
             if overflowing {
-                FunctionDomain::MayThrow
+                FunctionDomain::MayThrowDomain(domain)
             } else {
                 FunctionDomain::Domain(domain)
             }
@@ -598,7 +598,7 @@ fn register_lossy_cast<
         .calc_domain(|_, domain| {
             let (domain, overflowing) = domain.overflow_cast();
             if overflowing {
-                FunctionDomain::MayThrow
+                FunctionDomain::MayThrowDomain(domain)
             } else {
                 FunctionDomain::Domain(domain)
             }

@@ -648,7 +648,7 @@ impl PhysicalPlanBuilder {
             return Ok(());
         };
 
-        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+        let cast_rules = BUILTIN_FUNCTIONS.comparison_cast_rules();
         for (probe_key, build_key) in probe_exchange
             .keys
             .iter_mut()
@@ -770,7 +770,7 @@ impl PhysicalPlanBuilder {
         let mut is_null_equal = Vec::new();
         let mut probe_to_build_index = Vec::new();
 
-        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+        let cast_rules = BUILTIN_FUNCTIONS.comparison_cast_rules();
         for condition in join.equi_conditions.iter() {
             let original_left_condition = &condition.left;
             let original_right_condition = &condition.right;
