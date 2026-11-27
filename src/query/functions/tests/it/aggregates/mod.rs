@@ -24,6 +24,7 @@ mod array_agg;
 mod avg;
 mod bitmap;
 mod bitmap_count;
+mod bitmap_serialize;
 mod bool;
 mod count;
 mod count_distinct;

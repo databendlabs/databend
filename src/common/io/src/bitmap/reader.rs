@@ -210,13 +210,14 @@ impl BitmapReader<'_> {
         reader.seek_relative(last_container * OFFSET_BYTES as i64)?;
         let last_offset = reader.read_u32::<LittleEndian>()?;
 
-        let size = 4
-            + last_offset as usize
-            + if last_cardinality <= ARRAY_LIMIT {
-                2 * last_cardinality
-            } else {
-                BITMAP_BYTES
-            };
+        let size = 4 + last_offset as usize + payload_size(last_cardinality);
+
+        if size < reader.position() as usize {
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "data is truncated or invalid",
+            ));
+        }
 
         if buf.len() < size {
             Err(Error::new(
@@ -285,11 +286,7 @@ impl BitmapReader<'_> {
         let data = &self.bitmap_buf()[offset..];
 
         // Validate container data length
-        let required_len = if cardinality <= ARRAY_LIMIT {
-            cardinality * 2
-        } else {
-            BITMAP_BYTES
-        };
+        let required_len = payload_size(cardinality);
         if data.len() < required_len {
             return Err(Error::other("container data too short"));
         }
@@ -297,8 +294,7 @@ impl BitmapReader<'_> {
         Ok(ContainerReader {
             key: desc.prefix,
             cardinality,
-            is_array: cardinality <= ARRAY_LIMIT,
-            data,
+            data: &data[..required_len],
         })
     }
 
@@ -330,10 +326,17 @@ impl Description {
     }
 }
 
+fn payload_size(cardinality: usize) -> usize {
+    if cardinality <= ARRAY_LIMIT {
+        cardinality * 2
+    } else {
+        BITMAP_BYTES
+    }
+}
+
 pub struct ContainerReader<'a> {
     key: u16,
     cardinality: usize,
-    is_array: bool,
     data: &'a [u8],
 }
 
@@ -342,8 +345,12 @@ impl<'a> ContainerReader<'a> {
         self.key
     }
 
+    pub fn is_array(&self) -> bool {
+        self.cardinality <= ARRAY_LIMIT
+    }
+
     pub fn contains(&self, low16: u16) -> bool {
-        if self.is_array {
+        if self.is_array() {
             self.contains_array(low16)
         } else {
             self.contains_bitmap(low16)
@@ -351,7 +358,7 @@ impl<'a> ContainerReader<'a> {
     }
 
     pub fn min(&self) -> Option<u16> {
-        if self.is_array {
+        if self.is_array() {
             self.array_first()
         } else {
             self.bitmap_first()
@@ -359,7 +366,7 @@ impl<'a> ContainerReader<'a> {
     }
 
     pub fn max(&self) -> Option<u16> {
-        if self.is_array {
+        if self.is_array() {
             self.array_last()
         } else {
             self.bitmap_last()
@@ -383,11 +390,11 @@ impl<'a> ContainerReader<'a> {
             return false;
         }
         // Type dispatch
-        if self.is_array && other.is_array {
+        if self.is_array() && other.is_array() {
             self.array_has_any_array(other)
-        } else if !self.is_array && !other.is_array {
+        } else if !self.is_array() && !other.is_array() {
             self.bitmap_has_any_bitmap(other)
-        } else if self.is_array {
+        } else if self.is_array() {
             self.array_has_any_bitmap(other)
         } else {
             other.array_has_any_bitmap(self)
@@ -404,7 +411,7 @@ impl<'a> ContainerReader<'a> {
             return true;
         }
         // Fast path: type check (array capacity < bitmap)
-        if self.is_array && !other.is_array {
+        if self.is_array() && !other.is_array() {
             return false;
         }
         // Fast path: range non-covering
@@ -419,9 +426,9 @@ impl<'a> ContainerReader<'a> {
             return false;
         }
         // Type dispatch
-        if self.is_array && other.is_array {
+        if self.is_array() && other.is_array() {
             self.array_has_all_array(other)
-        } else if !self.is_array && !other.is_array {
+        } else if !self.is_array() && !other.is_array() {
             self.bitmap_has_all_bitmap(other)
         } else {
             // self is bitmap, other is array
@@ -987,6 +994,9 @@ mod tests {
     use roaring::RoaringTreemap;
 
     use super::*;
+    use crate::bitmap::test_support::create_format_spec_32_bitmap;
+    use crate::bitmap::test_support::create_format_spec_64_bitmap;
+    use crate::bitmap::test_support::create_format_spec_portable_64_bitmap;
 
     fn create_bitmap(seed: u64) -> RoaringTreemap {
         let mut rng = SmallRng::seed_from_u64(seed);
@@ -1007,49 +1017,6 @@ mod tests {
             bitmap.insert(v & u16::MAX as u64);
         }
 
-        bitmap
-    }
-
-    // Mirrors the generators from RoaringFormatSpec/testdata and testdata64. We deliberately
-    // serialize with the local `roaring` crate: BitmapReader supports the no-run portable subset
-    // emitted by that implementation, rather than every representation accepted by the format.
-    fn create_format_spec_32_bitmap() -> RoaringTreemap {
-        let mut bitmap = RoaringTreemap::new();
-        for value in (0..100_000u64).step_by(1_000) {
-            bitmap.insert(value);
-        }
-        for value in 100_000..200_000u64 {
-            bitmap.insert(3 * value);
-        }
-        for value in 700_000..800_000u64 {
-            bitmap.insert(value);
-        }
-        bitmap
-    }
-
-    fn create_format_spec_64_bitmap() -> RoaringTreemap {
-        let mut bitmap = RoaringTreemap::new();
-        for value in (0..65_536u64).step_by(2) {
-            bitmap.insert(value);
-        }
-        let start = 1u64 << 32;
-        bitmap.insert_range(start..start + 1_000_000);
-        bitmap.insert(1u64 << 48);
-        bitmap
-    }
-
-    fn create_format_spec_portable_64_bitmap() -> RoaringTreemap {
-        let mut bitmap = RoaringTreemap::new();
-        for prefix in 0..2u64 {
-            let base = prefix << 32;
-            bitmap.insert_range((base)..=(base | 0x09000));
-            bitmap.insert_range((base | 0x0A000)..=(base | 0x10000));
-            bitmap.insert(base | 0x20000);
-            bitmap.insert(base | 0x20005);
-            for value in (0..0x10000u64).step_by(2) {
-                bitmap.insert(base | 0x80000 | value);
-            }
-        }
         bitmap
     }
 

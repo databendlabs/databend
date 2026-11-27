@@ -1,0 +1,112 @@
+query TTT
+WITH
+    low_large AS (
+        SELECT bitmap_or_agg(to_bitmap(number)) AS b FROM numbers(33)
+    ),
+    multi_large AS (
+        SELECT bitmap_or_agg(to_bitmap(value)) AS b
+        FROM (
+            SELECT number AS value FROM numbers(33)
+            UNION ALL
+            SELECT number + 4294967296 AS value FROM numbers(33)
+        )
+    )
+SELECT
+    to_string(bitmap_and(multi_large.b, build_bitmap([]))),
+    to_string(bitmap_and(multi_large.b, low_large.b)),
+    to_string(bitmap_not(multi_large.b, build_bitmap([])))
+FROM multi_large, low_large;
+----
+(empty) 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,4294967296,4294967297,4294967298,4294967299,4294967300,4294967301,4294967302,4294967303,4294967304,4294967305,4294967306,4294967307,4294967308,4294967309,4294967310,4294967311,4294967312,4294967313,4294967314,4294967315,4294967316,4294967317,4294967318,4294967319,4294967320,4294967321,4294967322,4294967323,4294967324,4294967325,4294967326,4294967327,4294967328
+
+query TTTT
+SELECT
+    to_string(bitmap_and(build_bitmap([]), build_bitmap([]))),
+    to_string(bitmap_or(build_bitmap([]), build_bitmap([]))),
+    to_string(bitmap_xor(build_bitmap([]), build_bitmap([]))),
+    to_string(bitmap_not(build_bitmap([]), build_bitmap([])));
+----
+(empty) (empty) (empty) (empty)
+
+query TTTTTTTT
+SELECT
+    to_string(bitmap_and(build_bitmap([]), build_bitmap([1,2]))),
+    to_string(bitmap_or(build_bitmap([]), build_bitmap([1,2]))),
+    to_string(bitmap_xor(build_bitmap([]), build_bitmap([1,2]))),
+    to_string(bitmap_not(build_bitmap([]), build_bitmap([1,2]))),
+    to_string(bitmap_and(build_bitmap([1,2]), build_bitmap([]))),
+    to_string(bitmap_or(build_bitmap([1,2]), build_bitmap([]))),
+    to_string(bitmap_xor(build_bitmap([1,2]), build_bitmap([]))),
+    to_string(bitmap_not(build_bitmap([1,2]), build_bitmap([])));
+----
+(empty) 1,2 1,2 (empty) (empty) 1,2 1,2 1,2
+
+query TTTTTTTT
+WITH low_large AS (
+    SELECT bitmap_or_agg(to_bitmap(number)) AS b FROM numbers(33)
+)
+SELECT
+    to_string(bitmap_and(build_bitmap([]), low_large.b)),
+    to_string(bitmap_or(build_bitmap([]), low_large.b)),
+    to_string(bitmap_xor(build_bitmap([]), low_large.b)),
+    to_string(bitmap_not(build_bitmap([]), low_large.b)),
+    to_string(bitmap_and(low_large.b, build_bitmap([]))),
+    to_string(bitmap_or(low_large.b, build_bitmap([]))),
+    to_string(bitmap_xor(low_large.b, build_bitmap([]))),
+    to_string(bitmap_not(low_large.b, build_bitmap([])))
+FROM low_large;
+----
+(empty) 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 (empty) (empty) 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32
+
+query TTTT
+SELECT
+    to_string(bitmap_and(build_bitmap([1,2]), build_bitmap([1,2]))),
+    to_string(bitmap_or(build_bitmap([1,2]), build_bitmap([1,2]))),
+    to_string(bitmap_xor(build_bitmap([1,2]), build_bitmap([1,2]))),
+    to_string(bitmap_not(build_bitmap([1,2]), build_bitmap([1,2])));
+----
+1,2 1,2 (empty) (empty)
+
+query TTTTTTTT
+WITH
+    low_large AS (
+        SELECT bitmap_or_agg(to_bitmap(number)) AS b FROM numbers(33)
+    ),
+    multi_large AS (
+        SELECT bitmap_or_agg(to_bitmap(value)) AS b
+        FROM (
+            SELECT number AS value FROM numbers(33)
+            UNION ALL
+            SELECT number + 4294967296 AS value FROM numbers(33)
+        )
+    )
+SELECT
+    to_string(bitmap_and(multi_large.b, low_large.b)),
+    to_string(bitmap_and(low_large.b, multi_large.b)),
+    to_string(bitmap_or(multi_large.b, low_large.b)),
+    to_string(bitmap_or(low_large.b, multi_large.b)),
+    to_string(bitmap_xor(multi_large.b, low_large.b)),
+    to_string(bitmap_xor(low_large.b, multi_large.b)),
+    to_string(bitmap_not(multi_large.b, low_large.b)),
+    to_string(bitmap_not(low_large.b, multi_large.b))
+FROM multi_large, low_large;
+----
+0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,4294967296,4294967297,4294967298,4294967299,4294967300,4294967301,4294967302,4294967303,4294967304,4294967305,4294967306,4294967307,4294967308,4294967309,4294967310,4294967311,4294967312,4294967313,4294967314,4294967315,4294967316,4294967317,4294967318,4294967319,4294967320,4294967321,4294967322,4294967323,4294967324,4294967325,4294967326,4294967327,4294967328 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,4294967296,4294967297,4294967298,4294967299,4294967300,4294967301,4294967302,4294967303,4294967304,4294967305,4294967306,4294967307,4294967308,4294967309,4294967310,4294967311,4294967312,4294967313,4294967314,4294967315,4294967316,4294967317,4294967318,4294967319,4294967320,4294967321,4294967322,4294967323,4294967324,4294967325,4294967326,4294967327,4294967328 4294967296,4294967297,4294967298,4294967299,4294967300,4294967301,4294967302,4294967303,4294967304,4294967305,4294967306,4294967307,4294967308,4294967309,4294967310,4294967311,4294967312,4294967313,4294967314,4294967315,4294967316,4294967317,4294967318,4294967319,4294967320,4294967321,4294967322,4294967323,4294967324,4294967325,4294967326,4294967327,4294967328 4294967296,4294967297,4294967298,4294967299,4294967300,4294967301,4294967302,4294967303,4294967304,4294967305,4294967306,4294967307,4294967308,4294967309,4294967310,4294967311,4294967312,4294967313,4294967314,4294967315,4294967316,4294967317,4294967318,4294967319,4294967320,4294967321,4294967322,4294967323,4294967324,4294967325,4294967326,4294967327,4294967328 4294967296,4294967297,4294967298,4294967299,4294967300,4294967301,4294967302,4294967303,4294967304,4294967305,4294967306,4294967307,4294967308,4294967309,4294967310,4294967311,4294967312,4294967313,4294967314,4294967315,4294967316,4294967317,4294967318,4294967319,4294967320,4294967321,4294967322,4294967323,4294967324,4294967325,4294967326,4294967327,4294967328 (empty)
+
+query TTTTTTTT
+WITH
+    low_large AS (
+        SELECT bitmap_or_agg(to_bitmap(number)) AS b FROM numbers(33)
+    )
+SELECT
+    to_string(bitmap_and(build_bitmap([1,2]), low_large.b)),
+    to_string(bitmap_and(low_large.b, build_bitmap([1,2]))),
+    to_string(bitmap_or(build_bitmap([1,2]), low_large.b)),
+    to_string(bitmap_or(low_large.b, build_bitmap([1,2]))),
+    to_string(bitmap_xor(build_bitmap([1,2]), low_large.b)),
+    to_string(bitmap_xor(low_large.b, build_bitmap([1,2]))),
+    to_string(bitmap_not(build_bitmap([1,2]), low_large.b)),
+    to_string(bitmap_not(low_large.b, build_bitmap([1,2])))
+FROM low_large;
+----
+1,2 1,2 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 0,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 (empty) 0,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32

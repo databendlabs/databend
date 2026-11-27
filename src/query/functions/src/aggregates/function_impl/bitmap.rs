@@ -47,8 +47,10 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_io::FastTreemap;
 use databend_common_io::HybridBitmap;
 use databend_common_io::bitmap::BitmapRhs;
+use databend_common_io::bitmap::is_hybrid_large;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
@@ -276,7 +278,7 @@ macro_rules! with_bitmap_result_mapped_type {
 
 #[derive(Default)]
 pub struct BitmapState {
-    rb: Option<HybridBitmap>,
+    rb: Option<BitmapPayload>,
 }
 
 impl BitmapState {
@@ -289,54 +291,98 @@ impl BitmapState {
 
     fn insert(&mut self, value: u64) {
         match &mut self.rb {
-            Some(rb) => {
+            Some(BitmapPayload::Hybrid(rb)) => {
+                rb.insert(value);
+            }
+            Some(BitmapPayload::Fast(rb)) => {
                 rb.insert(value);
             }
             None => {
                 let mut rb = HybridBitmap::new();
                 rb.insert(value);
-                self.rb = Some(rb);
+                self.rb = Some(BitmapPayload::Hybrid(rb));
             }
         }
     }
 
-    fn insert_many<I>(&mut self, values: I)
+    fn insert_many<I>(&mut self, values: I) -> Result<()>
     where I: IntoIterator<Item = u64> {
         let mut values = values.into_iter().collect::<Vec<_>>();
         if values.is_empty() {
-            return;
+            return Ok(());
         }
 
         let len = values.len();
         values.sort_unstable();
         values.dedup();
         if values.len() * 4 > len * 3 {
-            for value in values {
-                self.insert(value);
+            // Bind the payload once per batch.
+            let rb = self
+                .rb
+                .get_or_insert_with(|| BitmapPayload::Hybrid(HybridBitmap::new()));
+            match rb {
+                BitmapPayload::Hybrid(rb) => {
+                    for value in values {
+                        rb.insert(value);
+                    }
+                }
+                BitmapPayload::Fast(rb) => {
+                    for value in values {
+                        rb.insert(value);
+                    }
+                }
             }
-            return;
+            return Ok(());
         }
 
-        self.add_bitmap::<BitmapOrOp>(HybridBitmap::from_iter(values));
+        self.add_bitmap::<BitmapOrOp>(BitmapPayload::Hybrid(HybridBitmap::from_iter(values)))
     }
 
     fn add<OP>(&mut self, other: &[u8]) -> Result<()>
     where OP: BitmapOperate {
-        match &mut self.rb {
-            Some(rb) => OP::operate_buf(rb, other),
-            None => {
-                self.rb = Some(deserialize_bitmap(other)?);
+        match (&mut self.rb, is_hybrid_large(other)) {
+            // A Fast payload stays Fast.
+            (Some(BitmapPayload::Fast(lhs)), _) => OP::operate_large_buf(lhs, other),
+            // A small input keeps the payload Hybrid.
+            (Some(BitmapPayload::Hybrid(lhs)), false) => OP::operate_buf(lhs, other),
+            // A large input migrates the payload to Fast.
+            (Some(BitmapPayload::Hybrid(_)), true) => {
+                let hybrid = match self.rb.take() {
+                    Some(BitmapPayload::Hybrid(hybrid)) => hybrid,
+                    _ => unreachable!(),
+                };
+                let mut fast = FastTreemap::from_hybrid(&hybrid);
+                if let Err(err) = OP::operate_large_buf(&mut fast, other) {
+                    self.rb = Some(BitmapPayload::Hybrid(hybrid));
+                    return Err(err);
+                }
+                self.rb = Some(BitmapPayload::Fast(fast));
+                Ok(())
+            }
+            (None, true) => {
+                self.rb = Some(BitmapPayload::Fast(FastTreemap::deserialize(other)?));
+                Ok(())
+            }
+            (None, false) => {
+                self.rb = Some(BitmapPayload::Hybrid(deserialize_bitmap(other)?));
                 Ok(())
             }
         }
     }
 
-    fn add_bitmap<OP>(&mut self, other: HybridBitmap)
+    fn add_bitmap<OP>(&mut self, other: BitmapPayload) -> Result<()>
     where OP: BitmapOperate {
         match &mut self.rb {
-            Some(rb) => OP::operate(rb, other),
+            Some(rb) => {
+                if let (BitmapPayload::Hybrid(hybrid), BitmapPayload::Fast(_)) = (&*rb, &other) {
+                    *rb = BitmapPayload::Fast(FastTreemap::from_hybrid(hybrid));
+                }
+                OP::operate(rb, other);
+                Ok(())
+            }
             None => {
                 self.rb = Some(other);
+                Ok(())
             }
         }
     }
@@ -362,18 +408,45 @@ impl BitmapState {
         Ok(())
     }
 
-    fn merge_owned<OP>(&mut self, rhs: &mut Self)
+    fn merge_owned<OP>(&mut self, rhs: &mut Self) -> Result<()>
     where OP: BitmapOperate {
         if let Some(rb) = rhs.rb.take() {
-            self.add_bitmap::<OP>(rb);
+            self.add_bitmap::<OP>(rb)?;
+        }
+        Ok(())
+    }
+}
+
+// Accept the large enum size for the sake of performance.
+#[allow(clippy::large_enum_variant)]
+enum BitmapPayload {
+    Hybrid(HybridBitmap),
+    Fast(FastTreemap),
+}
+
+impl BitmapPayload {
+    fn len(&self) -> u64 {
+        match self {
+            BitmapPayload::Hybrid(rb) => rb.len(),
+            BitmapPayload::Fast(rb) => rb.len(),
+        }
+    }
+
+    fn serialize_into<W: std::io::Write>(&self, writer: W) -> std::io::Result<()> {
+        match self {
+            BitmapPayload::Hybrid(rb) => rb.serialize_into(writer),
+            BitmapPayload::Fast(rb) => rb.serialize_into(writer),
         }
     }
 }
 
 trait BitmapOperate: Send + Sync + 'static {
-    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap);
+    fn operate(lhs: &mut BitmapPayload, rhs: BitmapPayload);
 
     fn operate_buf(lhs: &mut HybridBitmap, rhs: &[u8]) -> Result<()>;
+
+    /// Same as operate_buf, but for a Fast payload.
+    fn operate_large_buf(lhs: &mut FastTreemap, buf: &[u8]) -> Result<()>;
 }
 
 struct BitmapAndOp;
@@ -382,42 +455,86 @@ struct BitmapXorOp;
 struct BitmapNotOp;
 
 impl BitmapOperate for BitmapAndOp {
-    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
-        lhs.bitand_assign(rhs);
+    fn operate(lhs: &mut BitmapPayload, rhs: BitmapPayload) {
+        match (lhs, rhs) {
+            (BitmapPayload::Hybrid(lhs), BitmapPayload::Hybrid(rhs)) => lhs.bitand_assign(rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Fast(rhs)) => lhs.bitand_assign(&rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Hybrid(rhs)) => {
+                lhs.bitand_assign_hybrid(&rhs);
+            }
+            (BitmapPayload::Hybrid(_), BitmapPayload::Fast(_)) => unreachable!("caller migrated"),
+        }
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, rhs: &[u8]) -> Result<()> {
         lhs.bitand_assign_rhs(BitmapRhs::Serialized(rhs))
     }
+
+    fn operate_large_buf(lhs: &mut FastTreemap, buf: &[u8]) -> Result<()> {
+        lhs.bitand_assign_serialized(buf)
+    }
 }
 
 impl BitmapOperate for BitmapOrOp {
-    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
-        lhs.bitor_assign(rhs);
+    fn operate(lhs: &mut BitmapPayload, rhs: BitmapPayload) {
+        match (lhs, rhs) {
+            (BitmapPayload::Hybrid(lhs), BitmapPayload::Hybrid(rhs)) => lhs.bitor_assign(rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Fast(rhs)) => lhs.bitor_assign(&rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Hybrid(rhs)) => {
+                lhs.bitor_assign_hybrid(&rhs);
+            }
+            (BitmapPayload::Hybrid(_), BitmapPayload::Fast(_)) => unreachable!("caller migrated"),
+        }
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, rhs: &[u8]) -> Result<()> {
         lhs.bitor_assign_rhs(BitmapRhs::Serialized(rhs))
     }
+
+    fn operate_large_buf(lhs: &mut FastTreemap, buf: &[u8]) -> Result<()> {
+        lhs.bitor_assign_serialized(buf)
+    }
 }
 
 impl BitmapOperate for BitmapXorOp {
-    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
-        lhs.bitxor_assign(rhs);
+    fn operate(lhs: &mut BitmapPayload, rhs: BitmapPayload) {
+        match (lhs, rhs) {
+            (BitmapPayload::Hybrid(lhs), BitmapPayload::Hybrid(rhs)) => lhs.bitxor_assign(rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Fast(rhs)) => lhs.bitxor_assign(&rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Hybrid(rhs)) => {
+                lhs.bitxor_assign_hybrid(&rhs);
+            }
+            (BitmapPayload::Hybrid(_), BitmapPayload::Fast(_)) => unreachable!("caller migrated"),
+        }
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, rhs: &[u8]) -> Result<()> {
         lhs.bitxor_assign_rhs(BitmapRhs::Serialized(rhs))
     }
+
+    fn operate_large_buf(lhs: &mut FastTreemap, buf: &[u8]) -> Result<()> {
+        lhs.bitxor_assign_serialized(buf)
+    }
 }
 
 impl BitmapOperate for BitmapNotOp {
-    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
-        lhs.sub_assign(rhs);
+    fn operate(lhs: &mut BitmapPayload, rhs: BitmapPayload) {
+        match (lhs, rhs) {
+            (BitmapPayload::Hybrid(lhs), BitmapPayload::Hybrid(rhs)) => lhs.sub_assign(rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Fast(rhs)) => lhs.sub_assign(&rhs),
+            (BitmapPayload::Fast(lhs), BitmapPayload::Hybrid(rhs)) => {
+                lhs.sub_assign_hybrid(&rhs);
+            }
+            (BitmapPayload::Hybrid(_), BitmapPayload::Fast(_)) => unreachable!("caller migrated"),
+        }
     }
 
     fn operate_buf(lhs: &mut HybridBitmap, rhs: &[u8]) -> Result<()> {
         lhs.sub_assign_rhs(BitmapRhs::Serialized(rhs))
+    }
+
+    fn operate_large_buf(lhs: &mut FastTreemap, buf: &[u8]) -> Result<()> {
+        lhs.sub_assign_serialized(buf)
     }
 }
 
@@ -511,8 +628,7 @@ where
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        merge_bitmap_states::<OP>(input);
-        Ok(())
+        merge_bitmap_states::<OP>(input)
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
@@ -613,8 +729,7 @@ where
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        merge_bitmap_states::<BitmapAndOp>(input);
-        Ok(())
+        merge_bitmap_states::<BitmapAndOp>(input)
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
@@ -653,7 +768,7 @@ where
                 }
             }
             None => {
-                state.insert_many(values.iter().map(|value| value.as_()));
+                state.insert_many(values.iter().map(|value| value.as_()))?;
             }
         }
         Ok(())
@@ -688,8 +803,7 @@ where
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        merge_bitmap_states::<BitmapOrOp>(input);
-        Ok(())
+        merge_bitmap_states::<BitmapOrOp>(input)
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
@@ -992,12 +1106,12 @@ where OP: BitmapOperate {
     })
 }
 
-fn merge_bitmap_states<OP>(input: MergeStatesInput<'_>)
+fn merge_bitmap_states<OP>(input: MergeStatesInput<'_>) -> Result<()>
 where OP: BitmapOperate {
     input
         .state
         .get::<BitmapState>()
-        .merge_owned::<OP>(input.rhs.get::<BitmapState>());
+        .merge_owned::<OP>(input.rhs.get::<BitmapState>())
 }
 
 unsafe fn drop_bitmap_state(state: AggrState<'_>) {

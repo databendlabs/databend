@@ -56,6 +56,7 @@ pub use bitmap::bitmap_has_any;
 pub use bitmap::bitmap_max;
 pub use bitmap::bitmap_min;
 pub use bitmap::deserialize_bitmap;
+pub use bitmap::fast::FastTreemap;
 pub use bitmap::parse_bitmap;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_128_trimmed;
