@@ -618,6 +618,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_materialized_cte_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables join runtime filters on the producer of a materialized CTE when every consumer is covered by a join.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_spatial_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables spatial join for supported inner spatial joins. The smaller side is indexed locally with an R-tree. The setting is off by default.",

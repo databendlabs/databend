@@ -28,11 +28,15 @@ use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_expression::Expr;
 use parking_lot::RwLock;
 
+use crate::pipelines::processors::transforms::CteRuntimeFilterCollector;
+
 #[derive(Default)]
 pub struct RuntimeFilterState {
     runtime_filters: RwLock<HashMap<usize, RuntimeFilterInfo>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     runtime_scan_filters: RwLock<HashMap<usize, RuntimeScanFilters>>,
+    /// Collectors of CTE producer filters, by the id of each source filter.
+    cte_runtime_filters: RwLock<HashMap<usize, Vec<Arc<CteRuntimeFilterCollector>>>>,
     runtime_filter_logged: AtomicBool,
 }
 
@@ -45,7 +49,29 @@ impl RuntimeFilterState {
         self.runtime_filters.write().clear();
         self.runtime_filter_ready.write().clear();
         self.runtime_scan_filters.write().clear();
+        self.cte_runtime_filters.write().clear();
         self.runtime_filter_logged.store(false, Ordering::SeqCst);
+    }
+
+    pub fn register_cte_runtime_filter(&self, collector: Arc<CteRuntimeFilterCollector>) {
+        for (scan_id, ready) in collector.ready_by_scan() {
+            self.set_runtime_filter_ready(scan_id, ready.clone());
+        }
+        let mut collectors = self.cte_runtime_filters.write();
+        for filter_id in collector.source_filters() {
+            collectors
+                .entry(*filter_id)
+                .or_default()
+                .push(collector.clone());
+        }
+    }
+
+    pub fn get_cte_runtime_filters(&self, filter_id: usize) -> Vec<Arc<CteRuntimeFilterCollector>> {
+        self.cte_runtime_filters
+            .read()
+            .get(&filter_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn register_runtime_scan_filter(&self, scan_id: usize, filter: Arc<dyn RuntimeScanFilter>) {

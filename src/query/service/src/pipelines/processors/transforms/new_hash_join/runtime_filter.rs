@@ -99,6 +99,8 @@ impl RuntimeFiltersDesc {
         for ready in &self.runtime_filters_ready {
             let _ = ready.runtime_filter_watcher.send(Some(()));
         }
+        self.ctx
+            .abandon_cte_runtime_filter_sources(self.filters_desc.iter().map(|desc| desc.id));
     }
 
     pub async fn globalization(&self, mut packet: JoinRuntimeFilterPacket) -> Result<()> {
@@ -109,6 +111,9 @@ impl RuntimeFiltersDesc {
         self.global_build_side_empty
             .store(packet.build_rows == 0, Ordering::Release);
 
+        let cte_sources = self
+            .ctx
+            .cte_runtime_filter_sources(&packet, self.filters_desc.iter().map(|desc| desc.id));
         let runtime_filter_descs = self.filters_desc.iter().map(|r| (r.id, r)).collect();
         let runtime_filter_infos = build_runtime_filter_infos(
             packet,
@@ -127,7 +132,9 @@ impl RuntimeFiltersDesc {
                 .map_err(|_| ErrorCode::TokioError("watcher channel is closed"))?;
         }
 
-        Ok(())
+        self.ctx
+            .publish_cte_runtime_filter_sources(cte_sources)
+            .await
     }
 
     pub fn build_side_empty(&self) -> bool {

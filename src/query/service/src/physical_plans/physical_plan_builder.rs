@@ -36,9 +36,12 @@ use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::optimize_distributed_fuse_pruning;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::runtime_filter::CteFilterSource;
+use crate::physical_plans::runtime_filter::JoinId;
 use crate::sessions::TableContext;
 
 pub struct PhysicalPlanBuilder {
@@ -51,6 +54,14 @@ pub struct PhysicalPlanBuilder {
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub cte_schemas: HashMap<String, DataSchemaRef>,
     pub is_cte_required_columns_collected: bool,
+    /// Producer input of each materialized CTE, by CTE name.
+    pub cte_producers: HashMap<String, PExpr>,
+    /// Subtrees that a CTE producer waits for through its runtime filters.
+    pub cte_producer_waits: HashMap<String, Vec<PExpr>>,
+    /// Join equi-conditions whose build keys feed a CTE producer filter.
+    pub cte_filter_requests: HashMap<JoinId, Vec<usize>>,
+    /// Runtime filters that joins built for `cte_filter_requests`.
+    pub cte_filter_sources: HashMap<CteFilterSource, PhysicalRuntimeFilter>,
     pub build_depth: usize,
     /// Scan IDs that can use the post-pruning block metadata exchange if their finalized
     /// physical-plan fragment runs on all executors.
@@ -69,6 +80,10 @@ impl PhysicalPlanBuilder {
             cte_required_columns: HashMap::new(),
             cte_schemas: HashMap::new(),
             is_cte_required_columns_collected: false,
+            cte_producers: HashMap::new(),
+            cte_producer_waits: HashMap::new(),
+            cte_filter_requests: HashMap::new(),
+            cte_filter_sources: HashMap::new(),
             build_depth: 0,
             distributed_fuse_pruning_scans: HashSet::new(),
         }
@@ -103,6 +118,7 @@ impl PhysicalPlanBuilder {
         if !self.is_cte_required_columns_collected {
             if Self::requires_cte_column_collection(s_expr) {
                 self.collect_cte_required_columns(s_expr, required.clone())?;
+                Self::collect_cte_producers(s_expr, &mut self.cte_producers)?;
             }
             self.is_cte_required_columns_collected = true;
         }
@@ -442,6 +458,16 @@ impl PhysicalPlanBuilder {
             s_expr.plan(),
             PhysicalRelOperator::Sequence(_) | PhysicalRelOperator::MaterializedCTERef(_)
         ) || s_expr.children().any(Self::requires_cte_column_collection)
+    }
+
+    fn collect_cte_producers(s_expr: &PExpr, producers: &mut HashMap<String, PExpr>) -> Result<()> {
+        if let PhysicalRelOperator::MaterializedCTE(cte) = s_expr.plan() {
+            producers.insert(cte.cte_name.clone(), s_expr.child(0)?.clone());
+        }
+        for child in s_expr.children() {
+            Self::collect_cte_producers(child, producers)?;
+        }
+        Ok(())
     }
 
     fn collect_cte_required_columns(&mut self, s_expr: &PExpr, required: ColumnSet) -> Result<()> {

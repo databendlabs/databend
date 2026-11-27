@@ -39,6 +39,10 @@ pub async fn build_and_push_down_runtime_filter(
         );
     }
 
+    let cte_sources = join.ctx.cte_runtime_filter_sources(
+        &packet,
+        join.runtime_filter_desc().iter().map(|desc| desc.id),
+    );
     let runtime_filter_descs = join
         .runtime_filter_desc()
         .iter()
@@ -74,5 +78,7 @@ pub async fn build_and_push_down_runtime_filter(
 
     join.ctx.set_runtime_filter(runtime_filter_infos);
     join.set_bloom_filter_ready()?;
-    Ok(())
+    join.ctx
+        .publish_cte_runtime_filter_sources(cte_sources)
+        .await
 }

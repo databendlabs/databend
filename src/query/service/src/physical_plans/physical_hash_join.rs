@@ -49,6 +49,8 @@ use databend_common_sql::plans::JoinType;
 use tokio::sync::Barrier;
 
 use super::PhysicalPlanCast;
+use super::runtime_filter::CteFilterSource;
+use super::runtime_filter::JoinId;
 use super::runtime_filter::PhysicalRuntimeFilters;
 use super::runtime_filter::RuntimeFilterProbeKey;
 use super::runtime_filter::canonical_equivalence_connector;
@@ -1287,7 +1289,13 @@ impl PhysicalPlanBuilder {
         let non_equi_conditions = self.process_non_equi_conditions(join, &merged_schema)?;
 
         // Step 11: Build runtime filter
-        let runtime_filter = build_runtime_filter(
+        let join_id = JoinId::of(s_expr);
+        let cte_sources = self
+            .cte_filter_requests
+            .get(&join_id)
+            .cloned()
+            .unwrap_or_default();
+        let (runtime_filter, cte_source_filters) = build_runtime_filter(
             self.ctx.clone(),
             &self.metadata,
             join,
@@ -1295,8 +1303,18 @@ impl PhysicalPlanBuilder {
             &right_join_conditions,
             left_join_conditions_rt,
             build_table_indexes,
+            &cte_sources,
         )
         .await?;
+        for (condition, filter) in cte_source_filters {
+            self.cte_filter_sources.insert(
+                CteFilterSource {
+                    join: join_id,
+                    condition,
+                },
+                filter,
+            );
+        }
 
         // Step 12: Create and return the HashJoin
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;

@@ -125,6 +125,7 @@ pub use physical_udf::UdfFunctionDesc;
 pub use physical_union_all::UnionAll;
 pub use physical_window::*;
 pub use physical_window_partition::*;
+pub use runtime_filter::PhysicalCteRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
 

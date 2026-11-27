@@ -89,8 +89,12 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
 /// * `build_keys` - Build side keys
 /// * `probe_keys` - Probe keys with their scan, source column, connector, and null-equality metadata
 ///
+/// * `cte_sources` - Equi-condition indexes whose build keys feed a filter on
+///   a materialized CTE producer. Each gets a filter even without scan targets.
+///
 /// # Returns
-/// Collection of runtime filters to be applied
+/// Collection of runtime filters to be applied, and the filters built for
+/// `cte_sources` by equi-condition index.
 pub async fn build_runtime_filter(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
@@ -99,7 +103,8 @@ pub async fn build_runtime_filter(
     build_keys: &[RemoteExpr],
     probe_keys: Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
     build_table_indexes: Vec<Option<IndexType>>,
-) -> Result<PhysicalRuntimeFilters> {
+    cte_sources: &[usize],
+) -> Result<(PhysicalRuntimeFilters, Vec<(usize, PhysicalRuntimeFilter)>)> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
         return Ok(Default::default());
     }
@@ -123,43 +128,49 @@ pub async fn build_runtime_filter(
     }
 
     let mut filters = Vec::new();
+    let mut cte_source_filters = Vec::new();
     let func_ctx = ctx.get_function_context()?;
 
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
-    for (build_key, probe, build_table_index) in build_keys
+    for (condition, ((build_key, probe), build_table_index)) in build_keys
         .iter()
         .zip(probe_keys)
         .zip(build_table_indexes)
-        .filter_map(|((build_key, probe), table_index)| {
-            probe.map(|probe| (build_key, probe, table_index))
-        })
+        .enumerate()
     {
-        let RuntimeFilterProbeKey {
+        let is_cte_source = cte_sources.contains(&condition);
+        let mut probe_targets = Vec::new();
+        let mut is_null_equal = join
+            .equi_conditions
+            .get(condition)
+            .is_some_and(|condition| condition.is_null_equal);
+        if let Some(RuntimeFilterProbeKey {
             probe_key,
             scan_id,
             column_idx,
             is_connector,
-            is_null_equal,
-        } = probe;
-        if !supported_probe_key_for_runtime_filter(&probe_key, &func_ctx) {
-            continue;
+            is_null_equal: probe_is_null_equal,
+        }) = probe
+        {
+            is_null_equal = probe_is_null_equal;
+            if supported_probe_key_for_runtime_filter(&probe_key, &func_ctx) {
+                probe_targets = find_probe_targets(
+                    metadata,
+                    probe_side,
+                    probe_key,
+                    scan_id,
+                    column_idx,
+                    is_connector,
+                    &func_ctx,
+                )?;
+            }
         }
-
-        let probe_targets = find_probe_targets(
-            metadata,
-            probe_side,
-            probe_key,
-            scan_id,
-            column_idx,
-            is_connector,
-            &func_ctx,
-        )?;
 
         // A valid probe expression may have no safe scan target (e.g. a window
         // output). Skip filter creation and ID allocation when no targets remain.
-        if probe_targets.is_empty() {
+        if probe_targets.is_empty() && !is_cte_source {
             continue;
         }
 
@@ -190,10 +201,13 @@ pub async fn build_runtime_filter(
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
         };
+        if is_cte_source {
+            cte_source_filters.push((condition, runtime_filter.clone()));
+        }
         filters.push(runtime_filter);
     }
 
-    Ok(PhysicalRuntimeFilters { filters })
+    Ok((PhysicalRuntimeFilters { filters }, cte_source_filters))
 }
 
 async fn get_build_table_rows(
@@ -214,7 +228,7 @@ async fn get_build_table_rows(
     Ok(None)
 }
 
-fn find_probe_targets(
+pub(super) fn find_probe_targets(
     metadata: &MetadataRef,
     s_expr: &PExpr,
     probe_key: RemoteExpr<String>,
@@ -340,7 +354,7 @@ fn propagate_probe_targets(
 /// One policy for target paths and equivalence collection. Only traverse
 /// inputs to which a parent scan predicate can commute. Creating a filter
 /// *at* a join does not imply that another join's filter may cross it.
-fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
+pub(super) fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
     match plan {
         // Check every item, not just the RF key: changing the input block can
         // also change projected values or which rows a stateful filter keeps.
@@ -563,7 +577,7 @@ fn safe_expression_domain(expr: &Expr<String>, func_ctx: &FunctionContext) -> Op
     }
 }
 
-fn normalize_probe_target(
+pub(super) fn normalize_probe_target(
     target: &RemoteExpr<String>,
     target_type: &DataType,
     func_ctx: &FunctionContext,
