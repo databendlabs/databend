@@ -185,36 +185,40 @@ where A: TypeCheckAdapter
             .replace_expr_context(ExprContext::InAsyncFunction { alias_first });
         let result = match function {
             CoreAsyncFunction::Sleep(argument) => {
-                let (scalar, _) = *self.resolve_core(arena, argument.expr)?;
-                let return_type = DataType::Number(NumberDataType::UInt8);
-                Box::new((
-                    AsyncFunctionCall {
-                        span,
-                        func_name: "sleep".to_string(),
-                        display_name: format!("sleep({})", argument.display),
-                        return_type: Box::new(return_type.clone()),
-                        arguments: vec![wrap_cast(
-                            &scalar,
-                            &DataType::Number(NumberDataType::Float64),
-                        )],
-                        func_arg: AsyncFunctionArgument::Sleep,
-                    }
-                    .into(),
-                    return_type,
-                ))
+                self.resolve_core(arena, argument.expr).map(|bound| {
+                    let (scalar, _) = *bound;
+                    let return_type = DataType::Number(NumberDataType::UInt8);
+                    Box::new((
+                        AsyncFunctionCall {
+                            span,
+                            func_name: "sleep".to_string(),
+                            display_name: format!("sleep({})", argument.display),
+                            return_type: Box::new(return_type.clone()),
+                            arguments: vec![wrap_cast(
+                                &scalar,
+                                &DataType::Number(NumberDataType::Float64),
+                            )],
+                            func_arg: AsyncFunctionArgument::Sleep,
+                        }
+                        .into(),
+                        return_type,
+                    ))
+                })
             }
             CoreAsyncFunction::NextVal { sequence } => {
-                self.resolve_nextval_async_function(span, sequence)?
+                self.resolve_nextval_async_function(span, sequence)
             }
             CoreAsyncFunction::DictGet(function) => {
-                self.resolve_dict_get_async_function(arena, span, function)?
+                self.resolve_dict_get_async_function(arena, span, function)
             }
             CoreAsyncFunction::ReadFile(function) => {
-                self.resolve_read_file_async_function(arena, span, function)?
+                self.resolve_read_file_async_function(arena, span, function)
             }
         };
-        // Restore the original context
+        // Restore the original context, also on error: matching grouping-set
+        // keys binds the call speculatively and continues after an error.
         self.bind_context.expr_context = original_context;
+        let result = result?;
         self.bind_context.have_async_func = true;
         Ok(result)
     }
