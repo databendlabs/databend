@@ -102,6 +102,7 @@ impl VectorReclusterStrategy {
                     properties,
                     segment.info.summary.cluster_stats.as_ref(),
                     &segment.info.summary.col_stats,
+                    segment.info.summary.row_count,
                 );
                 VectorReclusterSegment::new(segment, stats)
             })
@@ -125,6 +126,7 @@ impl VectorReclusterStrategy {
                 properties,
                 info.summary.cluster_stats.as_ref(),
                 &info.summary.col_stats,
+                info.summary.row_count,
             );
             if stats.level < 0 && block_count >= block_per_segment {
                 continue;

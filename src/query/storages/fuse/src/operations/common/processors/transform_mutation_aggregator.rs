@@ -966,6 +966,7 @@ impl WriteSegmentCtx {
             new_summary.cluster_stats = Some(cluster_stats_from_col_stats(
                 &prepared_exprs,
                 &new_summary.col_stats,
+                new_summary.row_count,
                 cluster_key_info.cluster_key_id(),
                 0,
             ));

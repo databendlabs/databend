@@ -182,9 +182,15 @@ impl RangeIndex {
         ))
     }
 
+    /// Whether the rows described by `stats` may satisfy the expression.
+    ///
+    /// `row_count` is the number of those rows. It is what tells a column
+    /// without values from one whose bounds are unknown; without it, null
+    /// bounds leave the domain of a column unrestricted.
     pub fn apply<F>(
         &self,
         stats: &StatisticsOfColumns,
+        row_count: Option<u64>,
         spatial_stats: Option<&StatisticsOfSpatialColumns>,
         virtual_col_stats: Option<&VirtualColumnStatsOfNames>,
         column_is_default: F,
@@ -212,15 +218,16 @@ impl RangeIndex {
                         let column_stat = stat.to_column_statistics();
                         let data_type = DataType::from(&stat.data_type);
                         if slot.data_type == data_type {
-                            statistics_to_domain(vec![&column_stat], &data_type)
+                            statistics_to_domain(vec![&column_stat], &data_type, row_count)
                         } else if let Some(converted_stat) = cast_virtual_column_statistics(
                             &column_stat,
                             &data_type,
                             &slot.data_type,
                         ) {
-                            statistics_to_domain(vec![&converted_stat], &slot.data_type)
+                            statistics_to_domain(vec![&converted_stat], &slot.data_type, row_count)
                         } else if cast_input_columns.contains(&slot.name) {
-                            let domain = statistics_to_domain(vec![&column_stat], &data_type);
+                            let domain =
+                                statistics_to_domain(vec![&column_stat], &data_type, row_count);
                             virtual_column_types.insert(slot.name.clone(), data_type);
                             domain
                         } else {
@@ -232,16 +239,27 @@ impl RangeIndex {
                 }
                 Some(column_ids) => {
                     let mut column_stats = Vec::with_capacity(column_ids.len());
+                    // Statistics made up for a column the block does not store and
+                    // whose default is NULL, with their position in `column_stats`.
+                    // Blocks that store all their columns never fill it.
+                    let mut null_defaults = Vec::new();
                     for column_id in column_ids {
                         if let Some(stat) = stats.get(column_id) {
                             column_stats.push(stat);
                         } else if column_is_default(column_id) {
                             if let Some(stat) = self.default_stats.get(column_id) {
+                                if let Some(null_default) = null_default_statistics(stat, row_count)
+                                {
+                                    null_defaults.push((column_stats.len(), null_default));
+                                }
                                 column_stats.push(stat);
                             }
                         }
                     }
-                    statistics_to_domain(column_stats, &slot.data_type)
+                    for (position, null_default) in &null_defaults {
+                        column_stats[*position] = null_default;
+                    }
+                    statistics_to_domain(column_stats, &slot.data_type, row_count)
                 }
             };
             input_domains.insert(slot.name.clone(), domain);
@@ -339,26 +357,57 @@ impl RangeIndex {
     }
 }
 
-pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataType) -> Domain {
+/// The statistics that stand in for a column a block does not store when the
+/// column's default is NULL, or `None` if the default statistics do as they are.
+///
+/// A NULL default makes every row of the block null, which is told by the null
+/// count, so it has to be the row count of the block.
+fn null_default_statistics(
+    stat: &ColumnStatistics,
+    row_count: Option<u64>,
+) -> Option<ColumnStatistics> {
+    let row_count = row_count?;
+    if !(stat.min.is_null() && stat.max.is_null()) {
+        return None;
+    }
+    let mut stat = stat.clone();
+    stat.null_count = row_count;
+    Some(stat)
+}
+
+/// The domain of a column over `row_count` rows, from the statistics of its
+/// leaf columns over those rows.
+///
+/// A null bound does not restrict the domain on its side. That the rows are
+/// all NULL is told by the null count of the column being the row count,
+/// never by its bounds alone, so it takes a known `row_count` to conclude it.
+pub fn statistics_to_domain(
+    mut stats: Vec<&ColumnStatistics>,
+    data_type: &DataType,
+    row_count: Option<u64>,
+) -> Domain {
     if stats.len() != data_type.num_leaf_columns() {
         return Domain::full(data_type);
     }
     match data_type {
         DataType::Nullable(deref!(inner_ty)) => {
-            if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
+            // The statistics of a leaf describe the rows of the column only
+            // when the column is that leaf. The leaves of a Tuple do not see
+            // the nulls of the tuple itself, and the leaves of an Array or a
+            // Map describe elements.
+            let row_level = stats.len() == 1
+                && !matches!(
+                    inner_ty,
+                    DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_)
+                );
+            if row_level && row_count.is_some_and(|row_count| stats[0].is_all_null(row_count)) {
                 return Domain::Nullable(NullableDomain {
                     has_null: true,
                     value: None,
                 });
             }
-            let has_null = if stats.len() == 1 && !matches!(inner_ty, &DataType::Array(_)) {
-                stats[0].null_count > 0
-            } else {
-                // Only leaf columns have statistics,
-                // nested columns are treated as having nullable values
-                true
-            };
-            let domain = statistics_to_domain(stats, inner_ty);
+            let has_null = !row_level || stats[0].null_count > 0;
+            let domain = statistics_to_domain(stats, inner_ty, row_count);
             Domain::Nullable(NullableDomain {
                 has_null,
                 value: Some(Box::new(domain)),
@@ -370,21 +419,23 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                 .map(|inner_ty| {
                     let n = inner_ty.num_leaf_columns();
                     let stats = stats.drain(..n).collect();
-                    statistics_to_domain(stats, inner_ty)
+                    statistics_to_domain(stats, inner_ty, row_count)
                 })
                 .collect::<Vec<_>>();
             Domain::Tuple(inner_domains)
         }
+        // The leaves below an Array or a Map describe elements, whose number
+        // is unknown.
         DataType::Array(deref!(inner_ty)) => {
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
-            let inner_domain = statistics_to_domain(stats, inner_ty);
+            let inner_domain = statistics_to_domain(stats, inner_ty, None);
             Domain::Array(Some(Box::new(inner_domain)))
         }
         DataType::Map(deref!(inner_ty)) => {
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
-            let inner_domain = statistics_to_domain(stats, inner_ty);
+            let inner_domain = statistics_to_domain(stats, inner_ty, None);
             Domain::Map(Some(Box::new(inner_domain)))
         }
         DataType::Vector(_) => Domain::full(data_type),
@@ -392,6 +443,10 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
             let stat = stats[0];
             let min = stat.min();
             let max = stat.max();
+            // Only a string domain can leave one side open.
+            if !matches!(data_type, DataType::String) && (min.is_null() || max.is_null()) {
+                return Domain::full(data_type);
+            }
 
             with_number_mapped_type!(|NUM_TYPE| match data_type {
                 DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -400,10 +455,13 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                         max: NumberType::<NUM_TYPE>::try_downcast_scalar(&max.as_ref()).unwrap(),
                     })
                 }
-                DataType::String => Domain::String(StringDomain {
-                    min: min.clone().into_string().unwrap(),
-                    max: Some(max.clone().into_string().unwrap()),
-                }),
+                DataType::String => match min {
+                    Scalar::String(min) => Domain::String(StringDomain {
+                        min: min.clone(),
+                        max: max.as_string().cloned(),
+                    }),
+                    _ => Domain::full(data_type),
+                },
                 DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {
                     min: TimestampType::try_downcast_scalar(&min.as_ref()).unwrap(),
                     max: TimestampType::try_downcast_scalar(&max.as_ref()).unwrap(),

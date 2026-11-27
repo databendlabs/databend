@@ -159,7 +159,8 @@ pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, S
 }
 
 // Trimming must preserve the bounds: trimmed min <= original min, and
-// trimmed max >= original max.
+// trimmed max >= original max. A max that has no trimmed upper bound becomes
+// `Scalar::Null`, i.e. unknown.
 pub trait Trim: Sized {
     fn trim_min(self) -> Self;
     fn trim_max(self) -> Self;
@@ -187,6 +188,13 @@ fn auto_stats_string_prefix_len(min: &str, max: &str) -> usize {
     }
 }
 
+/// Trim the bounds of a column to what its statistics store.
+///
+/// String bounds are cut to a prefix. A prefix is a lower bound as it is, so
+/// a column with values always keeps its lower bound. As an upper bound the
+/// prefix has to be incremented, which a prefix of U+10FFFF only does not
+/// allow: no string of that length bounds the value from above. The upper
+/// bound is then null, i.e. unknown, and the rest of the statistics stay.
 pub(crate) fn trim_column_min_max(
     min: Scalar,
     max: Scalar,
@@ -198,7 +206,7 @@ pub(crate) fn trim_column_min_max(
                 string_truncate_len.unwrap_or_else(|| auto_stats_string_prefix_len(&min, &max));
             (
                 Scalar::String(trim_string_min_with_len(min, truncate_len)),
-                Scalar::String(trim_string_max_with_len(max, truncate_len)),
+                trim_string_max_with_len(max, truncate_len).map_or(Scalar::Null, Scalar::String),
             )
         }
         (min, max) => (min.trim_min(), max.trim_max()),
@@ -217,9 +225,8 @@ impl Trim for Scalar {
 
     fn trim_max(self) -> Self {
         match self {
-            Scalar::String(s) => {
-                Scalar::String(trim_string_max_with_len(s, STATS_STRING_PREFIX_LEN))
-            }
+            Scalar::String(s) => trim_string_max_with_len(s, STATS_STRING_PREFIX_LEN)
+                .map_or(Scalar::Null, Scalar::String),
             v => v,
         }
     }
@@ -235,54 +242,40 @@ pub fn trim_string_min_with_len(s: String, len: usize) -> String {
     }
 }
 
-/// Returns an upper bound of `s`. A value with more than `len` scalars
-/// normally gets a bound of exactly `len` scalars.
+/// Returns an upper bound of `s` with at most `len` scalars, or `None` if
+/// there is none.
 ///
-/// If the first `len` scalars of `s` are all U+10FFFF, no string with at most
-/// `len` scalars is an upper bound. Advance the first incrementable scalar
-/// after the prefix only if there is a suffix to drop; otherwise keep `s`.
-/// Either way the bound has more than `len` scalars, so readers that infer
-/// `may_be_truncated` from the stored length still treat it as inexact.
-pub fn trim_string_max_with_len(mut s: String, len: usize) -> String {
+/// A value with more than `len` scalars gets a bound of exactly `len` scalars:
+/// its prefix with the last scalar that can be incremented advanced. If the
+/// first `len` scalars of `s` are all U+10FFFF, nothing can be advanced and no
+/// string of that length is an upper bound. The bound is then left unknown
+/// rather than made as long as the value, so that the size of the statistics
+/// stays bounded.
+pub fn trim_string_max_with_len(s: String, len: usize) -> Option<String> {
     if s.len() <= len {
-        return s;
+        return Some(s);
     }
     let Some((end, _)) = s.char_indices().nth(len) else {
-        return s;
+        return Some(s);
     };
     let prefix = &s[..end];
 
     // Carry past trailing U+10FFFF scalars of the prefix.
-    if let Some((trailing_max_chars, (idx, c))) = prefix
+    let (trailing_max_chars, (idx, c)) = prefix
         .char_indices()
         .rev()
         .enumerate()
-        .find(|(_, (_, c))| *c < END_OF_UNICODE_RANGE)
-    {
-        let mut result = String::with_capacity(end);
-        result.push_str(&prefix[..idx]);
-        result.push(next_scalar(c));
-        // The incremented scalar makes the bound greater than the original value,
-        // so pad with the smallest scalar for the tightest fixed-length bound.
-        // Keep `len` scalars: readers infer may_be_truncated from the stored length
-        // and must not mistake a shortened successor for an exact max.
-        result.extend(std::iter::repeat_n('\0', trailing_max_chars));
-        return result;
-    }
+        .find(|(_, (_, c))| *c < END_OF_UNICODE_RANGE)?;
 
-    // Reuse the original buffer: the exceptional prefix can be large.
-    if let Some((offset, c)) = s[end..]
-        .char_indices()
-        .find(|(_, c)| *c < END_OF_UNICODE_RANGE)
-        && end + offset + c.len_utf8() < s.len()
-    {
-        s.truncate(end + offset);
-        s.push(next_scalar(c));
-        // The prefix may be short compared with the original value. Don't
-        // retain the full input allocation for a small statistics bound.
-        s.shrink_to_fit();
-    }
-    s
+    let mut result = String::with_capacity(end);
+    result.push_str(&prefix[..idx]);
+    result.push(next_scalar(c));
+    // The incremented scalar makes the bound greater than the original value,
+    // so pad with the smallest scalar for the tightest fixed-length bound.
+    // Keep `len` scalars: readers infer may_be_truncated from the stored length
+    // and must not mistake a shortened successor for an exact max.
+    result.extend(std::iter::repeat_n('\0', trailing_max_chars));
+    Some(result)
 }
 
 fn next_scalar(c: char) -> char {
@@ -300,6 +293,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
     use databend_common_expression::DataBlock;
@@ -312,6 +306,8 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::type_check::check_function;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
     use databend_common_functions::BUILTIN_FUNCTIONS;
     use databend_storages_common_index::RangeIndex;
@@ -386,20 +382,6 @@ mod tests {
     }
 
     #[test]
-    fn test_trim_column_min_max_past_adaptive_prefix() {
-        let expected_min = "\u{10FFFF}".repeat(MAX_AUTO_STATS_STRING_PREFIX_LEN);
-        let prefix = format!("{expected_min}\u{10FFFF}");
-        let (min, max) = trim_column_min_max(
-            Scalar::String(format!("{prefix}a-suffix")),
-            Scalar::String(format!("{prefix}z-suffix")),
-            None,
-        );
-
-        assert_eq!(min, Scalar::String(expected_min));
-        assert_eq!(max, Scalar::String(format!("{prefix}{{")));
-    }
-
-    #[test]
     fn test_trim_string_max_with_len() {
         for (input, len, expected) in [
             ("", 4, ""),
@@ -417,15 +399,27 @@ mod tests {
             ("\0-suffix", 1, "\u{1}"),
             ("a\0\0z-suffix", 4, "a\0\0{"),
             ("\u{10FFFF}", 1, "\u{10FFFF}"),
-            ("\u{10FFFF}-suffix", 1, "\u{10FFFF}."),
-            ("\u{10FFFF}\u{10FFFF}-suffix", 1, "\u{10FFFF}\u{10FFFF}."),
-            ("\u{10FFFF}\u{10FFFF}z", 1, "\u{10FFFF}\u{10FFFF}z"),
-            ("\u{10FFFF}\u{7F}", 1, "\u{10FFFF}\u{7F}"),
-            ("\u{10FFFF}\u{10FFFF}", 1, "\u{10FFFF}\u{10FFFF}"),
+        ] {
+            assert_eq!(
+                trim_string_max_with_len(input.to_string(), len).as_deref(),
+                Some(expected),
+                "input={input:?}, len={len}"
+            );
+        }
+
+        // A value longer than a prefix of U+10FFFF only has no upper bound of
+        // the prefix's length, whatever follows the prefix.
+        for (input, len) in [
+            ("\u{10FFFF}-suffix", 1),
+            ("\u{10FFFF}\u{10FFFF}-suffix", 1),
+            ("\u{10FFFF}\u{10FFFF}z", 1),
+            ("\u{10FFFF}\u{7F}", 1),
+            ("\u{10FFFF}\u{10FFFF}", 1),
+            ("\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}z", 4),
         ] {
             assert_eq!(
                 trim_string_max_with_len(input.to_string(), len),
-                expected,
+                None,
                 "input={input:?}, len={len}"
             );
         }
@@ -442,7 +436,7 @@ mod tests {
                         END_OF_UNICODE_RANGE.to_string().repeat(trailing_max_chars)
                     );
                     let min = trim_string_min_with_len(input.clone(), len);
-                    let max = trim_string_max_with_len(input.clone(), len);
+                    let max = trim_string_max_with_len(input.clone(), len).unwrap();
                     let old_max = format!(
                         "{prefix}{}",
                         END_OF_UNICODE_RANGE
@@ -512,10 +506,53 @@ mod tests {
             )
             .unwrap();
 
-            assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+            assert!(!index.apply(&stats, Some(1), None, None, |_| false).unwrap());
             stats.get_mut(&0).unwrap().max = Scalar::String(old_bound.to_string());
-            assert!(index.apply(&stats, None, None, |_| false).unwrap());
+            assert!(index.apply(&stats, Some(1), None, None, |_| false).unwrap());
         }
+    }
+
+    #[test]
+    fn test_trim_column_min_max() {
+        let max_chars = |n| END_OF_UNICODE_RANGE.to_string().repeat(n);
+
+        // The upper bound carries past trailing U+10FFFF.
+        let prefix = format!("a{}", max_chars(STATS_STRING_PREFIX_LEN - 1));
+        let value = Scalar::String(format!("{prefix}-suffix"));
+        let len = Some(STATS_STRING_PREFIX_LEN);
+        let (min, max) = trim_column_min_max(value.clone(), value, len);
+        assert_eq!(min, Scalar::String(prefix));
+        assert_eq!(
+            max,
+            Scalar::String(format!("b{}", "\0".repeat(STATS_STRING_PREFIX_LEN - 1)))
+        );
+        assert!(max.as_string().unwrap().len() >= STATS_STRING_PREFIX_LEN);
+
+        // A prefix of U+10FFFF only cannot carry: the lower bound stays and
+        // the upper bound is unknown.
+        for kept in [1, 4, STATS_STRING_PREFIX_LEN] {
+            let value = Scalar::String(format!("{}z", max_chars(kept)));
+            let (min, max) =
+                trim_column_min_max(Scalar::String("a".to_string()), value.clone(), Some(kept));
+            assert_eq!(min, Scalar::String("a".to_string()));
+            assert_eq!(max, Scalar::Null);
+
+            let (min, max) = trim_column_min_max(value.clone(), value, Some(kept));
+            assert_eq!(min, Scalar::String(max_chars(kept)));
+            assert_eq!(max, Scalar::Null);
+        }
+        // Without an explicit length, the bounds of a column are cut where
+        // they differ, 16 characters in at the earliest.
+        let value = Scalar::String(format!("{}z", max_chars(STATS_STRING_PREFIX_LEN)));
+        let (min, max) = trim_column_min_max(Scalar::String("a".to_string()), value, None);
+        assert_eq!(min, Scalar::String("a".to_string()));
+        assert_eq!(max, Scalar::Null);
+
+        // Other bounds are stored as they are.
+        let (min, max) = trim_column_min_max(Scalar::from(1_i32), Scalar::from(2_i32), Some(4));
+        assert_eq!((min, max), (Scalar::from(1_i32), Scalar::from(2_i32)));
+        let (min, max) = trim_column_min_max(Scalar::Null, Scalar::Null, Some(4));
+        assert_eq!((min, max), (Scalar::Null, Scalar::Null));
     }
 
     #[test]
@@ -538,25 +575,51 @@ mod tests {
     }
 
     #[test]
+    fn test_unknown_string_max_keeps_the_rest_of_the_statistics() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::String.wrap_nullable(),
+        )]));
+        let unbounded = format!("{}z", END_OF_UNICODE_RANGE.to_string().repeat(4));
+        let block = DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![
+            Some("a"),
+            None,
+            Some(unbounded.as_str()),
+        ])]);
+
+        let stats = gen_columns_statistics(
+            &block,
+            None,
+            &schema,
+            &BTreeMap::from([(0, 4)]),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let stats = &stats[&0];
+        assert_eq!(stats.min(), &Scalar::String("a".to_string()));
+        assert_eq!(stats.max(), &Scalar::Null);
+        assert_eq!(stats.null_count, 1);
+        assert_eq!(stats.distinct_of_values, Some(2));
+        assert!(!stats.is_all_null(3));
+    }
+
+    #[test]
     fn test_trim_max() {
         {
-            // No scalar can be incremented, so the value is its own upper bound.
-            let s = END_OF_UNICODE_RANGE
-                .to_string()
-                .repeat(STATS_STRING_PREFIX_LEN + 1);
-            let scalar = Scalar::String(s);
-            assert_eq!(scalar.clone().trim_max(), scalar);
-        }
-
-        {
-            // The bound extends past the prefix to the first scalar it can increment.
+            // No string of the prefix's length is an upper bound, whether or
+            // not a later scalar could be incremented: the bound is unknown.
             let prefix = END_OF_UNICODE_RANGE
                 .to_string()
-                .repeat(STATS_STRING_PREFIX_LEN + 2);
-            for (suffix, successor) in [("z-suffix", '{'), ("\u{D7FF}-suffix", '\u{E000}')] {
+                .repeat(STATS_STRING_PREFIX_LEN);
+            for suffix in [
+                "\u{10FFFF}",
+                "z",
+                "z-suffix",
+                "\u{10FFFF}\u{10FFFF}z-suffix",
+            ] {
                 let res = Scalar::String(format!("{prefix}{suffix}")).trim_max();
-                let exp = format!("{prefix}{successor}");
-                assert_eq!(res, Scalar::String(exp));
+                assert_eq!(res, Scalar::Null, "suffix={suffix:?}");
             }
         }
 
@@ -589,5 +652,40 @@ mod tests {
 
             assert_eq!(res, Scalar::String(exp));
         }
+    }
+
+    /// Reducing statistics takes null bounds for "no value", so the elements
+    /// of an array must get a lower bound as soon as one of them has a value.
+    #[test]
+    fn test_array_elements_with_a_value_have_a_lower_bound() {
+        let element = TableDataType::Number(NumberDataType::Int32).wrap_nullable();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Array(Box::new(element)),
+        )]));
+        let data_type = DataType::from(schema.field(0).data_type());
+        let stats_of = |elements: Vec<Option<i32>>| {
+            let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+            builder.push(Scalar::Array(Int32Type::from_opt_data(elements)).as_ref());
+            let block = DataBlock::new_from_columns(vec![builder.build()]);
+            let stats =
+                gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())
+                    .unwrap();
+            stats[&0].clone()
+        };
+        let five = Scalar::Number(5_i32.into());
+
+        let empty = stats_of(vec![]);
+        assert_eq!((empty.min(), empty.max()), (&Scalar::Null, &Scalar::Null));
+        assert_eq!(empty.null_count, 0);
+
+        let nulls = stats_of(vec![None, None]);
+        assert_eq!((nulls.min(), nulls.max()), (&Scalar::Null, &Scalar::Null));
+        assert_eq!(nulls.null_count, 2);
+
+        // The null count is of elements: two in a block of one row.
+        let with_value = stats_of(vec![None, None, Some(5)]);
+        assert_eq!((with_value.min(), with_value.max()), (&five, &five));
+        assert_eq!(with_value.null_count, 2);
     }
 }

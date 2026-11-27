@@ -439,6 +439,17 @@ impl ColumnStatistics {
         &self.max
     }
 
+    /// Whether the `row_count` rows these statistics cover are all NULL.
+    ///
+    /// Null bounds alone do not tell. They say that the rows hold no non-null
+    /// value of a leaf column, which is as true of the elements of empty
+    /// arrays and of a field of NULL tuples. The null count tells, and only
+    /// where it counts rows; the statistics of Array and Map elements count
+    /// elements instead.
+    pub fn is_all_null(&self, row_count: u64) -> bool {
+        self.null_count == row_count && self.min.is_null() && self.max.is_null()
+    }
+
     /// Retag Decimal bounds after a metadata-only precision widening.
     pub fn widen_decimal_size(&mut self, size: DecimalSize) -> DatabendResult<()> {
         widen_decimal_scalar(&mut self.min, size)?;
@@ -806,7 +817,14 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
 
         while let Some(key) = access.next_key::<ColumnId>()? {
             if let Ok(value) = access.next_value::<ColumnStatistics>() {
-                if value.max.is_null() && value.min.is_null() {
+                // A bound may be null on its own when it is unknown, as the upper bound of
+                // a string column can be. The other bound still tells the type.
+                let bound = if value.max.is_null() {
+                    &value.min
+                } else {
+                    &value.max
+                };
+                if bound.is_null() {
                     // If scalar values of min and max are all NULL, they should be retained.
                     //
                     // This ensures that columns with only NULL values have their column statistics
@@ -815,7 +833,7 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
                     // would be missing as well.
                     map.insert(key, value);
                 } else {
-                    let data_type = value.max.as_ref().infer_data_type();
+                    let data_type = bound.as_ref().infer_data_type();
                     if supported_stat_type(&data_type) {
                         map.insert(key, value);
                     } else {
@@ -874,6 +892,36 @@ mod tests {
         let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
 
         assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
+    }
+
+    #[test]
+    fn reads_column_statistics_with_an_unknown_bound() {
+        let string = |value: &str| Scalar::String(value.to_string());
+        let col_stats = HashMap::from([
+            // The upper bound of a string column may be unknown on its own.
+            (
+                0,
+                ColumnStatistics::new(string("a"), Scalar::Null, 1, 8, Some(2)),
+            ),
+            (
+                1,
+                ColumnStatistics::new(Scalar::Null, Scalar::Null, 3, 0, Some(0)),
+            ),
+            (
+                2,
+                ColumnStatistics::new(string("a"), string("b"), 0, 8, Some(2)),
+            ),
+        ]);
+        let summary = Statistics {
+            row_count: 3,
+            col_stats: col_stats.clone(),
+            ..Default::default()
+        };
+
+        let bytes = rmp_serde::to_vec_named(&summary).unwrap();
+        let decoded: Statistics = rmp_serde::from_slice(&bytes).unwrap();
+
+        assert_eq!(decoded.col_stats, col_stats);
     }
 
     #[test]

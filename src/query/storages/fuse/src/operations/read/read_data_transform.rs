@@ -173,7 +173,8 @@ impl AsyncBlockingTransform for ReadDataTransform {
                 .as_ref()
                 .and_then(|index| index.virtual_block_meta.as_ref())
                 .map(|meta| &meta.virtual_column_stats);
-            let stats = RuntimeScanStatistics::new(part_info.columns_stat.as_ref(), virtual_stats);
+            let stats = RuntimeScanStatistics::new(part_info.columns_stat.as_ref(), virtual_stats)
+                .with_row_count(Some(part_info.nums_rows as u64));
             if self.runtime_scan_filters.should_prune(stats)
                 || expr_runtime_pruner.prune(&part).await?
             {

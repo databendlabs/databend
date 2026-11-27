@@ -89,6 +89,7 @@ impl SegmentPruner {
 
             let range_input = RangeIndexInput::new(
                 &info.summary().col_stats,
+                info.summary().row_count,
                 info.summary().spatial_stats.as_ref(),
             );
             if pruning_cost.measure(PruningCostKind::SegmentsRange, || {

@@ -82,8 +82,12 @@ fn column_statistics(
     block_count: u64,
     is_element: bool,
 ) -> std::result::Result<BasicColumnStatistics, String> {
-    let min = stat.min.clone().to_datum();
-    let max = stat.max.clone().to_datum();
+    // A bound unknown on one side, as the upper bound of a string column can
+    // be, leaves the range unknown; the null count and the NDV still hold.
+    let (min, max) = match (stat.min.clone().to_datum(), stat.max.clone().to_datum()) {
+        (Some(min), Some(max)) => (Some(min), Some(max)),
+        _ => (None, None),
+    };
     let single_block = block_count == 1;
     let (ndv, num_rows) = if is_element {
         let ndv = match (hll, stat.distinct_of_values) {
@@ -421,17 +425,31 @@ mod tests {
                 (1, stat(int(10), int(0), 20)),
                 (2, stat(string("b"), string("a"), 20)),
                 (3, stat(int(0), string("a"), 20)),
-                (4, stat(int(0), Scalar::Null, 20)),
-                (5, stat(int(0), int(10), 3001)),
+                (4, stat(int(0), int(10), 3001)),
             ]),
             &TableSchema::empty(),
         );
-        for column_id in 1..=5 {
+        for column_id in 1..=4 {
             assert!(
                 provider.column_statistics(column_id).is_none(),
                 "column {column_id}"
             );
         }
+    }
+
+    /// A bound that is null on its own is unknown, as the upper bound of a
+    /// string column can be. The column keeps its statistics without a range.
+    #[test]
+    fn test_one_unknown_bound_leaves_the_range_unknown() {
+        let string = |value: &str| Scalar::String(value.to_string());
+        let provider = provider_of(
+            HashMap::from([(1, stat(string("a"), Scalar::Null, 20))]),
+            &TableSchema::empty(),
+        );
+
+        let stats = provider.column_statistics(1).unwrap();
+        assert_eq!((stats.min(), stats.max()), (None, None));
+        assert_eq!(stats.null_count(), 20);
     }
 
     #[test]

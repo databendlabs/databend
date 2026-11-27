@@ -120,7 +120,7 @@ fn test_range_index_prunes_integer_column_eq_numeric_string_literal() {
     let expr = parse_expr("a = '4'", &[("a", Int32Type::data_type())]);
     let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
-    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
     let expr = parse_expr("a = '4'", &[("a", Int32Type::data_type().wrap_nullable())]);
     let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
-    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn test_range_index_prunes_by_virtual_column_statistics() {
 
     assert!(
         !index
-            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .apply(&Default::default(), None, None, Some(&stats), |_| false)
             .unwrap()
     );
 }
@@ -206,7 +206,7 @@ fn test_range_index_prunes_typed_virtual_column_with_converted_statistics() {
 
     assert!(
         !index
-            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .apply(&Default::default(), None, None, Some(&stats), |_| false)
             .unwrap()
     );
 }
@@ -238,7 +238,7 @@ fn test_range_index_keeps_typed_virtual_column_when_statistics_cast_overflows() 
 
     assert!(
         index
-            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .apply(&Default::default(), None, None, Some(&stats), |_| false)
             .unwrap()
     );
 }
@@ -274,7 +274,7 @@ fn test_range_index_prunes_try_cast_virtual_column_by_physical_type() {
 
     assert!(
         !index
-            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .apply(&Default::default(), None, None, Some(&stats), |_| false)
             .unwrap()
     );
 }
@@ -310,7 +310,7 @@ fn test_range_index_keeps_variant_function_with_typed_virtual_column_statistics(
 
     assert!(
         index
-            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .apply(&Default::default(), None, None, Some(&stats), |_| false)
             .unwrap()
     );
 }
@@ -346,7 +346,7 @@ fn test_range_index_keeps_mixed_cast_and_variant_function_virtual_column_referen
 
     assert!(
         index
-            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .apply(&Default::default(), None, None, Some(&stats), |_| false)
             .unwrap()
     );
 }
@@ -368,7 +368,7 @@ fn test_range_index_keeps_without_virtual_column_statistics() {
 
     assert!(
         index
-            .apply(&Default::default(), None, None, |_| false)
+            .apply(&Default::default(), None, None, None, |_| false)
             .unwrap()
     );
 }
@@ -421,11 +421,15 @@ fn test_range_index_keeps_nullable_boolean_cast_under_is_true() {
     let index = RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
         .unwrap();
 
-    assert!(index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(index.apply(&stats, None, None, None, |_| false).unwrap());
 
     let inverted_index =
         RangeIndex::try_create(func_ctx, &inverted_expr, schema, Default::default()).unwrap();
-    assert!(inverted_index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(
+        inverted_index
+            .apply(&stats, None, None, None, |_| false)
+            .unwrap()
+    );
 }
 
 #[test]
@@ -511,13 +515,13 @@ fn test_range_index_plain_predicate_without_rewrite_candidates() {
 
     // Pruned by the first conjunct: '2815' is outside [3000, 3100].
     let stats = make_stats("3000", "3100", 0, 100);
-    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, None, |_| false).unwrap());
     // Kept: both conjuncts overlap the block ranges.
     let stats = make_stats("2800", "2900", 0, 100);
-    assert!(index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(index.apply(&stats, None, None, None, |_| false).unwrap());
     // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
     let stats = make_stats("2800", "2900", 1000, 2000);
-    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -547,7 +551,7 @@ fn test_range_index_rewrites_candidates_nested_under_and() {
         )
         .unwrap();
         assert!(
-            !index.apply(&stats, None, None, |_| false).unwrap(),
+            !index.apply(&stats, None, None, None, |_| false).unwrap(),
             "{text} should prune the block"
         );
     }
@@ -634,13 +638,13 @@ fn test_range_index_int_column_string_literal_with_contains() {
 
     // Pruned by the first conjunct: 2815 is outside [3000, 3100].
     let stats = make_stats(3000, 3100, 0, 100);
-    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, None, |_| false).unwrap());
     // Kept: both conjuncts overlap the block ranges.
     let stats = make_stats(2800, 2900, 0, 100);
-    assert!(index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(index.apply(&stats, None, None, None, |_| false).unwrap());
     // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
     let stats = make_stats(2800, 2900, 1000, 2000);
-    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -892,7 +896,7 @@ fn run_text_with_schema(
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(&stats, None, None, |_| false) {
+    match index.apply(&stats, None, None, None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -939,7 +943,7 @@ fn run_text(file: &mut impl Write, text: &str, domains: &[(&str, Scalar, Scalar)
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(&stats, None, None, |_| false) {
+    match index.apply(&stats, None, None, None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -970,7 +974,7 @@ fn run_text_spatial(
     writeln!(file, "expr      : {expr}").unwrap();
     writeln!(file, "spatial   : {spatial_stats:?}").unwrap();
 
-    match index.apply(&stats, spatial_stats.as_ref(), None, |_| false) {
+    match index.apply(&stats, None, spatial_stats.as_ref(), None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -1002,4 +1006,142 @@ fn build_spatial_stats(
         is_valid: true,
     };
     [(column_id, stats)].into_iter().collect()
+}
+
+fn column_stats(min: Scalar, max: Scalar, null_count: u64) -> ColumnStatistics {
+    ColumnStatistics::new(min, max, null_count, 0, None)
+}
+
+/// Whether `text` may hold over `row_count` rows of a column `a` of type `ty`
+/// whose only leaf has the statistics `stats`. As in a pushed-down filter, a
+/// comparison of a nullable column has to be wrapped in `is_true`: only an
+/// expression that folds to false rules the rows out.
+fn keeps(text: &str, ty: &TableDataType, stats: ColumnStatistics, row_count: Option<u64>) -> bool {
+    let schema = Arc::new(TableSchema::new(vec![TableField::new("a", ty.clone())]));
+    let leaf = schema.leaf_columns_of(&"a".to_string())[0];
+    let expr = parse_expr(text, &[("a", ty.into())]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    index
+        .apply(
+            &HashMap::from([(leaf, stats)]),
+            row_count,
+            None,
+            None,
+            |_| false,
+        )
+        .unwrap()
+}
+
+#[test]
+fn test_range_index_tells_all_null_by_null_count() {
+    let ty = TableDataType::Number(NumberDataType::Int32).wrap_nullable();
+    let null_bounds = || column_stats(Scalar::Null, Scalar::Null, 10);
+
+    // Every row is null.
+    assert!(!keeps("is_true(a = 1)", &ty, null_bounds(), Some(10)));
+    assert!(!keeps("a is not null", &ty, null_bounds(), Some(10)));
+    assert!(keeps("a is null", &ty, null_bounds(), Some(10)));
+
+    // Null bounds over rows that are not all null, or over an unknown number
+    // of rows, are unknown bounds: the rows may hold any value.
+    for row_count in [Some(11), None] {
+        assert!(keeps("is_true(a = 1)", &ty, null_bounds(), row_count));
+        assert!(keeps("a is not null", &ty, null_bounds(), row_count));
+        assert!(keeps("a is null", &ty, null_bounds(), row_count));
+    }
+}
+
+#[test]
+fn test_range_index_string_without_upper_bound() {
+    for ty in [TableDataType::String, TableDataType::String.wrap_nullable()] {
+        for row_count in [Some(5), None] {
+            let open = || column_stats(Scalar::String("b".to_string()), Scalar::Null, 0);
+            // Nothing bounds the values from above.
+            assert!(keeps("a > 'zzz'", &ty, open(), row_count));
+            assert!(keeps("a = 'c'", &ty, open(), row_count));
+            // The lower bound still holds.
+            assert!(!keeps("a < 'b'", &ty, open(), row_count));
+            assert!(!keeps("a = 'a'", &ty, open(), row_count));
+        }
+    }
+}
+
+#[test]
+fn test_range_index_null_bounds_of_non_nullable_column() {
+    let unknown = || column_stats(Scalar::Null, Scalar::Null, 0);
+    let int = TableDataType::Number(NumberDataType::Int32);
+    assert!(keeps("a = 1", &int, unknown(), Some(3)));
+    assert!(keeps("a = 'x'", &TableDataType::String, unknown(), Some(3)));
+}
+
+#[test]
+fn test_range_index_nested_leaf_does_not_tell_row_nulls() {
+    let int = TableDataType::Number(NumberDataType::Int32);
+    let n = |n: i32| Scalar::Number(n.into());
+
+    // The leaf of an array describes elements. A row holding `[]` has no
+    // element at all, and a row holding `[NULL]` has as many null elements as
+    // there are rows; neither makes the array itself null.
+    let array = TableDataType::Array(Box::new(int.wrap_nullable())).wrap_nullable();
+    for element_nulls in [0, 1] {
+        let elements = column_stats(Scalar::Null, Scalar::Null, element_nulls);
+        assert!(keeps("a is not null", &array, elements.clone(), Some(1)));
+        assert!(keeps("a is null", &array, elements, Some(1)));
+    }
+
+    // The leaf of a tuple does not see the nulls of the tuple: a null field
+    // does not make the tuple null, and a field without nulls does not make
+    // the tuple non-null.
+    let tuple = |field: TableDataType| {
+        TableDataType::Tuple {
+            fields_name: vec!["x".to_string()],
+            fields_type: vec![field],
+        }
+        .wrap_nullable()
+    };
+    let null_field = column_stats(Scalar::Null, Scalar::Null, 1);
+    assert!(keeps(
+        "a is not null",
+        &tuple(int.wrap_nullable()),
+        null_field,
+        Some(1)
+    ));
+    let no_nulls = column_stats(n(0), n(0), 0);
+    assert!(keeps("a is null", &tuple(int), no_nulls, Some(1)));
+}
+
+#[test]
+fn test_range_index_default_of_absent_column() {
+    let ty = TableDataType::Number(NumberDataType::Int32).wrap_nullable();
+    let schema = Arc::new(TableSchema::new(vec![TableField::new("a", ty.clone())]));
+    // The rows of a block that does not store the column read as its default.
+    let keeps = |text: &str, default: Scalar| {
+        let expr = parse_expr(text, &[("a", (&ty).into())]);
+        let default_stats = HashMap::from([(0, column_stats(default.clone(), default, 0))]);
+        let index = RangeIndex::try_create(
+            FunctionContext::default(),
+            &expr,
+            schema.clone(),
+            default_stats,
+        )
+        .unwrap();
+        index
+            .apply(&HashMap::new(), Some(3), None, None, |_| true)
+            .unwrap()
+    };
+
+    assert!(!keeps("a is not null", Scalar::Null));
+    assert!(!keeps("is_true(a = 7)", Scalar::Null));
+    assert!(keeps("a is null", Scalar::Null));
+
+    let seven = Scalar::Number(7_i32.into());
+    assert!(keeps("is_true(a = 7)", seven.clone()));
+    assert!(!keeps("is_true(a = 8)", seven.clone()));
+    assert!(!keeps("a is null", seven));
 }

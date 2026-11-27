@@ -236,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn test_column_stats_state_string_max_past_truncate_len() -> Result<()> {
+    fn test_column_stats_state_string_max_without_truncated_bound() -> Result<()> {
         let data_type = DataType::Nullable(Box::new(DataType::String));
         let schema = Arc::new(TableSchema::new(vec![TableField::new(
             "a",
@@ -244,7 +244,8 @@ mod tests {
         )]));
         let truncate_lens = BTreeMap::from([(0, 4)]);
         let stats_columns = vec![(0, data_type.clone())];
-        // No string of at most four scalars is an upper bound of this value (#21130).
+        // No string of at most four scalars is an upper bound of this value (#21130),
+        // so its upper bound is unknown: both writers store a null max and keep the min.
         let prefix = "\u{10FFFF}".repeat(4);
         let input = format!("{prefix}z-suffix");
         let blocks = [
@@ -273,7 +274,7 @@ mod tests {
 
             assert_eq!(actual, expected);
             assert_eq!(actual[&0].min(), &Scalar::String(min.to_string()));
-            assert_eq!(actual[&0].max(), &Scalar::String(format!("{prefix}{{")));
+            assert_eq!(actual[&0].max(), &Scalar::Null);
         }
         Ok(())
     }

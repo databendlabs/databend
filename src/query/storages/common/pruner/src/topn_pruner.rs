@@ -141,6 +141,16 @@ impl TopNPruner {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        // A bound that is null next to a known one is an unknown bound, as the
+        // upper bound of a string that could not be truncated. Such a block
+        // cannot be ordered against the others, so nothing is pruned.
+        if id_stats
+            .iter()
+            .any(|(_, stat, _)| stat.min().is_null() != stat.max().is_null())
+        {
+            return Ok(metas);
+        }
+
         // For descending order, we determine a lower bound for the Nth largest value.
         // Any block with a max_val below this lower bound can be discarded.
         // For ascending order, we determine an upper bound for the Nth smallest value.
@@ -404,6 +414,48 @@ mod tests {
         let result = pruner.prune(metas).unwrap();
         let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
         assert_eq!(kept_blocks, vec![0, 2]);
+    }
+
+    /// The upper bound of a string whose retained prefix is all U+10FFFF is
+    /// unknown and stored as null. A block with one may hold the largest
+    /// values, so it must survive in either direction.
+    #[test]
+    fn test_unknown_upper_bound_is_not_pruned() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::String.wrap_nullable(),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::String.wrap_nullable(),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+        let string = |s: &str| Scalar::String(s.to_string());
+        let block = |block_id, min: &str, max: Option<&str>, matched_rows| {
+            let max = max.map_or(Scalar::Null, string);
+            let stats = ColumnStatistics::new(string(min), max, 0, 0, None);
+            build_block_with_stats(column_id, block_id, stats, matched_rows)
+        };
+        let kept = |asc, limit, metas| {
+            let pruner =
+                TopNPruner::create(schema.clone(), vec![(sort_expr.clone(), asc, false)], limit);
+            let result = pruner.prune(metas).unwrap();
+            let mut kept: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+            kept.sort();
+            kept
+        };
+
+        // The only block that matches.
+        assert_eq!(kept(false, 1, vec![block(0, "x", None, 3)]), vec![0]);
+        assert_eq!(kept(true, 1, vec![block(0, "x", None, 3)]), vec![0]);
+
+        // Next to blocks with known bounds.
+        for asc in [false, true] {
+            let metas = vec![block(0, "a", None, 1), block(1, "b", Some("c"), 5)];
+            assert_eq!(kept(asc, 3, metas), vec![0, 1]);
+        }
     }
 
     fn build_block(

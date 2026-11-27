@@ -241,10 +241,10 @@ impl AsyncSink for SendPartInfoSink {
                     .virtual_block_meta
                     .as_ref()
                     .map(|meta| &meta.virtual_column_stats);
-                !filters.should_prune(RuntimeScanStatistics::new(
-                    Some(&meta.col_stats),
-                    virtual_stats,
-                ))
+                !filters.should_prune(
+                    RuntimeScanStatistics::new(Some(&meta.col_stats), virtual_stats)
+                        .with_row_count(Some(meta.row_count)),
+                )
             });
             if block_metas.len() != before {
                 self.send_part_state.mark_incomplete();
@@ -328,7 +328,8 @@ impl SendPartInfoSink {
                 .virtual_block_meta
                 .as_ref()
                 .map(|meta| &meta.virtual_column_stats);
-            let stats = RuntimeScanStatistics::new(Some(&block_meta.col_stats), virtual_stats);
+            let stats = RuntimeScanStatistics::new(Some(&block_meta.col_stats), virtual_stats)
+                .with_row_count(Some(block_meta.row_count));
             if self.runtime_scan_filters.should_prune(stats) {
                 self.send_part_state.mark_incomplete();
                 continue;
@@ -385,7 +386,8 @@ impl SendPartInfoSink {
                 .virtual_block_meta
                 .as_ref()
                 .map(|meta| &meta.virtual_column_stats);
-            let stats = RuntimeScanStatistics::new(Some(&block_meta.col_stats), virtual_stats);
+            let stats = RuntimeScanStatistics::new(Some(&block_meta.col_stats), virtual_stats)
+                .with_row_count(Some(block_meta.row_count));
             if self.runtime_scan_filters.should_prune(stats) {
                 self.send_part_state.mark_incomplete();
                 continue;

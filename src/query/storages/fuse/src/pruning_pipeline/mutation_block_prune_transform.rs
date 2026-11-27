@@ -126,8 +126,11 @@ impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for MutationSegmen
         let (segment_location, info) = data.segments;
 
         if let Some(range_index) = &self.inverse_range_index {
-            let range_input =
-                RangeIndexInput::new(&info.summary.col_stats, info.summary.spatial_stats.as_ref());
+            let range_input = RangeIndexInput::new(
+                &info.summary.col_stats,
+                info.summary.row_count,
+                info.summary.spatial_stats.as_ref(),
+            );
             if !range_index.should_keep(&range_input, None) {
                 self.stats
                     .num_whole_segment_mutation

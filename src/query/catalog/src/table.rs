@@ -730,6 +730,9 @@ impl CompactionLimits {
 #[derive(Debug)]
 pub struct Bound {
     pub value: Scalar,
+    /// `value` is not known to be the exact extreme of the column: a string
+    /// bound may have been truncated, and a null bound of a column that has
+    /// values is an unknown bound.
     pub may_be_truncated: bool,
 }
 

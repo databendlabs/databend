@@ -164,6 +164,77 @@ pub fn cluster_stats_scalar_overlap(left: &ClusterStatistics, right: &ClusterSta
         && scalar_tuple_cmp(right_min, left_max) != Ordering::Greater
 }
 
+/// One side of a column range while it is being reduced.
+enum ReducedBound {
+    /// No input has contributed a value yet.
+    NoValues,
+    Known(Scalar),
+    /// An input with values does not know its bound on this side.
+    Unknown,
+}
+
+impl ReducedBound {
+    fn merge(&mut self, bound: &Scalar, keep: Ordering) {
+        *self = match (std::mem::replace(self, ReducedBound::Unknown), bound) {
+            (ReducedBound::Unknown, _) | (_, Scalar::Null) => ReducedBound::Unknown,
+            (ReducedBound::NoValues, bound) => ReducedBound::Known(bound.clone()),
+            (ReducedBound::Known(current), bound) => {
+                if bound.cmp(&current) == keep {
+                    ReducedBound::Known(bound.clone())
+                } else {
+                    ReducedBound::Known(current)
+                }
+            }
+        };
+    }
+
+    fn into_scalar(self) -> Scalar {
+        match self {
+            ReducedBound::Known(bound) => bound,
+            ReducedBound::NoValues | ReducedBound::Unknown => Scalar::Null,
+        }
+    }
+}
+
+/// Reduce the statistics of one column over several sets of rows into the
+/// statistics of the column over all of them.
+///
+/// An input with both bounds null holds no non-null value and leaves the range
+/// alone: writers store the lower bound of every column that has a value, down
+/// to the elements of an Array or a Map. An input with one null bound has
+/// values and does not know that side, so the reduced bound on that side is
+/// unknown as well, i.e. null.
+pub fn merge_column_statistics<'a>(
+    inputs: impl IntoIterator<Item = &'a ColumnStatistics>,
+) -> ColumnStatistics {
+    let mut min = ReducedBound::NoValues;
+    let mut max = ReducedBound::NoValues;
+    let mut null_count = 0;
+    let mut in_memory_size = 0;
+    let mut distinct_of_values = Some(0);
+
+    for stats in inputs {
+        null_count += stats.null_count;
+        in_memory_size += stats.in_memory_size;
+        distinct_of_values = distinct_of_values
+            .zip(stats.distinct_of_values)
+            .map(|(sum, ndv)| sum + ndv);
+        if stats.min.is_null() && stats.max.is_null() {
+            continue;
+        }
+        min.merge(&stats.min, Ordering::Less);
+        max.merge(&stats.max, Ordering::Greater);
+    }
+
+    ColumnStatistics::new(
+        min.into_scalar(),
+        max.into_scalar(),
+        null_count,
+        in_memory_size,
+        distinct_of_values,
+    )
+}
+
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     cluster_stats: &[T],
     cluster_key_info: Option<&ClusterKeyInfo>,
@@ -1405,5 +1476,104 @@ mod tests {
         sketch.add_with_count(scalar_ref, 10);
 
         assert_eq!(sketch.estimate(&scalar), Some(110));
+    }
+
+    fn column_stats(min: Scalar, max: Scalar, null_count: u64) -> ColumnStatistics {
+        ColumnStatistics::new(min, max, null_count, 8, Some(1))
+    }
+
+    fn string_scalar(value: &str) -> Scalar {
+        Scalar::String(value.to_string())
+    }
+
+    #[test]
+    fn merge_column_statistics_reduces_known_bounds() {
+        let a = column_stats(uint_scalar(3), uint_scalar(7), 1);
+        let b = column_stats(uint_scalar(1), uint_scalar(5), 0);
+
+        let merged = merge_column_statistics([&a, &b]);
+
+        let expected = ColumnStatistics::new(uint_scalar(1), uint_scalar(7), 1, 16, Some(2));
+        assert_eq!(merged, expected);
+    }
+
+    #[test]
+    fn merge_column_statistics_skips_inputs_without_values() {
+        let values = column_stats(uint_scalar(3), uint_scalar(7), 1);
+        let nulls = column_stats(Scalar::Null, Scalar::Null, 4);
+
+        for inputs in [[&nulls, &values], [&values, &nulls]] {
+            let merged = merge_column_statistics(inputs);
+            assert_eq!(
+                (merged.min(), merged.max()),
+                (&uint_scalar(3), &uint_scalar(7))
+            );
+            assert_eq!(merged.null_count, 5);
+        }
+
+        let merged = merge_column_statistics([&nulls, &nulls]);
+        assert_eq!((merged.min(), merged.max()), (&Scalar::Null, &Scalar::Null));
+        assert_eq!(merged.null_count, 8);
+    }
+
+    #[test]
+    fn merge_column_statistics_keeps_one_null_bound_unknown() {
+        // A string whose upper bound could not be stored.
+        let open = column_stats(string_scalar("a"), Scalar::Null, 0);
+        let closed = column_stats(string_scalar("b"), string_scalar("c"), 1);
+        let nulls = column_stats(Scalar::Null, Scalar::Null, 2);
+
+        for inputs in [[&open, &closed, &nulls], [&nulls, &closed, &open]] {
+            let merged = merge_column_statistics(inputs);
+            assert_eq!(
+                (merged.min(), merged.max()),
+                (&string_scalar("a"), &Scalar::Null)
+            );
+            assert_eq!(merged.null_count, 3);
+        }
+    }
+
+    /// The statistics of the elements of an Array count elements, not rows:
+    /// a block of one empty array has no nulls, a block of `[NULL, NULL, 5]`
+    /// has two. Reducing them step by step, as summaries are merged, must not
+    /// lose the 5.
+    #[test]
+    fn merge_column_statistics_can_be_folded() {
+        let inputs = [
+            column_stats(Scalar::Null, Scalar::Null, 0),
+            column_stats(uint_scalar(5), uint_scalar(5), 2),
+            column_stats(uint_scalar(7), uint_scalar(9), 0),
+            column_stats(Scalar::Null, Scalar::Null, 4),
+        ];
+        let all_at_once = merge_column_statistics(&inputs);
+        assert_eq!(
+            (all_at_once.min(), all_at_once.max()),
+            (&uint_scalar(5), &uint_scalar(9))
+        );
+
+        let mut folded = inputs[0].clone();
+        for stats in &inputs[1..] {
+            folded = merge_column_statistics([&folded, stats]);
+        }
+        assert_eq!(folded, all_at_once);
+
+        // An unknown bound stays unknown however the inputs are grouped.
+        let inputs = [
+            column_stats(Scalar::Null, Scalar::Null, 4),
+            column_stats(string_scalar("m"), string_scalar("n"), 1),
+            column_stats(string_scalar("a"), Scalar::Null, 0),
+            column_stats(string_scalar("x"), string_scalar("z"), 2),
+        ];
+        let all_at_once = merge_column_statistics(&inputs);
+        let mut folded = inputs[0].clone();
+        for stats in &inputs[1..] {
+            folded = merge_column_statistics([&folded, stats]);
+        }
+        assert_eq!(folded, all_at_once);
+        assert_eq!(
+            (folded.min(), folded.max()),
+            (&string_scalar("a"), &Scalar::Null)
+        );
+        assert_eq!(folded.null_count, 7);
     }
 }

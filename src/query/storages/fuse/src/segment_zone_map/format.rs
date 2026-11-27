@@ -20,9 +20,11 @@
 //! fields: `min_c` and `max_c` (nullable, of the column's non-null type) and
 //! `null_count_c` (nullable UInt64). A NULL `null_count_c` means the segment has
 //! no usable statistics for `c`; readers leave the column out of the statistics
-//! map, which range pruning treats as an unknown domain. A non-NULL
-//! `null_count_c` with NULL `min_c`/`max_c` means the column is entirely NULL
-//! in that segment, as in the segment summary.
+//! map, which range pruning treats as an unknown domain. A segment summary with
+//! an unknown bound, i.e. a null bound of a column that has values, counts as
+//! not usable. A non-NULL `null_count_c` with NULL `min_c`/`max_c` therefore
+//! means the column is entirely NULL in that segment, and `null_count_c` is
+//! then the segment's row count.
 //!
 //! Rows are grouped into row groups of at most [`ROW_GROUP_ROWS`] segments so
 //! that neither the build nor a query has to hold the whole file in memory:
@@ -210,10 +212,18 @@ impl StatColumnBuilder {
         value == ScalarRef::Null || value.infer_data_type() == self.value_type
     }
 
-    /// Statistics of another type than the column's are as unknown as missing ones.
-    fn push(&mut self, stats: Option<&ColumnStatistics>) {
+    /// Push the statistics of a column over a segment of `row_count` rows.
+    ///
+    /// Statistics of another type than the column's are as unknown as missing
+    /// ones, and so are statistics with an unknown bound: the file stores null
+    /// bounds only for a column that is entirely NULL.
+    fn push(&mut self, stats: Option<&ColumnStatistics>, row_count: u64) {
         match stats {
-            Some(s) if self.accepts(s.min.as_ref()) && self.accepts(s.max.as_ref()) => {
+            Some(s)
+                if self.accepts(s.min.as_ref())
+                    && self.accepts(s.max.as_ref())
+                    && (s.is_all_null(row_count) || !(s.min.is_null() || s.max.is_null())) =>
+            {
                 self.min.push(s.min.as_ref());
                 self.max.push(s.max.as_ref());
                 self.null_count.push(u64_scalar(s.null_count));
@@ -328,7 +338,7 @@ impl SegmentZoneMapWriter {
         self.block_counts.push(u64_scalar(summary.block_count));
         self.fresh.push(ScalarRef::Boolean(true));
         for (column, builder) in self.columns.iter().zip(&mut self.stats) {
-            builder.push(summary.col_stats.get(&column.column_id));
+            builder.push(summary.col_stats.get(&column.column_id), summary.row_count);
         }
         self.row_done().await
     }
@@ -923,30 +933,44 @@ mod tests {
         ]);
         // Missing statistics and statistics of the wrong type are both unknown.
         let seg_c = StatisticsOfColumns::from([(0, string_stats("1", "2", 0))]);
+        // So are statistics with an unknown bound: a null bound of a column
+        // that is not entirely NULL.
+        let seg_d = StatisticsOfColumns::from([
+            (0, stats(Scalar::Null, Scalar::Null, 4)),
+            (1, stats(Scalar::String("x".into()), Scalar::Null, 0)),
+        ]);
 
         let mut writer = new_writer(&op, "round_trip/zm_1.parquet", columns.clone(), 0.75).await?;
         writer
             .push_summary("seg_a", &summary(1000, seg_a.clone()))
             .await?;
+        let rows = |row_count, summary| Statistics {
+            row_count,
+            ..summary
+        };
         writer
-            .push_summary("seg_b", &summary(7, seg_b.clone()))
+            .push_summary("seg_b", &rows(5, summary(7, seg_b.clone())))
             .await?;
         writer.push_summary("seg_c", &summary(1, seg_c)).await?;
+        writer
+            .push_summary("seg_d", &rows(5, summary(1, seg_d)))
+            .await?;
         let meta = writer.finish().await?;
 
         let file = reader(&op)?.open(&meta).await?;
         assert_eq!(file.columns(), &columns[..]);
         assert_eq!(file.ratio(), 0.75);
-        assert_eq!((file.num_rows(), file.num_row_groups()), (3, 1));
+        assert_eq!((file.num_rows(), file.num_row_groups()), (4, 1));
 
         let data = file.read_row_group(0, &all_column_ids(&columns)).await?;
-        assert_eq!(data.num_rows(), 3);
+        assert_eq!(data.num_rows(), 4);
         assert_eq!(read_stats(&data, "seg_a"), normalize(&seg_a));
         assert_eq!(read_stats(&data, "seg_b"), normalize(&seg_b));
         assert!(read_stats(&data, "seg_c").is_empty());
+        assert!(read_stats(&data, "seg_d").is_empty());
         assert_eq!(data.block_count(0), 1000);
         assert_eq!(data.block_count(1), 7);
-        assert!((0..3).all(|row| data.is_fresh(row)));
+        assert!((0..4).all(|row| data.is_fresh(row)));
 
         // Only the requested column is read.
         let data = file.read_row_group(0, &HashSet::from([1])).await?;
@@ -958,7 +982,7 @@ mod tests {
         // Segment fields alone, as used for the start decision.
         let data = file.read_row_group(0, &HashSet::new()).await?;
         assert!(read_stats(&data, "seg_b").is_empty());
-        assert_eq!(data.num_rows(), 3);
+        assert_eq!(data.num_rows(), 4);
         assert_eq!(data.block_count(2), 1);
         Ok(())
     }
@@ -1222,9 +1246,11 @@ mod tests {
             if row == 2 * ROW_GROUP_ROWS + 1 {
                 col_stats.insert(1, stats(Scalar::Null, Scalar::Null, 9));
             }
-            writer
-                .push_summary(&format!("seg_{row}"), &summary(1, col_stats))
-                .await?;
+            let summary = Statistics {
+                row_count: 9,
+                ..summary(1, col_stats)
+            };
+            writer.push_summary(&format!("seg_{row}"), &summary).await?;
         }
         let meta = writer.finish().await?;
 

@@ -800,11 +800,14 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> anyhow::Result<()> {
         let trimmed_min = data_value_min.clone().trim_min();
         let trimmed_max = data_value_max.clone().trim_max();
 
-        // Only a prefix of U+10FFFF scalars needs a longer bound.
-        if !is_degenerated_case(max_expr.as_str()) {
+        // A prefix of U+10FFFF scalars only has no upper bound of its length:
+        // the bound is unknown, stored as null.
+        if is_degenerated_case(max_expr.as_str()) {
+            assert_eq!(trimmed_max, Scalar::Null);
+        } else {
             assert!(char_len(trimmed_max.as_string().unwrap()) <= STATS_STRING_PREFIX_LEN);
+            assert!(trimmed_max >= data_value_max);
         }
-        assert!(trimmed_max >= data_value_max);
         assert!(char_len(trimmed_min.as_string().unwrap()) <= STATS_STRING_PREFIX_LEN);
         assert!(trimmed_min <= data_value_min);
         Ok(())
@@ -869,15 +872,20 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> anyhow::Res
             gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())
                 .unwrap();
 
-        // Statistics are collected even when the max starts with U+10FFFF scalars:
+        // Statistics are collected even when the max starts with U+10FFFF scalars;
+        // its upper bound is then unknown, stored as null. Otherwise
         // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
         let col_stats = stats_of_columns.get(&0).unwrap();
-        assert!(
-            col_stats.max().clone() >= max_expr.to_owned(),
-            "left [{}]\nright [{}]",
-            col_stats.max().clone(),
-            max_expr
-        );
+        if is_degenerated_case(max_expr.as_string().unwrap()) {
+            assert_eq!(col_stats.max(), &Scalar::Null);
+        } else {
+            assert!(
+                col_stats.max().clone() >= max_expr.to_owned(),
+                "left [{}]\nright [{}]",
+                col_stats.max().clone(),
+                max_expr
+            );
+        }
         // check that, trimmed "col_stats.min always less than or equal to the untrimmed "mn_expr"
         assert!(
             col_stats.min().clone() <= min_expr.to_owned(),

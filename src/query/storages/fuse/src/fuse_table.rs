@@ -1504,6 +1504,7 @@ impl Table for FuseTable {
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 
+        let row_count = snapshot.summary.row_count;
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
         // ATTACH does not preserve the source column's STATS_TRUNCATE_LEN option.
         // Its string bounds may have been truncated at any number of characters.
@@ -1523,16 +1524,24 @@ impl Table for FuseTable {
                 // A stored min/max shorter than truncate_len cannot have been truncated.
                 // Otherwise, metadata cannot distinguish an unchanged original value
                 // from a result of truncation, so mark it as possibly truncated.
+                //
+                // A null bound is the exact answer only for a column whose rows
+                // are all NULL. Otherwise it is an unknown bound: the max of a
+                // string that has no truncated upper bound, or the bounds of
+                // statistics that do not cover every row.
+                let all_null = v.is_all_null(row_count);
                 let min_may_be_truncated = match &v.min {
                     Scalar::String(s) => {
                         unknown_string_truncation || s.chars().count() >= truncate_len
                     }
+                    Scalar::Null => !all_null,
                     _ => false,
                 };
                 let max_may_be_truncated = match &v.max {
                     Scalar::String(s) => {
                         unknown_string_truncation || s.chars().count() >= truncate_len
                     }
+                    Scalar::Null => !all_null,
                     _ => false,
                 };
                 (k, ColumnRange {

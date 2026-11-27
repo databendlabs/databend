@@ -1,0 +1,254 @@
+# run-with-settings: enable_block_stream_write=1
+# run-with-settings: enable_block_stream_write=0
+
+# The bounds of column statistics:
+# - a bound that is null on its own is an unknown bound;
+# - that the rows of a column are all NULL is told by its null count, not by
+#   its bounds.
+# Both write paths are exercised in addition to the default pass.
+
+statement ok
+create or replace database db_column_statistics_null_bounds;
+
+statement ok
+use db_column_statistics_null_bounds;
+
+# Inserts stay as written: each one is a block in a segment of its own, until
+# a statement below merges the segments.
+statement ok
+set enable_compact_after_write = 0;
+
+# A column whose rows are all NULL still prunes by its null count.
+statement ok
+create or replace table t_all_null(id int not null, k int null);
+
+statement ok
+insert into t_all_null values (1, null), (2, null);
+
+statement ok
+insert into t_all_null values (3, 5);
+
+statement ok
+optimize table t_all_null compact segment;
+
+query I
+select id from t_all_null where k is not null;
+----
+3
+
+query I
+select id from t_all_null where k is null order by id;
+----
+1
+2
+
+query III
+select min(k), max(k), count(k) from t_all_null;
+----
+5 5 1
+
+statement ok
+delete from t_all_null where k is null;
+
+query II
+select id, k from t_all_null order by id;
+----
+3 5
+
+# The statistics of a nested column describe its leaves. An array without
+# elements, or with NULL elements only, is not a NULL array.
+statement ok
+create or replace table t_array(id int not null, a array(int) null);
+
+statement ok
+insert into t_array values (1, []);
+
+statement ok
+insert into t_array values (2, [null]);
+
+statement ok
+insert into t_array values (3, null);
+
+query I
+select id from t_array where a is not null order by id;
+----
+1
+2
+
+query I
+select id from t_array where a = [];
+----
+1
+
+statement ok
+delete from t_array where a is null;
+
+query I
+select id from t_array order by id;
+----
+1
+2
+
+# Neither is a tuple of a NULL field a NULL tuple, nor a NULL tuple visible in
+# the statistics of a field that cannot be NULL.
+statement ok
+create or replace table t_tuple(id int not null, t tuple(x int null) null, u tuple(x int not null) null);
+
+statement ok
+insert into t_tuple values (1, tuple(null), null);
+
+query I
+select id from t_tuple where t is not null;
+----
+1
+
+query I
+select id from t_tuple where u is null;
+----
+1
+
+statement ok
+create or replace table t_map(id int not null, m map(string, int) null);
+
+statement ok
+insert into t_map values (1, {});
+
+statement ok
+insert into t_map values (2, null);
+
+statement ok
+optimize table t_map compact segment;
+
+query I
+select id from t_map where m is not null;
+----
+1
+
+query I
+select id from t_map where m is null;
+----
+2
+
+# The statistics of the elements of an array or a map count elements, not
+# rows. Merging the segments one after the other keeps the range of the
+# elements: the 5 is still found.
+statement ok
+create or replace table t_elements(id int not null, a array(int null) not null, m map(string, int null) not null);
+
+statement ok
+insert into t_elements values (1, [], {});
+
+statement ok
+insert into t_elements values (2, [null, null, 5], {'x': null, 'y': null, 'k': 5});
+
+statement ok
+optimize table t_elements compact segment;
+
+statement ok
+insert into t_elements values (3, [7, 8, 9], {'k': 7, 'l': 9});
+
+statement ok
+optimize table t_elements compact segment;
+
+query I
+select id from t_elements where a[3] = 5;
+----
+2
+
+query I
+select id from t_elements where m['k'] = 5;
+----
+2
+
+# No string of four characters is an upper bound of a value that starts with
+# four U+10FFFF, the largest Unicode scalar. The upper bound is then unknown;
+# the insert succeeds and the lower bound and the null count are kept.
+statement ok
+create or replace table t_string(id int not null, s string stats_truncate_len 4);
+
+statement ok
+insert into t_string values (1, concat(repeat(char(0x10FFFF), 4), 'z'));
+
+statement ok
+insert into t_string values (2, 'a');
+
+statement ok
+insert into t_string values (3, null);
+
+# f48fbfbf is U+10FFFF encoded as UTF-8.
+query TTT
+select to_hex(statistics:min::string), statistics:max, statistics:null_count
+from fuse_block_statistics('db_column_statistics_null_bounds', 't_string')
+where column_name = 's'
+order by to_hex(statistics:min::string) nulls last;
+----
+61 "a" 0
+f48fbfbff48fbfbff48fbfbff48fbfbf null 0
+NULL null 1
+
+statement ok
+optimize table t_string compact segment;
+
+query I
+select id from t_string where s > 'b';
+----
+1
+
+query I
+select id from t_string where s < 'b';
+----
+2
+
+query I
+select id from t_string where s is null;
+----
+3
+
+query BB
+select max(s) = concat(repeat(char(0x10FFFF), 4), 'z'), min(s) = 'a' from t_string;
+----
+1 1
+
+query I
+select id from t_string order by s desc nulls last limit 1;
+----
+1
+
+statement ok
+replace into t_string on (s) values (9, concat(repeat(char(0x10FFFF), 4), 'z'));
+
+statement ok
+delete from t_string where s = 'a';
+
+query I
+select id from t_string order by id;
+----
+3
+9
+
+# Null bounds alone do not tell that every row is NULL. The summary of the
+# compacted segment has null bounds for `k`, from the block of the NULL row,
+# but does not cover the block written before `k` was added, whose row reads
+# as the default.
+statement ok
+create or replace table t_added(id int not null);
+
+statement ok
+insert into t_added values (1);
+
+statement ok
+alter table t_added add column k int null default 7;
+
+statement ok
+insert into t_added values (2, null);
+
+statement ok
+optimize table t_added compact segment;
+
+query II
+select min(k), max(k) from t_added;
+----
+7 7
+
+statement ok
+drop database db_column_statistics_null_bounds;

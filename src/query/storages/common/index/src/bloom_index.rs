@@ -485,9 +485,11 @@ impl BloomIndex {
                     .column_id_of(&id)
                     .ok()
                     .and_then(|col_id| {
+                        // The row count is not at hand here. Blocks whose column
+                        // holds no value are left to range pruning, which runs first.
                         column_stats
                             .get(&col_id)
-                            .map(|stat| statistics_to_domain(vec![stat], &ty))
+                            .map(|stat| statistics_to_domain(vec![stat], &ty, None))
                     })
                     .unwrap_or_else(|| Domain::full(&ty));
                 (id, domain)

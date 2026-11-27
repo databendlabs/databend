@@ -44,6 +44,9 @@ pub type RuntimeScanFilterFuture = Pin<Box<dyn Future<Output = ()> + Send + 'sta
 pub struct RuntimeScanStatistics<'a> {
     pub column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
     pub virtual_column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
+    /// The number of rows the statistics cover, when known. It takes a known
+    /// row count to tell that a column is entirely NULL.
+    pub row_count: Option<u64>,
 }
 
 impl<'a> RuntimeScanStatistics<'a> {
@@ -54,7 +57,13 @@ impl<'a> RuntimeScanStatistics<'a> {
         Self {
             column_stats,
             virtual_column_stats,
+            row_count: None,
         }
+    }
+
+    pub fn with_row_count(mut self, row_count: Option<u64>) -> Self {
+        self.row_count = row_count;
+        self
     }
 
     pub fn from_columns(column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>) -> Self {
@@ -295,10 +304,18 @@ impl RuntimeTopNBoundary {
     /// Return true only when every row in a block is strictly worse than the
     /// current boundary. Equal values are retained for tie safety.
     ///
-    /// `min`/`max` describe the non-null values of the block and `null_count`
-    /// its null rows; boundaries are never null, so null rows rank by
-    /// `nulls_first` alone.
-    pub fn boundary_excludes(&self, min: &Scalar, max: &Scalar, null_count: u64) -> bool {
+    /// The boundary is the published TopN value held in `self.boundary`: the
+    /// worst sort value a row may have and still make the TopN. It is never
+    /// null ([`Self::update`] ignores a null), so the null rows of a block
+    /// rank by `nulls_first` alone.
+    ///
+    /// `stat` holds the statistics of the sort column over the `row_count`
+    /// rows of a block or a segment. A null bound is an unknown bound, which
+    /// excludes nothing. That the rows are all NULL is told by
+    /// [`ColumnStatistics::is_all_null`], which takes a known `row_count`,
+    /// never by null bounds alone: a segment summary may not cover the blocks
+    /// that have no statistics for the column.
+    pub fn boundary_excludes(&self, stat: &ColumnStatistics, row_count: Option<u64>) -> bool {
         let boundary = self.boundary.read();
         let Some(boundary) = boundary.as_ref() else {
             return false;
@@ -306,20 +323,20 @@ impl RuntimeTopNBoundary {
 
         // Under NULLS FIRST null rows sort before the boundary and stay
         // candidates forever.
-        if self.nulls_first && null_count > 0 {
+        if self.nulls_first && stat.null_count > 0 {
             return false;
         }
 
-        // Blocks without non-null values have null min/max statistics. Under
-        // NULLS LAST every such row sorts after the non-null boundary.
-        if matches!(min, Scalar::Null) || matches!(max, Scalar::Null) {
-            return !self.nulls_first && null_count > 0;
+        // The null rows left sort after the boundary, which is never null.
+        if row_count.is_some_and(|row_count| stat.is_all_null(row_count)) {
+            return true;
         }
 
+        // `partial_cmp` does not order a null bound against the boundary.
         if self.asc {
-            min.partial_cmp(boundary) == Some(CmpOrdering::Greater)
+            stat.min().partial_cmp(boundary) == Some(CmpOrdering::Greater)
         } else {
-            max.partial_cmp(boundary) == Some(CmpOrdering::Less)
+            stat.max().partial_cmp(boundary) == Some(CmpOrdering::Less)
         }
     }
 }
@@ -348,8 +365,7 @@ impl RuntimeScanFilter for RuntimeTopNFilter {
             return false;
         };
 
-        self.boundary
-            .boundary_excludes(stat.min(), stat.max(), stat.null_count)
+        self.boundary.boundary_excludes(stat, stats.row_count)
     }
 
     fn recheck_notified(&self) -> RuntimeScanFilterFuture {
@@ -620,6 +636,10 @@ mod tests {
         Scalar::Number(NumberScalar::Int64(value))
     }
 
+    fn bounds(min: Scalar, max: Scalar, null_count: u64) -> ColumnStatistics {
+        ColumnStatistics::new(min, max, null_count, 0, None)
+    }
+
     fn top_n_filter(
         column_id: u32,
         asc: bool,
@@ -633,12 +653,12 @@ mod tests {
     #[test]
     fn runtime_top_n_boundary_is_monotonic_and_tie_safe() {
         let asc = RuntimeTopNBoundary::new(true, false);
-        assert!(!asc.boundary_excludes(&int64(11), &int64(20), 0));
+        assert!(!asc.boundary_excludes(&bounds(int64(11), int64(20), 0), None));
 
         asc.update(&int64(10));
         assert_eq!(asc.boundary(), Some(int64(10)));
-        assert!(asc.boundary_excludes(&int64(11), &int64(20), 0));
-        assert!(!asc.boundary_excludes(&int64(10), &int64(20), 0));
+        assert!(asc.boundary_excludes(&bounds(int64(11), int64(20), 0), None));
+        assert!(!asc.boundary_excludes(&bounds(int64(10), int64(20), 0), None));
 
         // A weaker local boundary must not loosen the shared filter.
         asc.update(&int64(12));
@@ -648,8 +668,8 @@ mod tests {
 
         let desc = RuntimeTopNBoundary::new(false, false);
         desc.update(&int64(10));
-        assert!(desc.boundary_excludes(&int64(1), &int64(9), 0));
-        assert!(!desc.boundary_excludes(&int64(1), &int64(10), 0));
+        assert!(desc.boundary_excludes(&bounds(int64(1), int64(9), 0), None));
+        assert!(!desc.boundary_excludes(&bounds(int64(1), int64(10), 0), None));
         desc.update(&int64(8));
         assert_eq!(desc.boundary(), Some(int64(10)));
         desc.update(&int64(12));
@@ -664,17 +684,39 @@ mod tests {
         let nulls_last = RuntimeTopNBoundary::new(true, false);
         nulls_last.update(&int64(10));
         // Nulls sort after the boundary, so null rows are prunable too.
-        assert!(nulls_last.boundary_excludes(&int64(11), &int64(20), 5));
+        assert!(nulls_last.boundary_excludes(&bounds(int64(11), int64(20), 5), None));
         // All-null blocks sort entirely after the boundary.
-        assert!(nulls_last.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
-        assert!(!nulls_last.boundary_excludes(&int64(9), &int64(20), 5));
+        let all_null = bounds(Scalar::Null, Scalar::Null, 7);
+        assert!(nulls_last.boundary_excludes(&all_null, Some(7)));
+        // Null bounds alone do not tell that the rows are all NULL: the row
+        // count may be unknown, or the statistics may not cover every row.
+        assert!(!nulls_last.boundary_excludes(&all_null, None));
+        assert!(!nulls_last.boundary_excludes(&all_null, Some(8)));
+        assert!(!nulls_last.boundary_excludes(&bounds(int64(9), int64(20), 5), None));
 
         let nulls_first = RuntimeTopNBoundary::new(true, true);
         nulls_first.update(&int64(10));
         // Null rows are always candidates under NULLS FIRST.
-        assert!(!nulls_first.boundary_excludes(&int64(11), &int64(20), 1));
-        assert!(nulls_first.boundary_excludes(&int64(11), &int64(20), 0));
-        assert!(!nulls_first.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
+        assert!(!nulls_first.boundary_excludes(&bounds(int64(11), int64(20), 1), None));
+        assert!(nulls_first.boundary_excludes(&bounds(int64(11), int64(20), 0), None));
+        assert!(!nulls_first.boundary_excludes(&all_null, Some(7)));
+    }
+
+    #[test]
+    fn runtime_top_n_boundary_keeps_blocks_with_an_unknown_bound() {
+        // A bound that is null on its own is unknown, not the mark of a block
+        // without values.
+        let asc = RuntimeTopNBoundary::new(true, false);
+        asc.update(&int64(10));
+        assert!(asc.boundary_excludes(&bounds(int64(11), Scalar::Null, 5), None));
+        assert!(!asc.boundary_excludes(&bounds(int64(9), Scalar::Null, 5), None));
+        assert!(!asc.boundary_excludes(&bounds(Scalar::Null, int64(20), 5), None));
+
+        let desc = RuntimeTopNBoundary::new(false, false);
+        desc.update(&int64(10));
+        assert!(!desc.boundary_excludes(&bounds(int64(1), Scalar::Null, 5), None));
+        assert!(desc.boundary_excludes(&bounds(Scalar::Null, int64(9), 5), None));
+        assert!(!desc.boundary_excludes(&bounds(Scalar::Null, int64(10), 5), None));
     }
 
     #[test]
@@ -687,7 +729,7 @@ mod tests {
                     // Race tightening publishes against reads.
                     for v in (0..500).rev() {
                         filter.update(&int64(v * 4 + t));
-                        let _ = filter.boundary_excludes(&int64(1), &int64(2), 0);
+                        let _ = filter.boundary_excludes(&bounds(int64(1), int64(2), 0), None);
                         let _ = filter.boundary();
                     }
                 })
@@ -699,8 +741,8 @@ mod tests {
 
         // The global minimum wins regardless of interleaving.
         assert_eq!(filter.boundary(), Some(int64(0)));
-        assert!(filter.boundary_excludes(&int64(1), &int64(5), 0));
-        assert!(!filter.boundary_excludes(&int64(0), &int64(5), 0));
+        assert!(filter.boundary_excludes(&bounds(int64(1), int64(5), 0), None));
+        assert!(!filter.boundary_excludes(&bounds(int64(0), int64(5), 0), None));
     }
 
     #[tokio::test]

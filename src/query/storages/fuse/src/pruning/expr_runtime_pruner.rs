@@ -162,6 +162,7 @@ impl RuntimeStatsPruner {
                 &self.table_schema,
                 &entry.expr,
                 column_stats,
+                rows as u64,
             );
             let elapsed = start.elapsed();
             entry.stats.record_inlist_min_max(
@@ -221,6 +222,7 @@ impl ExprRuntimePruner {
                 &self.table_schema,
                 filter,
                 part.columns_stat.as_ref(),
+                part.nums_rows as u64,
             );
 
             if !should_prune
@@ -287,6 +289,7 @@ fn prune_by_statistics(
     table_schema: &TableSchemaRef,
     filter: &Expr<String>,
     column_stats: Option<&StatisticsOfColumns>,
+    row_count: u64,
 ) -> bool {
     if matches!(
         filter,
@@ -309,7 +312,7 @@ fn prune_by_statistics(
             && let Some(stat) = stats.get(&column_ids[0])
         {
             let stats = vec![stat];
-            let domain = statistics_to_domain(stats, ty);
+            let domain = statistics_to_domain(stats, ty, Some(row_count));
 
             let mut input_domains = HashMap::new();
             input_domains.insert(name.to_string(), domain.clone());

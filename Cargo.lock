@@ -6170,7 +6170,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-frozen-api",
- "databend-common-functions",
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-statistics",
