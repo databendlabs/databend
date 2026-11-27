@@ -995,13 +995,13 @@ CREATE MATERIALIZED VIEW test_mv_from_mv AS SELECT id FROM test_mv WHERE 1 = 1
 statement ok
 CREATE TABLE mv_null_source (id INT) ENGINE = NULL
 
-statement error 1065
+statement error 1302
 CREATE MATERIALIZED VIEW test_mv_from_null AS SELECT * FROM mv_null_source WHERE 1 = 1
 
 statement ok
 CREATE TEMPORARY TABLE mv_temp_source (id INT)
 
-statement error 1065
+statement error 1302
 CREATE MATERIALIZED VIEW test_mv_from_temp AS SELECT * FROM mv_temp_source WHERE 1 = 1
 
 statement ok

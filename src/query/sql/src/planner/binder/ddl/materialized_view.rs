@@ -19,11 +19,15 @@ use std::sync::Arc;
 use databend_common_ast::ast::AlterMaterializedViewStmt;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::ClusterType as AstClusterType;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::RefreshMaterializedViewStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::ShowCreateMaterializedViewStmt;
@@ -81,6 +85,8 @@ use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::check_materialized_view_source_without_policy;
+use crate::expand_materialized_view_star;
+use crate::materialized_view_ident;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::planner::semantic::MaterializedViewChecker;
@@ -494,6 +500,46 @@ impl Binder {
         Ok(metadata.tables()[0].clone())
     }
 
+    /// Resolve the ORDER BY of a bound top-N definition to output column positions, with the
+    /// direction and NULLS placement chosen by binding.
+    fn materialized_view_top_n_order(
+        s_expr: &SExpr,
+        bind_context: &BindContext,
+        order_by_len: usize,
+    ) -> Result<Vec<(usize, bool, bool)>> {
+        let mut current = s_expr;
+        let sort = loop {
+            if let RelOperator::Sort(sort) = current.plan() {
+                break sort;
+            }
+            current = current.child(0).map_err(|_| {
+                ErrorCode::Internal("top-N materialized view definition has no Sort")
+            })?;
+        };
+        // The binder drops constant ORDER BY keys. Persisted keys pair with the remaining
+        // items by position, so require one bound item per key.
+        if sort.items.len() != order_by_len {
+            return Err(ErrorCode::InvalidMaterializedView(
+                "ORDER BY of a top-N materialized view must not contain constant expressions",
+            ));
+        }
+        sort.items
+            .iter()
+            .map(|item| {
+                let position = bind_context
+                    .columns
+                    .iter()
+                    .position(|column| column.index == item.index)
+                    .ok_or_else(|| {
+                        ErrorCode::InvalidMaterializedView(
+                            "ORDER BY of a top-N materialized view must only use columns of its select list",
+                        )
+                    })?;
+                Ok((position, item.asc, item.nulls_first))
+            })
+            .collect()
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_materialized_view(
         &mut self,
@@ -532,7 +578,7 @@ impl Binder {
         let checker = MaterializedViewChecker::check_query(query);
         if !checker.is_supported() {
             return Err(ErrorCode::SemanticError(format!(
-                "Materialized View only supports simple SELECT queries over one table, with optional WHERE/GROUP BY clauses, registered aggregate functions, and deterministic expressions",
+                "Materialized View only supports simple SELECT queries over one table, with optional WHERE/GROUP BY clauses, registered aggregate functions, and deterministic expressions, or a non-aggregate SELECT with ORDER BY and a constant LIMIT",
             )));
         }
 
@@ -568,6 +614,7 @@ impl Binder {
             );
         let original_query_plan = self.as_query_plan(query).await?;
         let Plan::Query {
+            s_expr: original_expr,
             metadata: original_metadata,
             bind_context: original_bind_context,
             ..
@@ -688,6 +735,30 @@ impl Binder {
             source_database.clone(),
             self.name_resolution_ctx.clone(),
         ))?;
+        if checker.has_star() {
+            let column_names = original_bind_context
+                .columns
+                .iter()
+                .map(|column| column.column_name.clone())
+                .collect::<Vec<_>>();
+            expand_materialized_view_star(&mut original_query, &column_names)?;
+        }
+        // Persist the top-N order with the direction and NULLS placement resolved under the
+        // creating session, so later sessions with other defaults keep the same rows.
+        let top_n_order = if checker.is_top_n() {
+            let order = Self::materialized_view_top_n_order(
+                original_expr.logical()?,
+                original_bind_context,
+                original_query.order_by.len(),
+            )?;
+            for (item, (_, asc, nulls_first)) in original_query.order_by.iter_mut().zip(&order) {
+                item.asc = Some(*asc);
+                item.nulls_first = Some(*nulls_first);
+            }
+            Some(order)
+        } else {
+            None
+        };
 
         // 2. Rewrite the qualified definition into storage form, recording logical-to-physical
         // output mapping in the same pass.
@@ -702,6 +773,28 @@ impl Binder {
             specified_columns,
         );
         physical_rewriter.rewrite_query(&mut physical_query)?;
+        // Storage rows keep the same order keys as physical columns. Reads and refreshes then order
+        // persisted rows without re-evaluating source expressions.
+        if let Some(order) = &top_n_order {
+            let physical_names = physical_rewriter.physical_names();
+            physical_query.order_by = order
+                .iter()
+                .map(|(position, asc, nulls_first)| OrderByExpr {
+                    expr: Expr::ColumnRef {
+                        span: None,
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: ColumnID::Name(materialized_view_ident(
+                                &physical_names[*position],
+                            )),
+                        },
+                    },
+                    asc: Some(*asc),
+                    nulls_first: Some(*nulls_first),
+                })
+                .collect();
+        }
 
         // 3. Bind storage SQL independently: aggregate outputs now have physical serialized-state
         // semantics, so this plan cannot be shared with the logical definition bind above.

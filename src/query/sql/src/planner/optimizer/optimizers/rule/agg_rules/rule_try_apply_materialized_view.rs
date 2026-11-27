@@ -39,8 +39,9 @@ impl RuleTryApplyMaterializedView {
     fn matchers() -> Vec<Matcher> {
         // QueryInfo walks the complete unary query subtree and supports arbitrary combinations of
         // EvalScalar, Filter, Aggregate, Sort and TopN. Expression binding can introduce multiple
-        // intermediate EvalScalar nodes, so do not enumerate fixed-depth shapes here.
-        vec![match_op!(EvalScalar -> *)]
+        // intermediate EvalScalar nodes, so do not enumerate fixed-depth shapes here. A Limit
+        // root is matched only by top-N materialized views.
+        vec![match_op!(EvalScalar -> *), match_op!(Limit -> *)]
     }
 
     fn is_supported_query_subtree(s_expr: &SExpr) -> bool {
@@ -100,10 +101,12 @@ impl Rule for RuleTryApplyMaterializedView {
         s_expr: &SExpr,
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
-        if !Self::is_supported_query_subtree(s_expr) {
-            return Ok(());
-        }
-        if Self::contains_ordering(s_expr) {
+        let is_limit = matches!(s_expr.plan(), RelOperator::Limit(_));
+        if is_limit {
+            if s_expr.arity() != 1 || !s_expr.child(0).is_ok_and(Self::is_supported_query_subtree) {
+                return Ok(());
+            }
+        } else if !Self::is_supported_query_subtree(s_expr) || Self::contains_ordering(s_expr) {
             return Ok(());
         }
 
@@ -121,9 +124,14 @@ impl Rule for RuleTryApplyMaterializedView {
         else {
             return Ok(());
         };
+        // A top-N MV holds a subset of its definition's rows, so it can only answer a Limit, and
+        // a Limit is answered only from top-N MVs.
         let candidates = all_candidates
             .iter()
-            .filter(|candidate| candidate.source_table_index == table_index)
+            .filter(|candidate| {
+                candidate.source_table_index == table_index
+                    && materialized_view::is_top_n_candidate(candidate) == is_limit
+            })
             .cloned()
             .collect::<Vec<_>>();
         if candidates.is_empty() {
@@ -132,15 +140,31 @@ impl Rule for RuleTryApplyMaterializedView {
         let table_name = metadata.table(table_index).name();
 
         let required_output_columns = self.output_columns.as_ref();
-        if let Some((mut result, mv_table_id)) = materialized_view::try_rewrite(
-            table_index,
-            table_name,
-            &metadata,
-            s_expr,
-            &candidates,
-            required_output_columns,
-            self.ctx.get_stat_context(),
-        )? {
+        let rewritten = if is_limit {
+            let Some(required_output_columns) = required_output_columns else {
+                return Ok(());
+            };
+            materialized_view::try_rewrite_top_n(
+                table_index,
+                table_name,
+                &metadata,
+                s_expr,
+                &candidates,
+                required_output_columns,
+                self.ctx.get_stat_context(),
+            )?
+        } else {
+            materialized_view::try_rewrite(
+                table_index,
+                table_name,
+                &metadata,
+                s_expr,
+                &candidates,
+                required_output_columns,
+                self.ctx.get_stat_context(),
+            )?
+        };
+        if let Some((mut result, mv_table_id)) = rewritten {
             if let Some(candidate) = candidates
                 .iter()
                 .find(|candidate| candidate.mv_table_id == mv_table_id)

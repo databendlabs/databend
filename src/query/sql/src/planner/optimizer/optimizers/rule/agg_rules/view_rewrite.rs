@@ -42,6 +42,8 @@ use crate::plans::SortItem;
 
 pub(crate) struct QueryInfo {
     equi_classes: EquivalenceClasses,
+    /// Column equality predicates in their original form, keyed by the equated column names.
+    equi_preds: Vec<(String, String, ScalarExpr)>,
     range_classes: RangeClasses,
     residual_classes: ResidualClasses,
     sort_items: Option<Vec<SortItem>>,
@@ -178,8 +180,14 @@ impl QueryInfo {
                 preds_splitter.split(pred, &column_map);
             }
 
-            for equi_pred in &preds_splitter.equi_columns_preds {
-                equi_classes.add_equivalence_class(&equi_pred.0, &equi_pred.1);
+            let mut equi_preds = Vec::with_capacity(preds_splitter.equi_columns_preds.len());
+            for (col0, col1, pred) in &preds_splitter.equi_columns_preds {
+                equi_classes.add_equivalence_class(col0, col1);
+                equi_preds.push((
+                    format_col(&col0.column),
+                    format_col(&col1.column),
+                    pred.clone(),
+                ));
             }
             for range_pred in &preds_splitter.range_preds {
                 range_classes.add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
@@ -201,6 +209,7 @@ impl QueryInfo {
 
             Ok(Self {
                 equi_classes,
+                equi_preds,
                 range_classes,
                 residual_classes,
                 aggregate,
@@ -388,7 +397,7 @@ pub(crate) struct ViewRewriteMatch {
 }
 
 struct PredicatesSplitter {
-    equi_columns_preds: Vec<(BoundColumnRef, BoundColumnRef)>,
+    equi_columns_preds: Vec<(BoundColumnRef, BoundColumnRef, ScalarExpr)>,
     range_preds: Vec<(String, BoundColumnRef, ConstantExpr)>,
     residual_preds: Vec<ScalarExpr>,
 }
@@ -418,7 +427,7 @@ impl PredicatesSplitter {
 
                     let col0 = BoundColumnRef::try_from(arg0.clone()).unwrap();
                     let col1 = BoundColumnRef::try_from(arg1.clone()).unwrap();
-                    self.equi_columns_preds.push((col0, col1));
+                    self.equi_columns_preds.push((col0, col1, pred.clone()));
                 }
                 // Ranges compare values, so a typed constant counts by its value.
                 "eq" | "lt" | "lte" | "gt" | "gte"
@@ -499,6 +508,14 @@ impl EquivalenceClasses {
                     .insert(column.clone(), equi_cols);
             }
         }
+    }
+
+    fn are_equal(&self, col1: &str, col2: &str) -> bool {
+        col1 == col2
+            || self
+                .column_to_equivalence_class
+                .get(col1)
+                .is_some_and(|columns| columns.contains(col2))
     }
 
     // Equijoin subsumption test.
@@ -843,6 +860,7 @@ impl ResidualClasses {
 pub(crate) struct ViewMatcher {
     query_info: QueryInfo,
     allow_aggregate_rollup: bool,
+    exact_predicates: bool,
 }
 
 impl ViewMatcher {
@@ -850,12 +868,53 @@ impl ViewMatcher {
         Self {
             query_info,
             allow_aggregate_rollup: false,
+            exact_predicates: false,
         }
     }
 
     pub(crate) fn with_aggregate_rollup(mut self) -> Self {
         self.allow_aggregate_rollup = true;
         self
+    }
+
+    /// Accept only views whose predicates select exactly the query's rows.
+    ///
+    /// A top-N view keeps the first rows of its own predicate. A stricter query predicate could
+    /// select rows the view dropped, so no compensating filter can make the view usable.
+    pub(crate) fn with_exact_predicates(mut self) -> Self {
+        self.exact_predicates = true;
+        self
+    }
+
+    /// Whether the query's ORDER BY keys are a prefix of the view's keys.
+    ///
+    /// The view keeps the first rows under its keys, which also orders them under any prefix of
+    /// those keys. Ties beyond the prefix are unordered in the query, so the view's first rows
+    /// are a valid first slice of the query's order.
+    pub(crate) fn sort_items_are_prefix_of(&self, view_info: &ViewInfo) -> bool {
+        let query_items = self.query_info.sort_items.as_deref().unwrap_or_default();
+        let view_items = view_info
+            .query_info
+            .sort_items
+            .as_deref()
+            .unwrap_or_default();
+        query_items.len() <= view_items.len()
+            && query_items
+                .iter()
+                .zip(view_items)
+                .all(|(query_item, view_item)| {
+                    let query_key = self.query_info.column_map.get(&query_item.index);
+                    let view_key = view_info.query_info.column_map.get(&view_item.index);
+                    match (query_key, view_key) {
+                        (Some(query_key), Some(view_key)) => {
+                            query_item.asc == view_item.asc
+                                && query_item.nulls_first == view_item.nulls_first
+                                && format_scalar(query_key, &self.query_info.column_map)
+                                    == format_scalar(view_key, &view_info.query_info.column_map)
+                        }
+                        _ => false,
+                    }
+                })
     }
 
     pub(crate) fn try_match(&self, view_info: &ViewInfo) -> Result<Option<ViewRewriteMatch>> {
@@ -1054,7 +1113,25 @@ impl ViewMatcher {
             }
         }
 
-        true
+        // Column equalities of the query that the view does not guarantee are compensated with
+        // the query's own predicates. Together with the view's equalities they rebuild every
+        // query equivalence class.
+        for (col0, col1, pred) in &self.query_info.equi_preds {
+            if view_info.query_info.equi_classes.are_equal(col0, col1) {
+                continue;
+            }
+            match self
+                .query_info
+                .check_output_cols(pred, &view_info.output_cols, new_selection_set)
+            {
+                Ok(Some(new_pred)) => new_predicates.push(new_pred),
+                Ok(None) | Err(_) => return false,
+            }
+        }
+
+        // A top-N view keeps the first rows of its own predicate, so it cannot be filtered
+        // further.
+        !(self.exact_predicates && !new_predicates.is_empty())
     }
 
     fn check_output_expressions(
