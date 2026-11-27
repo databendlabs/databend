@@ -28,7 +28,6 @@ use databend_common_sql::plans::JoinType;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::GraceHashJoin;
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::hybrid::hybrid_state::HybridHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
@@ -175,10 +174,6 @@ impl HybridHashJoin {
 
 impl Join for HybridHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        if let Some(block) = data.as_ref() {
-            self.state.add_build_input_rows(block.num_rows());
-        }
-
         // 1. Check if another processor has already triggered spill
         if self.state.check_spilled() {
             self.switch_to_grace_mode(false)?;
@@ -224,22 +219,6 @@ impl Join for HybridHashJoin {
             HybridJoinMode::Memory(join) => join.final_build(),
             HybridJoinMode::Grace(join) => join.final_build(),
         }
-    }
-
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
-        match &self.mode {
-            HybridJoinMode::Memory(join) => join.add_runtime_filter_packet(packet),
-            HybridJoinMode::Grace(join) => join.add_runtime_filter_packet(packet),
-        }
-    }
-
-    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        let mut packet = match &self.mode {
-            HybridJoinMode::Memory(join) => join.build_runtime_filter(),
-            HybridJoinMode::Grace(join) => join.build_runtime_filter(),
-        }?;
-        packet.build_rows = self.state.build_input_rows();
-        Ok(packet)
     }
 
     fn is_spill_happened(&self) -> bool {

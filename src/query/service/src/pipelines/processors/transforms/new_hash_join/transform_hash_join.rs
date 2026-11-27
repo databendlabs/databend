@@ -30,6 +30,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use log::info;
 
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::new_hash_join::join::FinishedJoin;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
@@ -48,6 +49,8 @@ pub struct TransformHashJoin {
     projection: BTreeSet<usize>,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
+    /// Build rows added by this processor.
+    build_rows: usize,
     instant: Instant,
     _p: PhantomPinned,
 }
@@ -62,13 +65,7 @@ impl TransformHashJoin {
         projection: BTreeSet<usize>,
         rf_desc: Arc<RuntimeFiltersDesc>,
     ) -> Result<ProcessorPtr> {
-        let runtime_filter_builder = RuntimeFilterLocalBuilder::try_create(
-            &rf_desc.func_ctx,
-            rf_desc.filters_desc.clone(),
-            rf_desc.inlist_threshold,
-            rf_desc.bloom_threshold,
-            rf_desc.min_max_threshold,
-        )?;
+        let runtime_filter_builder = rf_desc.create_local_builder()?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
             build_port,
@@ -80,6 +77,7 @@ impl TransformHashJoin {
             stage_sync_barrier,
             joined_data: None,
             runtime_filter_builder,
+            build_rows: 0,
             stage: Stage::Build(BuildState {
                 finished: false,
                 build_data: None,
@@ -158,8 +156,12 @@ impl Processor for TransformHashJoin {
                 };
 
                 if !data_block.is_empty() {
+                    // Runtime filters see every build row before the join may spill it, so
+                    // they stay complete whether this join ends up in memory or grace mode.
+                    let rows_before = self.rf_desc.add_build_rows(data_block.num_rows());
+                    self.build_rows += data_block.num_rows();
                     if let Some(builder) = self.runtime_filter_builder.as_mut() {
-                        builder.add_block(&data_block)?;
+                        builder.add_block_after(&data_block, rows_before)?;
                     }
                     self.join.add_block(Some(data_block))?;
                 }
@@ -223,29 +225,22 @@ impl Processor for TransformHashJoin {
 
         self.stage = match &mut self.stage {
             Stage::Build(_) => {
-                if let Some(builder) = self.runtime_filter_builder.take() {
-                    let spill_happened = self.join.is_spill_happened();
-                    // Disable runtime filters once spilling occurs to avoid partial-build filters
-                    // being globalized across the cluster, which can prune valid probe rows.
-                    let packet = builder.finish(spill_happened)?;
-                    self.join.add_runtime_filter_packet(packet);
-                }
+                let packet = match self.runtime_filter_builder.take() {
+                    Some(builder) => builder.finish(false)?,
+                    None => JoinRuntimeFilterPacket::complete_without_filters(self.build_rows),
+                };
+                self.rf_desc.add_packet(packet);
 
                 let rf_build_elapsed = self.instant.elapsed() - elapsed;
                 let _wait_res = self.stage_sync_barrier.wait().await;
                 let before_wait = self.instant.elapsed();
 
                 if wait_res.is_leader() {
-                    let spilled = self.join.is_spill_happened();
-                    let packet = self.join.build_runtime_filter()?;
                     info!(
-                        "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
-                        spilled,
-                        packet.packets.as_ref().map_or(0, |p| p.len()),
-                        packet.disable_all_due_to_spill
+                        "HashJoin build stage finished, spilled: {}",
+                        self.join.is_spill_happened()
                     );
-
-                    self.rf_desc.globalization(packet).await?;
+                    self.rf_desc.globalization().await?;
                 }
 
                 let _wait_res = self.stage_sync_barrier.wait().await;

@@ -19,6 +19,29 @@ pub(super) fn should_enable_runtime_filter(
     build_num_rows: usize,
     selectivity_threshold: u64,
 ) -> bool {
+    let enabled = bloom_selectivity_allows(desc, build_num_rows, selectivity_threshold);
+    log::info!(
+        "RUNTIME-FILTER: bloom runtime filter {} enabled={} (build_rows={}, build_table_rows={:?}, probe_table_rows={:?}, threshold={}%)",
+        desc.id,
+        enabled,
+        build_num_rows,
+        desc.build_table_rows,
+        desc.probe_table_rows,
+        selectivity_threshold
+    );
+    enabled
+}
+
+/// Pure form of [`should_enable_runtime_filter`] without logging.
+///
+/// It is monotone in `build_num_rows`: once it returns `false` for some row count, it returns
+/// `false` for every larger count. Local builders rely on this to drop bloom hashes as soon as
+/// the rows seen so far already rule the bloom filter out.
+pub(super) fn bloom_selectivity_allows(
+    desc: &RuntimeFilterDesc,
+    build_num_rows: usize,
+    selectivity_threshold: u64,
+) -> bool {
     if build_num_rows == 0 {
         return false;
     }
@@ -31,15 +54,5 @@ pub(super) fn should_enable_runtime_filter(
                 && (build_num_rows as u128) * 100 < (rows as u128) * (selectivity_threshold as u128)
         })
     };
-    let enabled = below_threshold(desc.build_table_rows) || below_threshold(desc.probe_table_rows);
-    log::info!(
-        "RUNTIME-FILTER: bloom runtime filter {} enabled={} (build_rows={}, build_table_rows={:?}, probe_table_rows={:?}, threshold={}%)",
-        desc.id,
-        enabled,
-        build_num_rows,
-        desc.build_table_rows,
-        desc.probe_table_rows,
-        selectivity_threshold
-    );
-    enabled
+    below_threshold(desc.build_table_rows) || below_threshold(desc.probe_table_rows)
 }

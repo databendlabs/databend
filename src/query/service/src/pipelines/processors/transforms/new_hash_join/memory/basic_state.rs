@@ -21,7 +21,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::types::DataType;
 
 use crate::pipelines::processors::transforms::HashJoinHashTable;
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 
 pub struct BasicHashJoinState {
@@ -34,7 +33,6 @@ pub struct BasicHashJoinState {
 
     pub arenas: CStyleCell<Vec<Vec<u8>>>,
     pub hash_table: CStyleCell<HashJoinHashTable>,
-    pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 
     pub scan_map: CStyleCell<Vec<Vec<u8>>>,
     pub scan_queue: CStyleCell<VecDeque<usize>>,
@@ -51,7 +49,6 @@ impl BasicHashJoinState {
             build_queue: CStyleCell::new(VecDeque::new()),
             arenas: CStyleCell::new(Vec::new()),
             hash_table: CStyleCell::new(HashJoinHashTable::Null),
-            packets: CStyleCell::new(Vec::new()),
             scan_map: CStyleCell::new(Vec::new()),
             scan_queue: CStyleCell::new(VecDeque::new()),
         }

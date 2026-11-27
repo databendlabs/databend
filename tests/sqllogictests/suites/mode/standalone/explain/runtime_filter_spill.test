@@ -1,0 +1,153 @@
+# A hash join whose build side spills still prunes the probe scan with its runtime filter.
+
+statement ok
+set max_threads = 4;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set enable_prune_cache = 0;
+
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 0;
+
+statement ok
+create or replace table rf_spill_build(k UInt64 not null) row_per_block = 1000 as
+select number + 5000 as k from numbers(10);
+
+statement ok
+create or replace table rf_spill_probe(k UInt64 not null) row_per_block = 1000;
+
+statement ok
+insert into rf_spill_probe select number from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 1000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 2000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 3000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 4000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 5000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 6000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 7000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 8000 from numbers(1000);
+
+statement ok
+insert into rf_spill_probe select number + 9000 from numbers(1000);
+
+query I
+select count() from rf_spill_probe where k in (select k from rf_spill_build);
+----
+10
+
+# The join spills, and the probe scan still prunes the parts outside the build keys.
+# The marker after the spill count also skips the other spill metrics, which are only
+# printed when they are not zero.
+query T
+explain analyze select * from rf_spill_probe where k in (select k from rf_spill_build);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── numbers remote spilled by write: <slt:ignore>
+├── output columns: [rf_spill_probe.k (#0)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [rf_spill_probe.k (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_1 (#1), probe targets:[rf_spill_probe.k (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.default.rf_spill_build
+│   ├── scan id: 1
+│   ├── output columns: [k (#1)]
+│   ├── read rows: 10
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from <slt:ignore>
+    ├── parts pruned by runtime filter: 9
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.rf_spill_probe
+    ├── scan id: 0
+    ├── output columns: [k (#0)]
+    ├── read rows: 10000
+    ├── read size: <slt:ignore>
+    ├── partitions total: 10
+    ├── partitions scanned: 10
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 10000.00
+
+statement ok
+drop table rf_spill_build;
+
+statement ok
+drop table rf_spill_probe;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+unset enable_prune_cache;
+
+statement ok
+unset inlist_runtime_filter_threshold;
+
+statement ok
+unset enable_bloom_runtime_filter;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset max_threads;
