@@ -80,6 +80,7 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
+use crate::servers::http::v1::CredentialBinding;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -88,6 +89,7 @@ use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
 use crate::servers::login_history::LoginHandler;
 use crate::servers::login_history::LoginHistory;
+use crate::sessions::Session;
 use crate::sessions::SessionManager;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
@@ -285,6 +287,32 @@ fn get_client_ip(req: &Request) -> Option<String> {
     client_ip
 }
 
+fn network_policy_applies(session: &Session) -> bool {
+    let Ok(user) = session.get_current_user() else {
+        return true;
+    };
+    if user.option.network_policy().is_some() {
+        return true;
+    }
+    let global = session
+        .get_settings()
+        .get_network_policy()
+        .unwrap_or_default();
+    !user.is_account_admin() && !global.is_empty()
+}
+
+fn decode_client_session(
+    req: &Request,
+    is_worksheet: bool,
+    client_caps: &mut ClientCapabilities,
+) -> Result<Option<ClientSession>> {
+    if is_worksheet {
+        Ok(ClientSession::try_decode_for_worksheet(req))
+    } else {
+        Ok(ClientSession::try_decode(req, client_caps)?)
+    }
+}
+
 fn get_credential_from_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
@@ -430,6 +458,48 @@ impl<E> HTTPSessionEndpoint<E> {
         if let Some(tenant) = &requested_tenant {
             session.set_current_tenant(tenant.clone())?;
         }
+        // Compute against the tenant requested before authentication: a follow-up
+        // repeats the submission's request, not its resolved (e.g. JWT) tenant.
+        // Native session tokens are not bound: they are cheap to verify and
+        // must keep honoring explicit logout.
+        let credential_binding = match (&credential, self.endpoint_kind) {
+            (
+                Credential::Password { .. } | Credential::Jwt { .. } | Credential::KeyPair { .. },
+                EndpointKind::StartQuery | EndpointKind::PollQuery,
+            ) => CredentialBinding::from_request(&session.get_current_tenant(), req.headers()),
+            _ => None,
+        };
+        let bound_query = match (&credential_binding, self.endpoint_kind) {
+            (Some(binding), EndpointKind::PollQuery) => req
+                .raw_path_param("id")
+                .and_then(|id| HttpQueryManager::instance().get_query(id))
+                .filter(|query| {
+                    query
+                        .credential_binding
+                        .as_ref()
+                        .is_some_and(|bound| bound.matches(binding, client_host.as_deref()))
+                }),
+            _ => None,
+        };
+        // The binding stands in for the submitter only within its own client
+        // session. Any other session, including a new one, must authenticate
+        // normally so a stale credential cannot touch or refresh other sessions.
+        let mut decoded_client_session = None;
+        let bound_query = match bound_query {
+            Some(query) => {
+                let client_session = decode_client_session(req, is_worksheet, &mut client_caps)?;
+                let same_session = match &client_session {
+                    None => query.client_session_id.is_none(),
+                    Some(s) => {
+                        !s.is_new_session && query.client_session_id.as_ref() == Some(&s.header.id)
+                    }
+                };
+                decoded_client_session = Some(client_session);
+                same_session.then_some(query)
+            }
+            None => None,
+        };
+        let is_bound_query = bound_query.is_some();
         let (user_name, authed_client_session_id, authenticated_query) =
             if let Credential::QueryToken { query_id, token } = &credential {
                 // Retain exactly the object whose capability was verified. A
@@ -450,6 +520,12 @@ impl<E> HTTPSessionEndpoint<E> {
                     query.client_session_id.clone(),
                     Some(query),
                 )
+            } else if let Some(query) = bound_query {
+                // The submitter repeating its own credential keeps access to this
+                // query even if the credential has since expired or changed. On a
+                // mismatch, fall through to ordinary authentication instead.
+                session.set_current_tenant(query.owner_tenant.clone())?;
+                (query.user_name.clone(), None, Some(query))
             } else {
                 let (user_name, client_session_id) = self
                     .auth_manager
@@ -478,10 +554,9 @@ impl<E> HTTPSessionEndpoint<E> {
             ));
         }
 
-        let mut client_session = if is_worksheet {
-            ClientSession::try_decode_for_worksheet(req)
-        } else {
-            ClientSession::try_decode(req, &mut client_caps)?
+        let mut client_session = match decoded_client_session {
+            Some(client_session) => client_session,
+            None => decode_client_session(req, is_worksheet, &mut client_caps)?,
         };
         if client_session.is_none() && !matches!(self.endpoint_kind, EndpointKind::PollQuery) {
             info!(
@@ -511,13 +586,31 @@ impl<E> HTTPSessionEndpoint<E> {
                 //     log every request, which can be distinguished by `session_id = ''`
                 login_history.disable_write = true;
             }
+            // Query-scoped authorization must not renew a client session.
             if ClientSessionType::IDOnly != s.typ
                 && !matches!(&credential, Credential::QueryToken { .. })
+                && !is_bound_query
             {
                 s.try_refresh_state(session.get_current_tenant(), &user_name, req.cookie())
                     .await?;
             }
         }
+        if is_bound_query {
+            // A bound follow-up is not a login: the credential was not verified.
+            login_history.disable_write = true;
+        }
+
+        // Only a normally authenticated submission can establish a binding.
+        // If a network policy applied, retain the IP it admitted, not the policy.
+        let credential_binding = credential_binding
+            .filter(|_| matches!(self.endpoint_kind, EndpointKind::StartQuery))
+            .and_then(|binding| {
+                if network_policy_applies(&session) {
+                    binding.restrict_to_client_ip(client_host.as_deref())
+                } else {
+                    Some(binding)
+                }
+            });
 
         let session = session_manager.register_session(session)?;
 
@@ -537,6 +630,8 @@ impl<E> HTTPSessionEndpoint<E> {
             session,
             authenticated_tenant,
             authenticated_query,
+            credential_binding,
+            authorized_by_binding: is_bound_query,
             query_id,
             is_query_id_from_client,
             node_id,

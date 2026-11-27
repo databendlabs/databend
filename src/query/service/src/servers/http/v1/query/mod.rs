@@ -16,6 +16,7 @@
 databend_common_tracing::register_module_tag!("[HTTP-QUERY]");
 
 pub mod blocks_serializer;
+mod credential_binding;
 pub mod execute_state;
 pub mod expirable;
 pub mod expiring_map;
@@ -27,6 +28,7 @@ mod query_token;
 mod result_cache_owner;
 pub mod sized_spsc;
 
+pub use credential_binding::CredentialBinding;
 pub(crate) use execute_state::ExecuteState;
 pub use execute_state::ExecuteStateKind;
 pub(crate) use execute_state::Executor;

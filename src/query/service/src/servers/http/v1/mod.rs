@@ -41,6 +41,7 @@ use poem::Request;
 use poem::Response;
 #[cfg(not(feature = "storage-stage"))]
 use poem::web::Multipart;
+pub use query::CredentialBinding;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
 pub use query::ExpiringState;
