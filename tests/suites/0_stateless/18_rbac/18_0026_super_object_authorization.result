@@ -57,7 +57,12 @@ denied
 allowed
 allowed
 allowed
-procedure body visible when RBAC is disabled
+=== Legacy procedure listings show every row, but a body needs DESC PROCEDURE access ===
+visible=1
+denied
+procedure body is NULL without access
+procedure body visible to SUPER
+procedure body visible with ACCESS PROCEDURE
 SHOW PROCEDURES omits the body column
 === Only direct SUPER or SUPER on the current role can change the global switches ===
 allowed

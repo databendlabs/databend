@@ -200,10 +200,23 @@ expect_allowed super_direct_user "SET GLOBAL $rbac_check = 0"
 expect_allowed super_public_creator 'SELECT super_private_udf(1)'
 expect_allowed super_public_creator 'LIST @super_private_stage'
 
+echo '=== Legacy procedure listings show every row, but a body needs DESC PROCEDURE access ==='
+expect_visible super_public_creator 'SELECT name FROM system.procedures' super_private_proc 1
+expect_denied super_public_creator 'DESC PROCEDURE super_private_proc()' AccessProcedure
 request super_public_creator "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == [[null]]
+' >/dev/null
+echo 'procedure body is NULL without access'
+request super_direct_user "$procedure_body_sql" | jq -e '
 	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
 ' >/dev/null
-echo 'procedure body visible when RBAC is disabled'
+echo 'procedure body visible to SUPER'
+bendsql_connect_root_null --query='GRANT ACCESS PROCEDURE ON PROCEDURE super_private_proc() TO ROLE super_creator_role;'
+request super_public_creator "$procedure_body_sql" '{"role":"super_creator_role"}' | jq -e '
+	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
+' >/dev/null
+echo 'procedure body visible with ACCESS PROCEDURE'
+bendsql_connect_root_null --query='REVOKE ACCESS PROCEDURE ON PROCEDURE super_private_proc() FROM ROLE super_creator_role;'
 request super_public_creator "SHOW PROCEDURES WHERE name = 'super_private_proc'" | jq -e '
 	.state == "Succeeded" and .error == null and
 	(.schema | map(.name)) == ["name", "procedure_id", "arguments", "comment", "description", "created_on"] and

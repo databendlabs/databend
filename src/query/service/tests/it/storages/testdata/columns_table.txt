@@ -23,7 +23,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'batch_number'                    | 'system'             | 'history_etl'             | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'bloom_index_size'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'bloom_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'body'                            | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'body'                            | 'system'             | 'procedures'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'bound_source_generation'         | 'system'             | 'materialized_views'      | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'byte_size'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'cache_key_extras'                | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
