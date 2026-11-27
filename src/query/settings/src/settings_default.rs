@@ -1805,7 +1805,7 @@ impl DefaultSettings {
                 }),
                 ("queries_queue_retry_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5 * 60),
-                    desc: "Seconds that a query waits for a slot on one attempt, in a queue kept in meta-service such as a workload group queue, before it gives up its place and enters the queue again at the back. 0 means an attempt waits without a limit.",
+                    desc: "Seconds that a query waits for a slot on one attempt, in a queue kept in meta-service such as a workload group queue, before it gives up its place and enters the queue again at the back. 0 means 365 days.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
