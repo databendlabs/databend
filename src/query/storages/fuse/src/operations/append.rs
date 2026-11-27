@@ -35,6 +35,7 @@ use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
+use databend_common_pipeline_transforms::build_split_only_block_pipeline;
 use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::ClusterKeys;
@@ -97,6 +98,11 @@ impl FuseTable {
                 pipeline
                     .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
                 pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+            } else if ctx.copy_state().get_file_sort_keys().is_some() {
+                // COPY with SORTED_BY_CLUSTER_KEY: each block already holds a contiguous range of
+                // one input file. Combining blocks would mix ranges and make them overlap.
+                let max_threads = ctx.get_settings().get_max_threads()? as usize;
+                build_split_only_block_pipeline(pipeline, block_thresholds, max_threads)?;
             } else {
                 build_compact_block_pipeline(pipeline, block_thresholds)?;
             }
