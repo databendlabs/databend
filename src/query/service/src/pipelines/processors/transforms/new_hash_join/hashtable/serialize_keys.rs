@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -35,7 +34,8 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeDat
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::probe_chain::BinaryKeyEntries;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::probe_chain::ChainProbeStream;
 
 impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
     pub fn new(
@@ -109,6 +109,7 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
         let hash_method = &self.hash_method;
         let mut hashes = Vec::with_capacity(num_rows);
         let keys = Self::probe_keys(hash_method, data.columns(), num_rows, &mut hashes)?;
+        let entries = BinaryKeyEntries::new(keys);
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -133,13 +134,18 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<true, UNIQUE>::create(
+                true => Ok(ChainProbeStream::<_, true, UNIQUE>::from_selection(
+                    entries,
                     hashes,
-                    keys,
-                    &ctx.selection,
+                    &mut ctx.selection,
                     &[],
                 )),
-                false => Ok(BinaryKeyProbeStream::<true, UNIQUE>::create(hashes, keys)),
+                false => Ok(ChainProbeStream::<_, true, UNIQUE>::from_pointers(
+                    entries,
+                    hashes,
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                )),
             },
         }
     }
@@ -149,6 +155,7 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
         let hash_method = &self.hash_method;
         let mut hashes = Vec::with_capacity(num_rows);
         let keys = Self::probe_keys(hash_method, data.columns(), num_rows, &mut hashes)?;
+        let entries = BinaryKeyEntries::new(keys);
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -177,13 +184,18 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<false, UNIQUE>::create(
+                true => Ok(ChainProbeStream::<_, false, UNIQUE>::from_selection(
+                    entries,
                     hashes,
-                    keys,
-                    &ctx.selection,
+                    &mut ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(BinaryKeyProbeStream::<false, UNIQUE>::create(hashes, keys)),
+                false => Ok(ChainProbeStream::<_, false, UNIQUE>::from_pointers(
+                    entries,
+                    hashes,
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                )),
             },
         }
     }
@@ -239,251 +251,5 @@ impl KeyAccessor for DictKeys {
 
     fn len(&self) -> usize {
         self.keys.len()
-    }
-}
-
-pub struct BinaryKeyProbeStream<const MATCHED: bool, const MATCH_FIRST: bool> {
-    key_idx: usize,
-    pointers: Vec<u64>,
-    keys: Box<dyn KeyAccessor<Key = [u8]>>,
-    probe_entry_ptr: u64,
-    matched_num_rows: usize,
-}
-
-impl<const MATCHED: bool, const MATCH_FIRST: bool> BinaryKeyProbeStream<MATCHED, MATCH_FIRST> {
-    pub fn create(
-        pointers: Vec<u64>,
-        keys: Box<dyn KeyAccessor<Key = [u8]>>,
-    ) -> Box<dyn ProbeStream> {
-        Box::new(BinaryKeyProbeStream::<MATCHED, MATCH_FIRST> {
-            keys,
-            pointers,
-            key_idx: 0,
-            probe_entry_ptr: 0,
-            matched_num_rows: 0,
-        })
-    }
-}
-
-impl<const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
-    for BinaryKeyProbeStream<MATCHED, MATCH_FIRST>
-{
-    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        while self.key_idx < self.keys.len() {
-            if res.matched_probe.len() == max_rows {
-                break;
-            }
-
-            if !MATCHED && res.unmatched.len() >= max_rows {
-                break;
-            }
-
-            assume(res.unmatched.len() < res.unmatched.capacity());
-            assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() < res.matched_build.capacity());
-            assume(res.matched_probe.len() < res.matched_probe.capacity());
-            assume(self.key_idx < self.pointers.len());
-
-            if self.probe_entry_ptr == 0 {
-                self.probe_entry_ptr = self.pointers[self.key_idx];
-
-                if self.probe_entry_ptr == 0 {
-                    if !MATCHED {
-                        res.unmatched.push(self.key_idx as u64);
-                    }
-
-                    self.key_idx += 1;
-                    self.matched_num_rows = 0;
-                    continue;
-                }
-            }
-
-            let key = unsafe { self.keys.key_unchecked(self.key_idx) };
-
-            while self.probe_entry_ptr != 0 {
-                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
-                // Compare `early` and the length of the string, the size of `early` is 4.
-                let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
-
-                unsafe {
-                    if raw_entry.length as usize == key.len()
-                        && key[0..min_len] == raw_entry.early[0..min_len]
-                    {
-                        let key_ref = std::slice::from_raw_parts(
-                            raw_entry.key as *const u8,
-                            raw_entry.length as usize,
-                        );
-                        if key == key_ref {
-                            let row_ptr = raw_entry.row_ptr;
-                            res.matched_probe.push(self.key_idx as u64);
-                            res.matched_build.push(row_ptr);
-                            self.matched_num_rows += 1;
-
-                            if res.matched_probe.len() == max_rows {
-                                self.probe_entry_ptr = match MATCH_FIRST {
-                                    true => 0,
-                                    false => raw_entry.next,
-                                };
-
-                                if self.probe_entry_ptr == 0 {
-                                    self.key_idx += 1;
-                                    self.matched_num_rows = 0;
-                                }
-
-                                return Ok(());
-                            }
-
-                            if MATCH_FIRST {
-                                self.probe_entry_ptr = 0;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                self.probe_entry_ptr = raw_entry.next;
-            }
-
-            if !MATCHED && self.matched_num_rows == 0 {
-                res.unmatched.push(self.key_idx as u64);
-            }
-
-            self.key_idx += 1;
-            self.matched_num_rows = 0;
-        }
-
-        Ok(())
-    }
-}
-
-pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool, const MATCH_FIRST: bool> {
-    idx: usize,
-    pointers: Vec<u64>,
-    keys: Box<dyn KeyAccessor<Key = [u8]>>,
-    probe_entry_ptr: u64,
-    selections: &'a [u32],
-    unmatched_selection: &'a [u32],
-    matched_num_rows: usize,
-    returned_unmatched: bool,
-}
-
-impl<'a, const MATCHED: bool, const MATCH_FIRST: bool>
-    EarlyFilteringProbeStream<'a, MATCHED, MATCH_FIRST>
-{
-    pub fn create(
-        pointers: Vec<u64>,
-        keys: Box<dyn KeyAccessor<Key = [u8]>>,
-        selections: &'a [u32],
-        unmatched_selection: &'a [u32],
-    ) -> Box<dyn ProbeStream + 'a> {
-        Box::new(EarlyFilteringProbeStream::<'a, MATCHED, MATCH_FIRST> {
-            keys,
-            pointers,
-            selections,
-            unmatched_selection,
-            idx: 0,
-            probe_entry_ptr: 0,
-            matched_num_rows: 0,
-            returned_unmatched: false,
-        })
-    }
-}
-
-impl<'a, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
-    for EarlyFilteringProbeStream<'a, MATCHED, MATCH_FIRST>
-{
-    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        if !MATCHED && !self.returned_unmatched {
-            self.returned_unmatched = true;
-            res.unmatched
-                .extend(self.unmatched_selection.iter().map(|x| *x as u64));
-        }
-
-        while self.idx < self.selections.len() {
-            let key_idx = self.selections[self.idx] as usize;
-
-            if res.matched_probe.len() == max_rows {
-                break;
-            }
-
-            if !MATCHED && res.unmatched.len() >= max_rows {
-                break;
-            }
-
-            assume(res.unmatched.len() < res.unmatched.capacity());
-            assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() < res.matched_build.capacity());
-            assume(res.matched_probe.len() < res.matched_probe.capacity());
-            assume(key_idx < self.pointers.len());
-
-            if self.probe_entry_ptr == 0 {
-                self.probe_entry_ptr = self.pointers[key_idx];
-
-                if self.probe_entry_ptr == 0 {
-                    if !MATCHED {
-                        res.unmatched.push(key_idx as u64);
-                    }
-
-                    self.idx += 1;
-                    self.matched_num_rows = 0;
-                    continue;
-                }
-            }
-
-            let key = unsafe { self.keys.key_unchecked(key_idx) };
-
-            while self.probe_entry_ptr != 0 {
-                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
-                // Compare `early` and the length of the string, the size of `early` is 4.
-                let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
-
-                unsafe {
-                    if raw_entry.length as usize == key.len()
-                        && key[0..min_len] == raw_entry.early[0..min_len]
-                    {
-                        let key_ref = std::slice::from_raw_parts(
-                            raw_entry.key as *const u8,
-                            raw_entry.length as usize,
-                        );
-                        if key == key_ref {
-                            let row_ptr = raw_entry.row_ptr;
-                            res.matched_probe.push(key_idx as u64);
-                            res.matched_build.push(row_ptr);
-                            self.matched_num_rows += 1;
-
-                            if res.matched_probe.len() == max_rows {
-                                self.probe_entry_ptr = match MATCH_FIRST {
-                                    true => 0,
-                                    false => raw_entry.next,
-                                };
-
-                                if self.probe_entry_ptr == 0 {
-                                    self.idx += 1;
-                                    self.matched_num_rows = 0;
-                                }
-
-                                return Ok(());
-                            }
-
-                            if MATCH_FIRST {
-                                self.probe_entry_ptr = 0;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                self.probe_entry_ptr = raw_entry.next;
-            }
-
-            if !MATCHED && self.matched_num_rows == 0 {
-                res.unmatched.push(key_idx as u64);
-            }
-
-            self.idx += 1;
-            self.matched_num_rows = 0;
-        }
-
-        Ok(())
     }
 }
