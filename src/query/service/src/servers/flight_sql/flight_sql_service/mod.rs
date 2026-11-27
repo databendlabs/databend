@@ -26,8 +26,7 @@ use std::sync::Arc;
 use arrow_flight::FlightData;
 use catalog::CatalogInfoProvider;
 use dashmap::DashMap;
-use databend_common_sql::PlanExtras;
-use databend_common_sql::plans::Plan;
+use databend_common_expression::DataSchemaRef;
 use futures::Stream;
 use parking_lot::Mutex;
 use sql_info::SqlInfoProvider;
@@ -50,9 +49,20 @@ pub(crate) use status;
 
 type DoGetStream = Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send + 'static>>;
 
+/// A prepared statement keeps its SQL, not its plan: binding resolves the session's user and
+/// roles into the plan, such as the value of `current_role()` in a masking policy, and adds them
+/// to the result cache key of the context it binds in. Each execution binds the SQL again in the
+/// context that runs it, so a REVOKE since the statement was prepared takes effect.
+#[derive(Clone)]
+struct PreparedStatement {
+    query: String,
+    /// The result schema when the statement was prepared, sent to the client at once.
+    schema: DataSchemaRef,
+}
+
 pub struct FlightSqlServiceImpl {
     pub sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
-    statements: Arc<DashMap<Uuid, (Plan, PlanExtras)>>,
+    statements: Arc<DashMap<Uuid, PreparedStatement>>,
     version: BuildInfoRef,
 }
 

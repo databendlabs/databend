@@ -15,11 +15,13 @@
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
 use std::fs;
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
 use arrow_array::RecordBatch;
+use arrow_cast::display::array_value_to_string;
 use arrow_cast::pretty::pretty_format_batches;
 use arrow_flight::Action;
 use arrow_flight::FlightData;
@@ -33,6 +35,7 @@ use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::client::FlightSqlServiceClient;
+use arrow_flight::sql::client::PreparedStatement;
 use databend_common_base::runtime::Runtime;
 use databend_common_config::InnerConfig;
 use databend_common_config::UserAuthConfig;
@@ -41,6 +44,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
+use databend_query::catalogs::Catalog;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
@@ -222,6 +226,25 @@ async fn assert_prepared_statement_lifecycle(client: &mut FlightSqlServiceClient
     statement.close().await.unwrap(); // Closing an already removed statement is idempotent.
 }
 
+async fn wait_for_table_unlocked(
+    catalog: &Arc<dyn Catalog>,
+    request: &ListLockRevReq,
+    message: &str,
+) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !catalog
+            .list_lock_revisions(request.clone())
+            .await
+            .unwrap()
+            .is_empty()
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect(message);
+}
+
 async fn assert_prepared_update_lock(
     fixture: &TestFixture,
     client: &mut FlightSqlServiceClient<Channel>,
@@ -231,7 +254,7 @@ async fn assert_prepared_update_lock(
         fixture.default_db_name(),
         fixture.default_table_name()
     );
-    let statement = client
+    let mut statement = client
         .prepare(format!("UPDATE {table_name} SET id = 2"), None)
         .await
         .unwrap();
@@ -245,31 +268,15 @@ async fn assert_prepared_update_lock(
         tenant: fixture.default_tenant(),
         table_id: table.get_id(),
     });
-    let revisions = catalog.list_lock_revisions(request.clone()).await.unwrap();
-    assert_eq!(
-        revisions.len(),
-        1,
-        "prepare must hold a revision to release"
-    );
-    assert!(revisions[0].1.acquired_on.is_some());
+    // Prepare binds the UPDATE to get its schema and drops the plan with its table lock: each
+    // execution binds it again and takes the lock for that execution only.
+    wait_for_table_unlocked(&catalog, &request, "prepare must not keep the table lock").await;
 
-    statement.close().await.unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while !catalog
-            .list_lock_revisions(request.clone())
-            .await
-            .unwrap()
-            .is_empty()
-        {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("Close must release the prepared UPDATE's table lock");
     client
         .execute_update("SET acquire_lock_timeout = 0".to_string(), None)
         .await
         .unwrap();
+    // An open prepared UPDATE does not block another writer.
     assert_eq!(
         client
             .execute_update(format!("UPDATE {table_name} SET id = 3"), None)
@@ -277,6 +284,16 @@ async fn assert_prepared_update_lock(
             .unwrap(),
         1
     );
+    for _ in 0..2 {
+        assert_eq!(statement.execute_update().await.unwrap(), 1);
+        wait_for_table_unlocked(
+            &catalog,
+            &request,
+            "an execution must release its table lock",
+        )
+        .await;
+    }
+    statement.close().await.unwrap();
 }
 
 fn prepare_config() -> InnerConfig {
@@ -295,6 +312,41 @@ fn prepare_config() -> InnerConfig {
         .build()
 }
 
+/// Serves `service` on a Unix socket, runs `requests` with the socket path, then shuts it down.
+fn serve<Fut: Future<Output = ()>>(
+    service: Arc<FlightSqlServiceImpl>,
+    requests: impl FnOnce(String) -> Fut,
+) -> Result<()> {
+    let runtime = Runtime::with_default_worker_threads(Some("flight-sql-test".to_string()))?;
+    runtime.block_on(async move {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.into_temp_path().to_str().unwrap().to_string();
+        let _ = fs::remove_file(path.clone());
+
+        let uds = UnixListener::bind(path.clone()).unwrap();
+        let stream = UnixListenerStream::new(uds);
+
+        // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+        let serve_future = Server::builder()
+            .add_service(FlightServiceServer::from_arc(service))
+            .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
+        tokio::pin!(serve_future);
+
+        tokio::select! {
+            _ = &mut serve_future => panic!("server returned first"),
+            _ = requests(path) => {
+                debug!("Client finished!");
+            }
+        }
+        shutdown_tx.send(()).unwrap();
+        serve_future.await.unwrap();
+        debug!("Server shutdown!");
+
+        Ok(())
+    })
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_query() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&prepare_config()).await?;
@@ -308,72 +360,174 @@ async fn test_query() -> Result<()> {
         ))
         .await?;
 
-    let runtime = Runtime::with_default_worker_threads(Some("flight-sql-test".to_string()))?;
-    runtime.block_on(async {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.into_temp_path().to_str().unwrap().to_string();
-        let _ = fs::remove_file(path.clone());
+    let service = Arc::new(FlightSqlServiceImpl::create(
+        &databend_common_version::BUILD_INFO,
+    ));
+    let fixture = &fixture;
+    serve(service.clone(), |path| async move {
+        let mut mint = Mint::new("tests/it/servers/flight_sql/testdata");
+        let mut file = mint.new_goldenfile("query.txt").unwrap();
 
-        let uds = UnixListener::bind(path.clone()).unwrap();
-        let stream = UnixListenerStream::new(uds);
+        let mut client = client_with_uds(path).await;
+        let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
 
-        // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
-        let service = Arc::new(FlightSqlServiceImpl::create(&databend_common_version::BUILD_INFO));
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-        let serve_future = Server::builder()
-            .add_service(FlightServiceServer::from_arc(service.clone()))
-            .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
+        debug!("Auth succeeded with token: {:?}", token);
+        assert_prepared_put_handle_errors(&mut client).await;
+        let cases = [
+            "select 1, 'abc', 1.1, 1.1::float32 as c, 1::nullable(int) as b",
+            "select [1, 2]",
+            "select (1, 1.1)",
+            "select {1: 11, 2: 22}",
+            "show tables",
+            "drop table if exists test1",
+            "create table test1(a int, b string)",
+            "insert into table test1(a, b) values (1, 'x'), (2, 'y')",
+            "select * from test1",
+        ];
+        for case in cases {
+            writeln!(file, "---------- Input ----------").unwrap();
+            writeln!(file, "{}", case).unwrap();
+            writeln!(file, "---------- Output ---------").unwrap();
+            let res = match run_query(&mut client, case).await {
+                Ok(s) => s,
+                Err(e) => format!("{e:?}"),
+            };
+            writeln!(file, "{}", res).unwrap();
+        }
+        assert_prepared_statement_lifecycle(&mut client).await;
+        assert_prepared_update_lock(fixture, &mut client).await;
+        // Invalidate a real handshake token without waiting for its wall-clock TTL.
+        let statement = client.prepare("SELECT 1".to_string(), None).await.unwrap();
+        service.sessions.lock().remove(client.token().unwrap());
+        let error = statement.close().await.unwrap_err();
+        assert!(
+            matches!(&error, FlightError::Tonic(status) if status.code() == Code::Unauthenticated),
+            "{error}"
+        );
+    })
+}
 
-        let request_future = async {
-            let mut mint = Mint::new("tests/it/servers/flight_sql/testdata");
-            let mut file = mint.new_goldenfile("query.txt").unwrap();
+/// Executes `statement` and returns the first value of its result, as text.
+async fn first_value(
+    client: &mut FlightSqlServiceClient<Channel>,
+    statement: &mut PreparedStatement<Channel>,
+) -> String {
+    let info = statement.execute().await.unwrap();
+    let ticket = info.endpoint[0].ticket.clone().unwrap();
+    let batches: Vec<RecordBatch> = client
+        .do_get(ticket)
+        .await
+        .unwrap()
+        .try_collect()
+        .await
+        .unwrap();
+    let batch = batches.iter().find(|batch| batch.num_rows() > 0).unwrap();
+    array_value_to_string(batch.column(0), 0).unwrap()
+}
 
-            let mut client = client_with_uds(path).await;
-            let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
-
-            debug!("Auth succeeded with token: {:?}", token);
-            assert_prepared_put_handle_errors(&mut client).await;
-            let cases = [
-                "select 1, 'abc', 1.1, 1.1::float32 as c, 1::nullable(int) as b",
-                "select [1, 2]",
-                "select (1, 1.1)",
-                "select {1: 11, 2: 22}",
-                "show tables",
-                "drop table if exists test1",
-                "create table test1(a int, b string)",
-                "insert into table test1(a, b) values (1, 'x'), (2, 'y')",
-                "select * from test1",
-            ];
-            for case in cases {
-                writeln!(file, "---------- Input ----------").unwrap();
-                writeln!(file, "{}", case).unwrap();
-                writeln!(file, "---------- Output ---------").unwrap();
-                let res = match run_query(&mut client, case).await {
-                    Ok(s) => s,
-                    Err(e) => format!("{e:?}"),
-                };
-                writeln!(file, "{}", res).unwrap();
+/// Waits until `sql` would read a cached result in the session of `client`.
+async fn wait_for_cached_result(client: &mut FlightSqlServiceClient<Channel>, sql: &str) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let mut explain = client
+                .prepare(format!("EXPLAIN {sql}"), None)
+                .await
+                .unwrap();
+            let plan = first_value(client, &mut explain).await;
+            explain.close().await.unwrap();
+            if plan == "ReadQueryResultCache" {
+                return;
             }
-            assert_prepared_statement_lifecycle(&mut client).await;
-            assert_prepared_update_lock(&fixture, &mut client).await;
-            // Invalidate a real handshake token without waiting for its wall-clock TTL.
-            let statement = client.prepare("SELECT 1".to_string(), None).await.unwrap();
-            service.sessions.lock().remove(client.token().unwrap());
-            let error = statement.close().await.unwrap_err();
-            assert!(matches!(&error, FlightError::Tonic(status) if status.code() == Code::Unauthenticated), "{error}");
-        };
-        tokio::pin!(serve_future);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the result of the first execution must be cached");
+}
 
-        tokio::select! {
-            _ = &mut serve_future => panic!("server returned first"),
-            _ = request_future => {
-                debug!("Client finished!");
+/// A prepared statement is bound again when it executes, in the context that runs it: the
+/// values binding resolves, and the result cache key they are added to, are those of the user
+/// and roles at execution, not at prepare.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_prepared_statement_binds_on_execution() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    let table = format!(
+        "{}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    for sql in [
+        format!("INSERT INTO {table}(id) VALUES (1)"),
+        "CREATE ROLE flight_prepared_role".to_string(),
+        "CREATE USER flight_prepared_a IDENTIFIED BY 'password'".to_string(),
+        "CREATE USER flight_prepared_b IDENTIFIED BY 'password'".to_string(),
+        "GRANT ROLE flight_prepared_role TO flight_prepared_a".to_string(),
+        format!("GRANT SELECT ON {table} TO flight_prepared_a"),
+        format!("GRANT SELECT ON {table} TO flight_prepared_b"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let service = Arc::new(FlightSqlServiceImpl::create(
+        &databend_common_version::BUILD_INFO,
+    ));
+    let fixture = &fixture;
+    serve(service, |path| async move {
+        let mut user_a = client_with_uds(path.clone()).await;
+        user_a
+            .handshake("flight_prepared_a", "password")
+            .await
+            .unwrap();
+        let mut user_b = client_with_uds(path).await;
+        user_b
+            .handshake("flight_prepared_b", "password")
+            .await
+            .unwrap();
+
+        // Binding resolves IS_ROLE_IN_SESSION to a constant: after a REVOKE, a statement
+        // prepared before it must not run with the value bound at prepare.
+        let sql = "SELECT is_role_in_session('flight_prepared_role')";
+        let mut in_role = user_a.prepare(sql.to_string(), None).await.unwrap();
+        assert_eq!(first_value(&mut user_a, &mut in_role).await, "true");
+        fixture
+            .execute_command("REVOKE ROLE flight_prepared_role FROM flight_prepared_a")
+            .await
+            .unwrap();
+        assert_eq!(first_value(&mut user_a, &mut in_role).await, "false");
+        in_role.close().await.unwrap();
+
+        // Binding adds the value of current_user() to the result cache key of its context: the
+        // execution must use that key, or user b reads the result cached for user a.
+        for client in [&mut user_a, &mut user_b] {
+            for setting in [
+                "SET enable_query_result_cache = 1",
+                "SET query_result_cache_min_execute_secs = 0",
+            ] {
+                client
+                    .execute_update(setting.to_string(), None)
+                    .await
+                    .unwrap();
             }
         }
-        shutdown_tx.send(()).unwrap();
-        serve_future.await.unwrap();
-        debug!("Server shutdown!");
-
-        Ok(())
+        let sql = format!("SELECT current_user(), id FROM {table}");
+        let mut by_a = user_a.prepare(sql.clone(), None).await.unwrap();
+        assert_eq!(
+            first_value(&mut user_a, &mut by_a).await,
+            "'flight_prepared_a'@'%'"
+        );
+        wait_for_cached_result(&mut user_a, &sql).await;
+        assert_eq!(
+            first_value(&mut user_a, &mut by_a).await,
+            "'flight_prepared_a'@'%'"
+        );
+        let mut by_b = user_b.prepare(sql, None).await.unwrap();
+        assert_eq!(
+            first_value(&mut user_b, &mut by_b).await,
+            "'flight_prepared_b'@'%'"
+        );
+        by_a.close().await.unwrap();
+        by_b.close().await.unwrap();
     })
 }
