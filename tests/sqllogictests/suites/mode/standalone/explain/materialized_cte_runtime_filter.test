@@ -191,7 +191,7 @@ Sequence
 │           ├── apply join filters: [#3, #0]
 │           └── estimated rows: 100000.00
 └── AggregateFinal
-    ├── output columns: [COUNT(*) (#5)]
+    ├── output columns: [COUNT(*) (#14)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
@@ -203,17 +203,17 @@ Sequence
             ├── output columns: []
             ├── join type: RIGHT SEMI
             ├── build keys: [cte_rf_dim3.k (#4)]
-            ├── probe keys: [subquery_10 (#10)]
+            ├── probe keys: [subquery_9 (#9)]
             ├── keys is null equal: [false]
             ├── filters: []
             ├── build join filters:
-            │   └── filter id:2, build key:cte_rf_dim3.k (#4), probe targets:[subquery_10 (#10)@scan5], filter type:bloom,inlist,min_max
+            │   └── filter id:2, build key:cte_rf_dim3.k (#4), probe targets:[cte_rf_dim1.k (#9)@scan5], filter type:bloom,inlist,min_max
             ├── estimated rows: 4.56
             ├── HashJoin(Build)
             │   ├── output columns: [cte_rf_dim3.k (#4)]
             │   ├── join type: RIGHT SEMI
             │   ├── build keys: [cte_rf_dim3.k (#4)]
-            │   ├── probe keys: [CAST(subquery_6 (#6) AS UInt64 NULL)]
+            │   ├── probe keys: [CAST(subquery_5 (#5) AS UInt64 NULL)]
             │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── build join filters:
@@ -232,20 +232,20 @@ Sequence
             │   │   └── estimated rows: 5.00
             │   └── MaterializeCTERef(Probe)
             │       ├── cte_name: c
-            │       ├── cte_schema: [k (#6)]
+            │       ├── cte_schema: [k (#5)]
             │       └── estimated rows: 2973093.50
             └── HashJoin(Probe)
-                ├── output columns: [cte_rf_dim1.k (#10)]
+                ├── output columns: [cte_rf_dim1.k (#9)]
                 ├── join type: INNER
-                ├── build keys: [cte_rf_dim1.k (#10)]
-                ├── probe keys: [CAST(c.k (#11) AS UInt64 NULL)]
+                ├── build keys: [cte_rf_dim1.k (#9)]
+                ├── probe keys: [CAST(c.k (#10) AS UInt64 NULL)]
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── estimated rows: 15468.75
                 ├── TableScan(Build)
                 │   ├── table: default.default.cte_rf_dim1
                 │   ├── scan id: 5
-                │   ├── output columns: [k (#10)]
+                │   ├── output columns: [k (#9)]
                 │   ├── read rows: 5
                 │   ├── read size: < 1 KiB
                 │   ├── partitions total: 1
@@ -256,7 +256,7 @@ Sequence
                 │   └── estimated rows: 5.00
                 └── MaterializeCTERef(Probe)
                     ├── cte_name: c
-                    ├── cte_schema: [k (#11)]
+                    ├── cte_schema: [k (#10)]
                     └── estimated rows: 2973093.50
 
 query I
