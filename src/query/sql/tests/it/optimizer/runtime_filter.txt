@@ -378,6 +378,143 @@ EvalScalar
                 └── runtime filters: [#0: rf_fact.k (#0)]
 
 
+=== window_computed_partition_dependency_is_not_pushed ===
+description: A runtime filter on k could remove only part of a partition defined by k % 2.
+sql: SELECT f.rn FROM (SELECT k, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4) AS (#4)]
+        └── Window
+            ├── aggregate function: row_number
+            ├── partition items: [modulo(rf_fact.k (#0), 2) AS (#3)]
+            ├── order by items: [rf_fact.v (#1) AS (#1)]
+            ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            └── Sort
+                ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, rf_fact.v (#1) ASC NULLS LAST]
+                ├── limit: [NONE]
+                ├── window top: NONE
+                ├── window function: RowNumber
+                └── EvalScalar
+                    ├── scalars: [rf_fact.v (#1) AS (#1), modulo(rf_fact.k (#0), 2) AS (#3)]
+                    └── Scan
+                        ├── table: default.rf_fact (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4) AS (#4), rf_fact.k (#0) AS (#7), rf_dim.k (#5) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#5) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [modulo(rf_fact.k (#0), 2) AS (#3)]
+        ├── order by items: [rf_fact.v (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, rf_fact.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            ├── window top: NONE
+            ├── window function: RowNumber
+            └── EvalScalar
+                ├── scalars: [rf_fact.v (#1) AS (#1), modulo(rf_fact.k (#0), 2) AS (#3)]
+                └── Scan
+                    ├── table: default.rf_fact (#0)
+                    ├── filters: []
+                    ├── order by: [row_number_part_0 (#3) ASC, rf_fact.v (#1) ASC]
+                    └── limit: NONE
+
+
+=== window_partition_expression_key ===
+description: A probe key equal to the partition expression has one value per partition, so the runtime filter passes the window.
+sql: SELECT f.rn FROM (SELECT k, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM rf_fact) f
+JOIN rf_dim d ON f.k % 2 = d.k
+raw_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [modulo(rf_fact.k (#0), 2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4) AS (#4)]
+        └── Window
+            ├── aggregate function: row_number
+            ├── partition items: [modulo(rf_fact.k (#0), 2) AS (#3)]
+            ├── order by items: [rf_fact.v (#1) AS (#1)]
+            ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            └── Sort
+                ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, rf_fact.v (#1) ASC NULLS LAST]
+                ├── limit: [NONE]
+                ├── window top: NONE
+                ├── window function: RowNumber
+                └── EvalScalar
+                    ├── scalars: [rf_fact.v (#1) AS (#1), modulo(rf_fact.k (#0), 2) AS (#3)]
+                    └── Scan
+                        ├── table: default.rf_fact (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4) AS (#4), rf_fact.k (#0) AS (#7), rf_dim.k (#5) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [modulo(rf_fact.k (#0), 2)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#5) -> modulo(rf_fact.k (#0), 2)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [modulo(rf_fact.k (#0), 2) AS (#3)]
+        ├── order by items: [rf_fact.v (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, rf_fact.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            ├── window top: NONE
+            ├── window function: RowNumber
+            └── EvalScalar
+                ├── scalars: [rf_fact.v (#1) AS (#1), modulo(rf_fact.k (#0), 2) AS (#3)]
+                └── Scan
+                    ├── table: default.rf_fact (#0)
+                    ├── filters: []
+                    ├── order by: [row_number_part_0 (#3) ASC, rf_fact.v (#1) ASC]
+                    ├── limit: NONE
+                    └── runtime filters: [#0: modulo(rf_fact.k (#0), 2)]
+
+
 === window_without_partition_is_not_pushed ===
 description: Removing rows below a window without that partition key changes the window results, so the filter is removed.
 sql: SELECT f.rn FROM (SELECT k, row_number() OVER (ORDER BY v) AS rn FROM rf_fact) f
@@ -559,14 +696,14 @@ EvalScalar
 
 
 === null_supplying_side_of_left_join ===
-description: A NULL-rejecting key passes into the null-supplying side of a lower LEFT JOIN.
-sql: SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON f.k = d.k
+description: The computed probe key leaves the lower join outer in the early pass, but still rejects NULL-extended rows, so the runtime filter reaches the scan.
+sql: SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON (f.k & 255) = d.k
 raw_plan:
 EvalScalar
 ├── scalars: [rf_mid.j (#1) AS (#1)]
 └── Join(Inner)
     ├── build keys: [rf_dim.k (#8)]
-    ├── probe keys: [k (#5)]
+    ├── probe keys: [bit_and(k (#5), 255)]
     ├── other filters: []
     ├── Scan
     │   ├── table: default.rf_dim (#2)
@@ -595,9 +732,9 @@ EvalScalar
 ├── scalars: [rf_mid.j (#1) AS (#1), k (#5) AS (#10), rf_dim.k (#8) AS (#11)]
 └── Join(Inner)
     ├── build keys: [rf_dim.k (#8)]
-    ├── probe keys: [k (#5)]
+    ├── probe keys: [bit_and(k (#5), 255)]
     ├── other filters: []
-    ├── runtime filters: [#0: rf_dim.k (#8) -> k (#5)]
+    ├── runtime filters: [#0: rf_dim.k (#8) -> bit_and(k (#5), 255)]
     ├── Scan
     │   ├── table: default.rf_dim (#2)
     │   ├── filters: []
@@ -620,7 +757,7 @@ EvalScalar
                 ├── filters: []
                 ├── order by: []
                 ├── limit: NONE
-                └── runtime filters: [#0: CAST(rf_fact.k (#2) AS Int32 NULL), #1: CAST(rf_fact.v (#3) AS Int32 NULL)]
+                └── runtime filters: [#0: bit_and(CAST(rf_fact.k (#2) AS Int32 NULL), 255), #1: CAST(rf_fact.v (#3) AS Int32 NULL)]
 
 
 === null_accepting_key_stays_above_left_join ===

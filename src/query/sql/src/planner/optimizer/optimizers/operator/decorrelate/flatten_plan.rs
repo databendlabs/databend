@@ -1238,11 +1238,7 @@ impl SubqueryDecorrelatorOptimizer {
         let mut input = subquery.unary_child();
         let mut skipped_count_sort = false;
         if let RelOperator::Sort(sort) = input.plan()
-            && sort.limit.is_none()
-            && sort
-                .window_partition
-                .as_ref()
-                .is_none_or(|partition| partition.top.is_none())
+            && sort.preserves_rows()
             && (!window.partition_by.is_empty() || !window.order_by.is_empty())
         {
             skipped_count_sort = self.sort_contains_count(sort);

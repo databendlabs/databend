@@ -12,44 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use crate::ColumnSet;
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::partition_filter::WindowFilterPushDown;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
-use crate::plans::Window;
-use crate::plans::WindowGroup;
 
-/// Input:   Filter
-///           \
-///            Window
-///             \
-///              *
-///
-/// Output:
-/// (1)      Window
-///           \
-///            Filter
-///             \
-///              *
-///
-/// (2)
-///          Filter(remaining)
-///           \
-///            Window
-///             \
-///              Filter(pushed down)
-///               \
-///                *
-///
-/// note that only push down filter used in `Window.partition_by` columns
+/// Push down predicates that have one value per window partition, so the
+/// filter removes whole partitions. See `WindowFilterPushDown`.
 pub struct RulePushDownFilterWindow {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -90,74 +63,37 @@ impl Rule for RulePushDownFilterWindow {
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let Filter { predicates } = s_expr.plan().clone().try_into()?;
-        let window_expr = s_expr.child(0)?;
-        let (window_plan, allowed, rejected) =
-            if matches!(window_expr.plan(), RelOperator::WindowGroup(_)) {
-                let window_group: WindowGroup = window_expr.plan().clone().try_into()?;
-                // A filter moved below the group would also remove the rows that its
-                // scalar items, such as `running_difference(v)`, read.
-                if window_group.depends_on_other_rows() {
-                    return Ok(());
-                }
-                let mut allowed = window_group_partition_by_columns(&window_group)?;
-                // WindowGroup evaluates its scalar inputs internally. A reused
-                // partition expression can reference a column that does not yet
-                // exist below the group.
-                let child_columns = RelExpr::with_s_expr(window_expr.child(0)?)
-                    .derive_relational_prop()?
-                    .output_columns
-                    .clone();
-                allowed.retain(|column| child_columns.contains(column));
-                let rejected = window_group_rejected_columns(&window_group)?;
-                (RelOperator::WindowGroup(window_group), allowed, rejected)
+        let window_expr = s_expr.unary_child();
+        let Some(push_down) = WindowFilterPushDown::try_new(window_expr)? else {
+            return Ok(());
+        };
+        let mut pushed_down = vec![];
+        let mut remaining = vec![];
+        for predicate in predicates {
+            if push_down.can_push_down(&predicate)? {
+                pushed_down.push(predicate);
             } else {
-                let window: Window = window_expr.plan().clone().try_into()?;
-                let allowed = window.partition_by_columns()?;
-                let rejected = ColumnSet::from_iter(
-                    window
-                        .order_by_columns()?
-                        .into_iter()
-                        .chain(window.function.used_columns()),
-                );
-                (RelOperator::Window(window), allowed, rejected)
-            };
-
-        let (pushed_down, remaining): (Vec<_>, Vec<_>) =
-            predicates.into_iter().partition(|predicate| {
-                let used = predicate.used_columns();
-                used.is_subset(&allowed) && used.is_disjoint(&rejected)
-            });
+                remaining.push(predicate);
+            }
+        }
         if pushed_down.is_empty() {
             return Ok(());
         }
 
-        let pushed_down_filter = Filter {
-            predicates: pushed_down,
-        };
+        let window = window_expr
+            .unary_child_arc()
+            .ref_build_unary(Filter {
+                predicates: pushed_down,
+            })
+            .build_unary(window_expr.plan.clone());
         let result = if remaining.is_empty() {
-            SExpr::create_unary(
-                Arc::new(window_plan),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(pushed_down_filter.into()),
-                    Arc::new(window_expr.child(0)?.clone()),
-                )),
-            )
+            window
         } else {
-            let remaining_filter = Filter {
+            let mut expr = window.build_unary(Filter {
                 predicates: remaining,
-            };
-            let mut s_expr = SExpr::create_unary(
-                Arc::new(remaining_filter.into()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(window_plan),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(window_expr.child(0)?.clone()),
-                    )),
-                )),
-            );
-            s_expr.set_applied_rule(&self.id);
-            s_expr
+            });
+            expr.set_applied_rule(&self.id);
+            expr
         };
         state.add_result(result);
         Ok(())
@@ -166,34 +102,6 @@ impl Rule for RulePushDownFilterWindow {
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
     }
-}
-
-fn window_group_partition_by_columns(
-    window_group: &WindowGroup,
-) -> databend_common_exception::Result<ColumnSet> {
-    let Some(first) = window_group.windows.first() else {
-        return Ok(ColumnSet::new());
-    };
-
-    let mut allowed = first.partition_by_columns()?;
-    for window in window_group.windows.iter().skip(1) {
-        allowed = allowed
-            .intersection(&window.partition_by_columns()?)
-            .copied()
-            .collect();
-    }
-    Ok(allowed)
-}
-
-fn window_group_rejected_columns(
-    window_group: &WindowGroup,
-) -> databend_common_exception::Result<ColumnSet> {
-    let mut rejected = ColumnSet::new();
-    for window in &window_group.windows {
-        rejected.extend(window.order_by_columns()?);
-        rejected.extend(window.function.used_columns());
-    }
-    Ok(rejected)
 }
 
 impl Default for RulePushDownFilterWindow {

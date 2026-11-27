@@ -44,6 +44,10 @@ pub trait ExprVisitor<K: ExprKind = Logical> {
     /// Visit an expression node
     fn visit(&mut self, expr: &Expr<K>) -> Result<VisitAction<K>>;
 
+    /// Called on the parent immediately before visiting the child at `index`.
+    /// Visitors can use this to select context specific to that input edge.
+    fn before_child(&mut self, _index: usize) {}
+
     /// Post-visit an expression node after its children have been visited
     fn post_visit(&mut self, _expr: &Expr<K>) -> Result<VisitAction<K>> {
         Ok(VisitAction::Continue)
@@ -69,36 +73,18 @@ pub fn visit_expr<K: ExprKind, V: ExprVisitor<K>>(
         VisitAction::Replace(new_expr) => return Ok(Some(new_expr)),
     }
 
-    // Visit children
-    let mut children = Vec::with_capacity(expr.arity());
-    let mut children_changed = false;
-
-    for child in expr.children.iter() {
+    let mut children: Option<Vec<_>> = None;
+    for (index, child) in expr.children.iter().enumerate() {
+        visitor.before_child(index);
         if let Some(new_child) = visit_expr(visitor, child)? {
-            children.push(Arc::new(new_child));
-            children_changed = true;
-        } else {
-            children.push(child.clone());
+            children.get_or_insert_with(|| expr.children.clone())[index] = Arc::new(new_child);
         }
     }
 
-    // Create new expression if children changed
-    let current_expr = if children_changed {
-        expr.replace_children(children)
-    } else {
-        expr.clone()
-    };
-
-    // Post-order visit
-    match visitor.post_visit(&current_expr)? {
+    let rewritten = children.map(|children| expr.replace_children(children));
+    match visitor.post_visit(rewritten.as_ref().unwrap_or(expr))? {
         VisitAction::Replace(new_expr) => Ok(Some(new_expr)),
-        _ => {
-            if children_changed {
-                Ok(Some(current_expr))
-            } else {
-                Ok(None)
-            }
-        }
+        _ => Ok(rewritten),
     }
 }
 

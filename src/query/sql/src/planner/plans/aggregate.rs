@@ -136,13 +136,15 @@ impl Aggregate {
         Ok(used_columns)
     }
 
-    pub fn group_columns(&self) -> Result<ColumnSet> {
-        let mut col_set = ColumnSet::new();
-        for group_item in &self.group_items {
-            col_set.insert(group_item.index);
-            group_item.scalar.collect_used_columns(&mut col_set);
-        }
-        Ok(col_set)
+    /// Group keys that the child already produces. A column that a computed
+    /// key reads is not constant within the group. Callers must separately
+    /// handle grouping sets, rank limits, and scalar evaluation safety.
+    pub fn child_group_columns(&self, child_columns: &ColumnSet) -> ColumnSet {
+        self.group_items
+            .iter()
+            .map(|item| item.index)
+            .filter(|column| child_columns.contains(column))
+            .collect()
     }
 
     pub fn derive_agg_stats(&self, stat_info: Arc<StatInfo>) -> Result<Arc<StatInfo>> {

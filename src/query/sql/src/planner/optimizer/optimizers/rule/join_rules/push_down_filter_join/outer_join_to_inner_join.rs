@@ -149,7 +149,7 @@ pub fn outer_join_to_inner_join(
     Ok((result, true))
 }
 
-fn eliminate_outer_join_type(
+pub(crate) fn eliminate_outer_join_type(
     join_type: JoinType,
     can_filter_left_null: bool,
     can_filter_right_null: bool,
