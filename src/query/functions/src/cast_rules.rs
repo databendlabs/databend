@@ -12,55 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::AutoCastRules;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::auto_cast_rules::cast_from_number_rules;
+use databend_common_expression::auto_cast_rules::cast_from_string_rules;
+use databend_common_expression::auto_cast_rules::cast_from_variant_rules;
+use databend_common_expression::auto_cast_rules::cast_int_to_uint64_rules;
+use databend_common_expression::auto_cast_rules::general_cast_rules;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 
+use crate::CONVERSION_FUNCTIONS;
 use crate::scalars::ALL_COMP_FUNC_NAMES;
 use crate::scalars::ALL_STRING_FUNC_NAMES;
 use crate::scalars::PURE_STRING_FUNC_NAMES;
 
-// Functions whose argument resolution must not use the default String/Variant auto-cast policy.
-// FunctionCall-to-Cast equivalence is determined independently by expression Cast dispatch.
-const CAST_FUNCTIONS_WITH_GENERAL_AUTO_CAST_RULES: &[&str] = &[
-    "to_binary",
-    "to_string",
-    "to_uint8",
-    "to_uint16",
-    "to_uint32",
-    "to_uint64",
-    "to_int8",
-    "to_int16",
-    "to_int32",
-    "to_int64",
-    "to_float32",
-    "to_float64",
-    "to_timestamp",
-    "to_timestamp_tz",
-    "to_interval",
-    "to_date",
-    "to_variant",
-    "to_boolean",
-    "to_decimal",
-    "to_bitmap",
-    "to_geometry",
-    "to_geography",
-    "parse_json",
-];
-
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_default_cast_rules(GENERAL_CAST_RULES.iter().cloned());
-    registry.register_default_cast_rules(CAST_FROM_STRING_RULES.iter().cloned());
-    registry.register_default_cast_rules(CAST_FROM_VARIANT_RULES());
-    registry.register_auto_try_cast_rules(CAST_FROM_VARIANT_RULES());
+    registry.register_default_cast_rules(general_cast_rules());
+    registry.register_default_cast_rules(cast_from_string_rules());
+    registry.register_default_cast_rules(cast_from_variant_rules());
 
     // Time arithmetic returns a Timestamp even for Date inputs. Prefer parsing strings as
     // Timestamp so that a time component is not silently discarded by the Date overload.
     let time_arith_cast_rules = registry
-        .default_cast_rules
+        .default_cast_rules()
         .iter()
         .filter(|(src, dest)| !matches!((src, dest), (DataType::String, DataType::Date)))
         .cloned()
@@ -77,25 +53,19 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 
     for func_name in ["and", "or", "not", "xor", "and_filters", "or_filters"] {
-        for data_type in ALL_INTEGER_TYPES {
-            registry.register_additional_cast_rules(func_name, [(
-                DataType::Number(*data_type),
-                DataType::Boolean,
-            )]);
-            registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
-            registry
-                .register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
-            registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
-        }
-    }
-
-    for func_name in CAST_FUNCTIONS_WITH_GENERAL_AUTO_CAST_RULES {
-        // Disable auto cast from strings or variants.
-        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
+        registry.register_additional_cast_rules(
+            func_name,
+            ALL_INTEGER_TYPES
+                .iter()
+                .map(|data_type| (DataType::Number(*data_type), DataType::Boolean)),
+        );
+        registry.register_additional_cast_rules(func_name, general_cast_rules());
+        registry.register_additional_cast_rules(func_name, cast_from_string_rules());
+        registry.register_additional_cast_rules(func_name, cast_from_variant_rules());
     }
 
     for func_name in ALL_STRING_FUNC_NAMES {
-        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, general_cast_rules());
         if PURE_STRING_FUNC_NAMES.contains(func_name) {
             registry.register_dynamic_cast_rules(
                 func_name,
@@ -110,335 +80,44 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             );
         } else {
-            registry
-                .register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
+            registry.register_additional_cast_rules(func_name, cast_from_string_rules());
         }
-        registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
-        registry.register_additional_cast_rules(func_name, CAST_INT_TO_UINT64.iter().cloned());
+        registry.register_additional_cast_rules(func_name, cast_from_variant_rules());
+        registry.register_additional_cast_rules(func_name, cast_int_to_uint64_rules());
     }
 
     for func_name in ["slice", "get"] {
-        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
-        registry.register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
-        registry.register_additional_cast_rules(func_name, CAST_INT_TO_UINT64.iter().cloned());
+        registry.register_additional_cast_rules(func_name, general_cast_rules());
+        registry.register_additional_cast_rules(func_name, cast_from_string_rules());
+        registry.register_additional_cast_rules(func_name, cast_int_to_uint64_rules());
     }
 
     for func_name in ALL_COMP_FUNC_NAMES {
-        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
-        registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
-        registry.register_additional_cast_rules(func_name, CAST_FROM_NUMBER_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, general_cast_rules());
+        registry.register_additional_cast_rules(func_name, cast_from_variant_rules());
+        registry.register_additional_cast_rules(func_name, cast_from_number_rules());
     }
-    registry.register_additional_cast_rules("contains", GENERAL_CAST_RULES.iter().cloned());
-    registry.register_additional_cast_rules("contains", CAST_FROM_VARIANT_RULES());
+    registry.register_additional_cast_rules("contains", general_cast_rules());
+    registry.register_additional_cast_rules("contains", cast_from_variant_rules());
 
-    // Timestamp/Date --> other ints and floats
-    // Now it only overload 'to_int64'
-    for data_type in ALL_NUMERICS_TYPES
+    // A conversion function takes an argument of another type through the general rules only,
+    // not by parsing a string or extracting a Variant, and so does `parse_json`.
+    let func_names = CONVERSION_FUNCTIONS
         .iter()
-        .filter(|x| !matches!(*x, &NumberDataType::Int64))
-    {
-        let func_name = format!("to_{}", data_type).to_ascii_lowercase();
-        registry.register_additional_cast_rules(&func_name, [
-            (DataType::Timestamp, DataType::Number(NumberDataType::Int64)),
-            (DataType::Date, DataType::Number(NumberDataType::Int64)),
-        ]);
+        .map(|(func_name, _)| *func_name)
+        .chain(["to_decimal", "parse_json"]);
+    for func_name in func_names {
+        registry.register_additional_cast_rules(func_name, general_cast_rules());
+    }
+    // Of the number functions, only `to_int64` takes a Date or a Timestamp; the others take them
+    // through Int64.
+    for num in ALL_NUMERICS_TYPES {
+        if *num != NumberDataType::Int64 {
+            let func_name = format!("to_{num}").to_lowercase();
+            registry.register_additional_cast_rules(&func_name, [
+                (DataType::Date, DataType::Number(NumberDataType::Int64)),
+                (DataType::Timestamp, DataType::Number(NumberDataType::Int64)),
+            ]);
+        }
     }
 }
-
-/// The cast rules for any situation, including comparison functions, joins, etc.
-pub const GENERAL_CAST_RULES: AutoCastRules = &[
-    (DataType::String, DataType::Binary),
-    (DataType::String, DataType::Timestamp),
-    (DataType::String, DataType::TimestampTz),
-    (DataType::String, DataType::Date),
-    (DataType::String, DataType::Interval),
-    (DataType::String, DataType::Boolean),
-    (DataType::Date, DataType::Timestamp),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::UInt16),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::UInt32),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::Int16),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::Int32),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::Float32),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::UInt32),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::Int32),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::Float32),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt32),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt32),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt32),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt64),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::UInt64),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Int16),
-    ),
-    (
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Int32),
-    ),
-    (
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Float32),
-    ),
-    (
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Int32),
-    ),
-    (
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Float32),
-    ),
-    (
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::Int64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int64),
-        DataType::Number(NumberDataType::Float64),
-    ),
-    (
-        DataType::Number(NumberDataType::Float32),
-        DataType::Number(NumberDataType::Float64),
-    ),
-];
-
-/// The rules for automatic casting from string to other types. For example, they are
-/// used to allow `add_hours('2023-01-01 00:00:00', '1')`.
-pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
-    (DataType::String, DataType::Number(NumberDataType::Int64)),
-    (DataType::String, DataType::Number(NumberDataType::UInt64)),
-    (DataType::String, DataType::Number(NumberDataType::Float64)),
-    (DataType::String, DataType::Number(NumberDataType::Float32)),
-];
-
-#[allow(non_snake_case)]
-pub fn CAST_FROM_VARIANT_RULES() -> impl IntoIterator<Item = (DataType, DataType)> {
-    [
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Boolean)),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Date)),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Timestamp)),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::String)),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt16))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int8))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int16))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32))),
-        ),
-        (
-            DataType::Variant,
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Boolean)),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Date)),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Timestamp)),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::String)),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt16))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int8))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int16))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32))),
-        ),
-        (
-            DataType::Nullable(Box::new(DataType::Variant)),
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
-        ),
-    ]
-}
-
-pub const CAST_INT_TO_UINT64: AutoCastRules = &[
-    (
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-    (
-        DataType::Number(NumberDataType::Int64),
-        DataType::Number(NumberDataType::UInt64),
-    ),
-];
-
-pub const CAST_FROM_NUMBER_RULES: AutoCastRules = &[
-    (DataType::Number(NumberDataType::UInt8), DataType::Boolean),
-    (DataType::Number(NumberDataType::UInt16), DataType::Boolean),
-    (DataType::Number(NumberDataType::UInt32), DataType::Boolean),
-    (DataType::Number(NumberDataType::UInt64), DataType::Boolean),
-    (DataType::Number(NumberDataType::Int8), DataType::Boolean),
-    (DataType::Number(NumberDataType::Int16), DataType::Boolean),
-    (DataType::Number(NumberDataType::Int32), DataType::Boolean),
-    (DataType::Number(NumberDataType::Int64), DataType::Boolean),
-    (DataType::Number(NumberDataType::Float32), DataType::Boolean),
-    (DataType::Number(NumberDataType::Float64), DataType::Boolean),
-];

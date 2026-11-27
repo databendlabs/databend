@@ -91,6 +91,7 @@ pub async fn build_local_pipeline(
     let pipeline =
         PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
     let mut build_res = pipeline.finalize(plan)?;
+    ctx.check_materialized_cte_receivers_taken()?;
 
     let settings = ctx.get_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);

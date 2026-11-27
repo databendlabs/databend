@@ -15,6 +15,7 @@
 mod block_builder;
 mod decompressor;
 mod encoding_transformer;
+pub(crate) mod ordered;
 mod reader;
 mod separator;
 

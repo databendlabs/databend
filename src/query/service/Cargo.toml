@@ -139,6 +139,7 @@ geo = { workspace = true }
 geo-index = { workspace = true }
 headers = { workspace = true }
 hex = { workspace = true }
+hmac = { workspace = true }
 http = { workspace = true }
 humantime = { workspace = true }
 itertools = { workspace = true }

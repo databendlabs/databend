@@ -129,6 +129,32 @@ fn test_error_to_null_column() {
 }
 
 #[test]
+fn test_error_to_null_keeps_domain_of_rows_that_do_not_fail() {
+    for nullable in [false, true] {
+        let column = if nullable {
+            Int32Type::from_opt_data(vec![Some(10), None, Some(30)])
+        } else {
+            Int32Type::from_data(vec![10, 20, 30])
+        };
+        let values = Int32Type::from_data(vec![10, 30]).domain();
+        let function = error_to_null_function(
+            column.data_type(),
+            FunctionDomain::MayThrowDomain(column.domain()),
+            Value::Column(column),
+            Some(2),
+        );
+        let (domain, _) = evaluate(function, 3);
+        assert_eq!(
+            domain,
+            FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(values)),
+            }))
+        );
+    }
+}
+
+#[test]
 fn test_error_to_null_scalar() {
     for scalar in [Scalar::from(42_i32), Scalar::Null] {
         for has_error in [false, true] {

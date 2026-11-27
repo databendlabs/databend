@@ -23,6 +23,7 @@ pub mod display;
 pub mod filter_helper;
 pub(crate) mod json_path_transform;
 pub mod serialize;
+pub mod sort_key_order;
 pub mod udf_client;
 pub mod variant_transform;
 pub mod visitor;
@@ -136,7 +137,7 @@ pub fn cast_scalar(
         dest_type: dest_type.clone(),
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let block = DataBlock::empty();
+    let block = DataBlock::empty_with_rows(1);
     let func_ctx = &FunctionContext::default();
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok(evaluator.run(&expr)?.into_scalar().unwrap())

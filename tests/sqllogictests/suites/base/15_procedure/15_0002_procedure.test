@@ -610,3 +610,30 @@ call PROCEDURE hdr();
 
 statement ok
 DROP PROCEDURE hdr();
+
+statement ok
+CREATE OR REPLACE PROCEDURE p_param_in_subquery(number UInt64) RETURNS UInt64 NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    LET y := (SELECT count(*) FROM numbers(3) AS t WHERE t.number = number);
+    RETURN y;
+END;
+$$;
+
+query error `number` is ambiguous in a subquery
+call PROCEDURE p_param_in_subquery(1);
+
+statement ok
+CREATE OR REPLACE PROCEDURE p_param_in_subquery(number UInt64) RETURNS UInt64 NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    LET y := (SELECT count(*) FROM numbers(3) AS t WHERE t.number = :number);
+    RETURN y;
+END;
+$$;
+
+query I
+call PROCEDURE p_param_in_subquery(1);
+----
+1
+
+statement ok
+DROP PROCEDURE p_param_in_subquery(UInt64);

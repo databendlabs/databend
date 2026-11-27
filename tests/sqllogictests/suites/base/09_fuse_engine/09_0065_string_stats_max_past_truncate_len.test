@@ -1,0 +1,78 @@
+# run-with-settings: enable_block_stream_write=1
+# run-with-settings: enable_block_stream_write=0
+
+# Issue #21130: when the first STATS_TRUNCATE_LEN scalars of the max are all
+# U+10FFFF, no string of that length is an upper bound. The writer must accept
+# the value, keep the lower bound, and store the upper bound as unknown (null)
+# rather than as a string longer than the truncate length.
+statement ok
+DROP TABLE IF EXISTS t_string_stats_max_past_len;
+
+statement ok
+CREATE TABLE t_string_stats_max_past_len (
+    carry_value STRING STATS_TRUNCATE_LEN 4,
+    all_max STRING STATS_TRUNCATE_LEN 4,
+    no_suffix STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100 storage_format='parquet';
+
+statement ok
+INSERT INTO t_string_stats_max_past_len VALUES
+    ('abc', 'abc', 'abc'),
+    (concat(repeat(char(0x10FFFF), 4), 'z-suffix'),
+     repeat(char(0x10FFFF), 6),
+     concat(repeat(char(0x10FFFF), 4), 'z'));
+
+# The max of all three columns is unknown, whatever follows the four U+10FFFF:
+# it is stored as null and never grows with the value. The min stays 'abc'
+# (616263), and the null count is kept.
+query TTTT
+SELECT column_name, to_hex(statistics:min::string), statistics:max, statistics:null_count
+FROM fuse_block_statistics('default', 't_string_stats_max_past_len')
+ORDER BY column_id;
+----
+carry_value 616263 null 0
+all_max 616263 null 0
+no_suffix 616263 null 0
+
+query II
+SELECT count(*), count_if(carry_value > 'abc') FROM t_string_stats_max_past_len;
+----
+2 1
+
+# An unknown upper bound prunes nothing from above.
+query I
+SELECT count(*) FROM t_string_stats_max_past_len
+WHERE carry_value >= concat(repeat(char(0x10FFFF), 4), 'z');
+----
+1
+
+query I
+SELECT count(*) FROM t_string_stats_max_past_len
+WHERE carry_value > concat(repeat(char(0x10FFFF), 4), '{');
+----
+0
+
+query I
+SELECT count(*) FROM t_string_stats_max_past_len WHERE carry_value < 'abc' OR all_max < 'abc';
+----
+0
+
+# An unknown max is not an exact max: MAX must return the actual values.
+query B
+SELECT MAX(carry_value) = concat(repeat(char(0x10FFFF), 4), 'z-suffix')
+FROM t_string_stats_max_past_len;
+----
+1
+
+query B
+SELECT MAX(all_max) = repeat(char(0x10FFFF), 6) FROM t_string_stats_max_past_len;
+----
+1
+
+query TT
+SELECT MIN(carry_value), MIN(all_max) FROM t_string_stats_max_past_len;
+----
+abc abc
+
+statement ok
+DROP TABLE t_string_stats_max_past_len;

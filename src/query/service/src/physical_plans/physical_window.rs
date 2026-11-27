@@ -708,7 +708,7 @@ impl PhysicalPlanBuilder {
                     common_ty = common_super_type(
                         common_ty.clone(),
                         ty.clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                        BUILTIN_FUNCTIONS.default_cast_rules(),
                     )
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(

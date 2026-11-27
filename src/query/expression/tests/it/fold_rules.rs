@@ -167,7 +167,6 @@ fn test_cast_domain_rule() {
         FoldRules::cast_domain(
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
-            None,
             src,
             dest,
             is_try,
@@ -193,6 +192,111 @@ fn test_cast_domain_rule() {
             Some(Domain::Nullable(NullableDomain { has_null: true, .. }))
         ),
         "TRY_CAST turns overflow into NULL"
+    );
+    assert_eq!(
+        cast_domain(
+            &int64,
+            &uint8.wrap_nullable(),
+            true,
+            &Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 300 }))
+        ),
+        Some(Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(uint8_domain(1, 255))),
+        })),
+        "the rows that do not overflow keep their domain"
+    );
+
+    // Variant converts a JSON null to NULL.
+    let string = DataType::String;
+    assert_eq!(
+        cast_domain(
+            &DataType::Variant,
+            &string,
+            false,
+            &Domain::full(&DataType::Variant)
+        ),
+        None,
+        "a NULL is an error for CAST to a non-nullable type"
+    );
+    assert_eq!(
+        cast_domain(
+            &DataType::Variant,
+            &string.wrap_nullable(),
+            false,
+            &Domain::full(&DataType::Variant)
+        ),
+        Some(Domain::full(&string.wrap_nullable()))
+    );
+
+    // A function that returns no NULL for a non-NULL value keeps the NULLs of its input only,
+    // even when the domain of its nullable overload is `Full`.
+    let boolean = DataType::Boolean;
+    assert_eq!(
+        cast_domain(
+            &boolean.wrap_nullable(),
+            &string.wrap_nullable(),
+            false,
+            &Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(Domain::full(&boolean))),
+            }),
+        ),
+        Some(Domain::Nullable(NullableDomain {
+            has_null: false,
+            value: Some(Box::new(Domain::full(&string))),
+        }))
+    );
+
+    // The bounds of a string domain do not prove that the strings between them parse.
+    let dates = Domain::from_min_max(
+        Scalar::String("2020-01-01".to_string()),
+        Scalar::String("2029-01-01".to_string()),
+        &string,
+    );
+    assert_eq!(cast_domain(&string, &DataType::Date, false, &dates), None);
+    assert_eq!(
+        cast_domain(&string, &DataType::Date.wrap_nullable(), true, &dates),
+        Some(Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(Domain::Date(SimpleDomain {
+                min: 18262,
+                max: 21550
+            }))),
+        }))
+    );
+
+    // A single value is converted by running the cast function.
+    let int64_value = |value: i64| {
+        Domain::Number(NumberDomain::Int64(SimpleDomain {
+            min: value,
+            max: value,
+        }))
+    };
+    assert_eq!(
+        cast_domain(&int64, &uint8, false, &int64_value(5)),
+        Some(uint8_domain(5, 5))
+    );
+    assert_eq!(
+        cast_domain(&int64, &uint8, false, &int64_value(300)),
+        None,
+        "a single value that overflows has no domain"
+    );
+    assert_eq!(
+        cast_domain(
+            &int64.wrap_nullable(),
+            &uint8.wrap_nullable(),
+            false,
+            &Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(int64_value(5))),
+            }),
+        ),
+        Some(Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(uint8_domain(5, 5))),
+        })),
+        "a nullable source keeps its NULLs"
     );
 }
 

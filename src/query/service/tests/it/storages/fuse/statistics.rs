@@ -800,23 +800,16 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> anyhow::Result<()> {
         let trimmed_min = data_value_min.clone().trim_min();
         let trimmed_max = data_value_max.clone().trim_max();
 
-        let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
-
-        if meaningless_to_collect_max {
-            assert!(trimmed_max.is_none());
+        // A prefix of U+10FFFF scalars only has no upper bound of its length:
+        // the bound is unknown, stored as null.
+        if is_degenerated_case(max_expr.as_str()) {
+            assert_eq!(trimmed_max, Scalar::Null);
         } else {
-            assert!(trimmed_max.is_some());
-            let trimmed = trimmed_max.unwrap().as_string().unwrap().clone();
-            assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
-            assert!(Scalar::String(trimmed) >= data_value_max)
+            assert!(char_len(trimmed_max.as_string().unwrap()) <= STATS_STRING_PREFIX_LEN);
+            assert!(trimmed_max >= data_value_max);
         }
-
-        {
-            assert!(trimmed_min.is_some());
-            let trimmed = trimmed_min.unwrap().as_string().unwrap().clone();
-            assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
-            assert!(Scalar::String(trimmed) <= data_value_min);
-        }
+        assert!(char_len(trimmed_min.as_string().unwrap()) <= STATS_STRING_PREFIX_LEN);
+        assert!(trimmed_min <= data_value_min);
         Ok(())
     };
 
@@ -879,34 +872,27 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> anyhow::Res
             gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())
                 .unwrap();
 
-        // check if the max value (untrimmed) is in degenerated condition:
-        // - the length of string value is larger or equal than STRING_PREFIX_LEN
-        // - AND the string has a prefix of length STRING_PREFIX_LEN, for all the char C in prefix,
-        //   C > REPLACEMENT_CHAR; which means we can not replace any of them.
-        let string_max_expr = max_expr.as_string().unwrap().to_string();
-        let meaningless_to_collect_max = is_degenerated_case(string_max_expr.as_str());
-
-        if meaningless_to_collect_max {
-            // no stats will be collected
-            assert!(!stats_of_columns.contains_key(&0))
+        // Statistics are collected even when the max starts with U+10FFFF scalars;
+        // its upper bound is then unknown, stored as null. Otherwise
+        // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
+        let col_stats = stats_of_columns.get(&0).unwrap();
+        if is_degenerated_case(max_expr.as_string().unwrap()) {
+            assert_eq!(col_stats.max(), &Scalar::Null);
         } else {
-            // Finally:
-            // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
-            let col_stats = stats_of_columns.get(&0).unwrap();
             assert!(
                 col_stats.max().clone() >= max_expr.to_owned(),
                 "left [{}]\nright [{}]",
                 col_stats.max().clone(),
                 max_expr
             );
-            // check that, trimmed "col_stats.min always less than or equal to the untrimmed "mn_expr"
-            assert!(
-                col_stats.min().clone() <= min_expr.to_owned(),
-                "left [{}]\nright [{}]",
-                col_stats.min().clone(),
-                min_expr
-            );
         }
+        // check that, trimmed "col_stats.min always less than or equal to the untrimmed "mn_expr"
+        assert!(
+            col_stats.min().clone() <= min_expr.to_owned(),
+            "left [{}]\nright [{}]",
+            col_stats.min().clone(),
+            min_expr
+        );
         Ok(())
     };
 

@@ -97,6 +97,46 @@ has already committed and is not a signal to automatically re-execute it.
   while a well-formed query-token request without retained query state gives 404.
 - Duplicate `X-DATABEND-AUTH-METHOD` headers are rejected on authenticated endpoints.
 
+## Credential binding for existing clients
+
+Clients that do not use query tokens get query-scoped access from a credential
+binding. On submission with a password, JWT or key-pair credential, the server
+stores an HMAC (per-process random key) of the requested tenant,
+`X-DATABEND-AUTH-METHOD` and the exact `Authorization` header in the query record;
+the credential itself is not retained. Native session tokens are not bound: they
+are cheap to verify and must keep honoring explicit logout.
+
+If a user-level or applicable global network policy applies at submission, the
+binding also records the effective client IPv4 address used by ordinary
+authentication. It matches only follow-ups from that same address; a missing,
+invalid or different address does not match. A policy-bound submission without a
+usable address cannot establish a binding. When no policy applies at submission,
+the binding does not compare IP addresses.
+
+Network policy is evaluated at submission, not again on a bound follow-up. Changes
+made after submission (including attaching a policy) do not revoke a retained
+binding. New SQL and unbound follow-ups still use ordinary authentication and
+current policy. IP matching relies on the same trusted client-IP source as network
+policy: when forwarding headers are used, a trusted proxy must set them and
+clients must not be able to bypass it.
+
+A state/page/final/kill request without the explicit `query-token` method whose
+binding matches the target query, sent from the query's own client session (or
+without a session if the query has none), is authorized as the query owner without
+user or password-policy lookups in Meta. It is not a login: it is not written to the
+login history, cannot count towards password lockout, and does not renew the client
+session or its temporary tables. Any other credential or session, including a newly
+created one, falls back to ordinary authentication and ownership checks. An explicit
+`query-token` request never falls back: a wrong token is 401 even if `Authorization`
+equals the submission credential.
+
+The submission credential keeps working for its own query after a password change,
+credential expiry or user deletion, but cannot submit new SQL. Credentials that
+change on every request, such as key-pair JWTs, never match and keep the existing
+behavior. Once the query record is gone (expiry, removal or restart) there is
+nothing to match, so a stale credential falls back to ordinary authentication and
+gets 401, whereas a query-token request gets 404 without Meta access.
+
 ## Transport and secrecy
 
 Use TLS. Never put tokens in URLs or unredacted logs/traces. Token-bearing responses
