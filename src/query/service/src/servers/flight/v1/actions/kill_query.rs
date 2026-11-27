@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::session_access::SessionAccess;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -22,7 +23,6 @@ use serde::Serialize;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
-use crate::interpreters::KillQueryAccess;
 use crate::servers::flight::v1::actions::create_session;
 
 pub static KILL_QUERY: &str = "/actions/kill_query";
@@ -31,7 +31,7 @@ pub static KILL_QUERY_V2: &str = "/actions/kill_query_v2";
 #[derive(Clone, Serialize, Deserialize)]
 pub struct KillQueryRequest {
     pub plan: KillPlan,
-    pub access: KillQueryAccess,
+    pub access: SessionAccess,
 }
 
 /// Old receivers deserialize only the flattened plan and ignore access. Old senders
@@ -41,13 +41,13 @@ pub struct LegacyKillQueryRequest {
     #[serde(flatten)]
     pub plan: KillPlan,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub access: Option<KillQueryAccess>,
+    pub access: Option<SessionAccess>,
 }
 
 pub async fn kill_query(request: LegacyKillQueryRequest) -> Result<bool> {
     // Old senders required SUPER but did not transmit a tenant. Bound this trusted
     // compatibility path to the receiver's configured tenant, never a wildcard.
-    let access = request.access.unwrap_or_else(|| KillQueryAccess {
+    let access = request.access.unwrap_or_else(|| SessionAccess {
         tenant: GlobalConfig::instance()
             .query
             .tenant_id

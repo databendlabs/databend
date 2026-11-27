@@ -43,6 +43,7 @@ impl Session {
             id: self.id.clone(),
             typ: self.get_type().to_string(),
             state: self.process_state(session_ctx),
+            tenant: self.get_current_tenant().tenant_name().to_string(),
             database: session_ctx.get_current_database(),
             user: session_ctx.get_current_user(),
             settings: self.get_settings(),

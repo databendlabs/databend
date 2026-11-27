@@ -119,6 +119,8 @@ pub struct ProcessInfo {
     pub id: String,
     pub typ: String,
     pub state: ProcessInfoState,
+    /// The tenant of the session, which bounds who may see it in `system.processes`.
+    pub tenant: String,
     pub database: String,
     pub user: Option<UserInfo>,
     pub settings: Arc<Settings>,

@@ -12,13 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::session_access::SessionAccess;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -36,15 +45,52 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 
-use crate::SyncOneBlockSystemTable;
-use crate::SyncSystemTable;
+use crate::AsyncOneBlockSystemTable;
+use crate::AsyncSystemTable;
 
 pub struct ProcessesTable {
     table_info: TableInfo,
 }
 
+/// The sessions a query may list, as for `KILL`. Decided on the node that plans the query and
+/// sent to every node of the warehouse, which reads its sessions with a worker context.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ProcessesPart {
+    access: SessionAccess,
+}
+
+#[typetag::serde(name = "system_processes")]
+impl PartInfo for ProcessesPart {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        info.as_any()
+            .downcast_ref::<ProcessesPart>()
+            .is_some_and(|other| self == other)
+    }
+
+    fn hash(&self) -> u64 {
+        0
+    }
+}
+
+impl ProcessesPart {
+    async fn of_current_user(ctx: &dyn TableContext) -> Result<Self> {
+        Ok(ProcessesPart {
+            access: SessionAccess::of_current_user(ctx).await?,
+        })
+    }
+
+    fn can_list(&self, process: &ProcessInfo) -> bool {
+        let user = process.user.as_ref().map(|user| user.identity());
+        self.access.can_access(&process.tenant, user.as_ref())
+    }
+}
+
 #[async_trait::async_trait]
-impl SyncSystemTable for ProcessesTable {
+impl AsyncSystemTable for ProcessesTable {
     const NAME: &'static str = "system.processes";
 
     const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
@@ -53,8 +99,50 @@ impl SyncSystemTable for ProcessesTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let processes_info = ctx.get_processes_info();
+    /// Only for a partition planned by a version without `ProcessesPart`: decides from `ctx`.
+    #[async_backtrace::framed]
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock> {
+        let part = ProcessesPart::of_current_user(ctx.as_ref()).await?;
+        Self::list_processes(ctx.as_ref(), &part)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_full_data_of_part(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        part: &PartInfoPtr,
+    ) -> Result<DataBlock> {
+        match part.as_any().downcast_ref::<ProcessesPart>() {
+            Some(part) => Self::list_processes(ctx.as_ref(), part),
+            None => self.get_full_data(ctx, push_downs).await,
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let part = ProcessesPart::of_current_user(ctx.as_ref()).await?;
+        Ok((
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::BroadcastWarehouse, vec![Arc::new(
+                Box::new(part),
+            )]),
+        ))
+    }
+}
+
+impl ProcessesTable {
+    fn list_processes(ctx: &dyn TableContext, part: &ProcessesPart) -> Result<DataBlock> {
+        let mut processes_info = ctx.get_processes_info();
+        processes_info.retain(|process| part.can_list(process));
 
         let local_node = ctx.get_cluster().local_id.clone();
 
@@ -151,9 +239,7 @@ impl SyncSystemTable for ProcessesTable {
             StringType::from_data(processes_query_parameterized_hash),
         ]))
     }
-}
 
-impl ProcessesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("node", TableDataType::String),
@@ -209,7 +295,7 @@ impl ProcessesTable {
             ..Default::default()
         };
 
-        SyncOneBlockSystemTable::create(ProcessesTable { table_info })
+        AsyncOneBlockSystemTable::create(ProcessesTable { table_info })
     }
 
     fn process_option_value<T>(opt: Option<T>) -> T

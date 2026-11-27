@@ -31,6 +31,7 @@ pub mod plan;
 pub mod query_kind;
 pub mod runtime_filter_info;
 pub mod sbbf;
+pub mod session_access;
 pub mod session_type;
 pub mod statistics;
 pub mod table;

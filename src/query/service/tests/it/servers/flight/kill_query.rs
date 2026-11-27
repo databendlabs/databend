@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::session_access::SessionAccess;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -21,7 +22,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::KillPlan;
 use databend_common_version::BUILD_INFO;
-use databend_query::interpreters::KillQueryAccess;
 use databend_query::servers::flight::v1::actions::KILL_QUERY;
 use databend_query::servers::flight::v1::actions::KILL_QUERY_V2;
 use databend_query::servers::flight::v1::actions::KillQueryRequest;
@@ -31,8 +31,8 @@ use databend_query::sessions::SessionManager;
 use databend_query::test_kits::TestFixture;
 
 #[test]
-fn test_can_kill() {
-    let mut access = KillQueryAccess {
+fn test_session_access() {
+    let mut access = SessionAccess {
         tenant: "tenant1".to_string(),
         user: UserIdentity::new("u1", "%"),
         is_super: false,
@@ -40,20 +40,20 @@ fn test_can_kill() {
     let other = UserIdentity::new("u2", "%");
     let other_host = UserIdentity::new("u1", "localhost");
 
-    assert!(access.can_kill("tenant1", Some(&access.user)));
-    assert!(!access.can_kill("tenant1", Some(&other)));
-    assert!(!access.can_kill("tenant1", Some(&other_host)));
-    assert!(!access.can_kill("tenant2", Some(&access.user)));
-    assert!(!access.can_kill("tenant1", None));
+    assert!(access.can_access("tenant1", Some(&access.user)));
+    assert!(!access.can_access("tenant1", Some(&other)));
+    assert!(!access.can_access("tenant1", Some(&other_host)));
+    assert!(!access.can_access("tenant2", Some(&access.user)));
+    assert!(!access.can_access("tenant1", None));
 
     access.is_super = true;
-    assert!(access.can_kill("tenant1", Some(&other)));
-    assert!(access.can_kill("tenant1", None));
-    assert!(!access.can_kill("tenant2", Some(&access.user)));
-    assert!(!access.can_kill("tenant2", None));
+    assert!(access.can_access("tenant1", Some(&other)));
+    assert!(access.can_access("tenant1", None));
+    assert!(!access.can_access("tenant2", Some(&access.user)));
+    assert!(!access.can_access("tenant2", None));
     access.tenant.clear();
-    assert!(!access.can_kill("tenant1", Some(&access.user)));
-    assert!(!access.can_kill("", Some(&access.user)));
+    assert!(!access.can_access("tenant1", Some(&access.user)));
+    assert!(!access.can_access("", Some(&access.user)));
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn test_kill_wire_compatibility() -> anyhow::Result<()> {
 
     let request = LegacyKillQueryRequest {
         plan: plan.clone(),
-        access: Some(KillQueryAccess {
+        access: Some(SessionAccess {
             tenant: "tenant1".to_string(),
             user: UserIdentity::new("u1", "%"),
             is_super: true,
@@ -135,7 +135,7 @@ async fn test_legacy_kill_respects_tenant() -> anyhow::Result<()> {
                     },
                     kill_connection,
                 },
-                access: requester_tenant.map(|tenant| KillQueryAccess {
+                access: requester_tenant.map(|tenant| SessionAccess {
                     tenant: tenant.to_string(),
                     user: UserIdentity::new("u2", "%"),
                     is_super,
@@ -233,7 +233,7 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
                     },
                     kill_connection,
                 },
-                access: KillQueryAccess {
+                access: SessionAccess {
                     tenant: tenant.to_string(),
                     user: UserIdentity::new(user, "%"),
                     is_super,

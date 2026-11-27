@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -244,6 +245,20 @@ pub trait AsyncSystemTable: Send + Sync {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock>;
 
+    /// `get_full_data` for a partition of `get_partitions`. On the other nodes of a cluster or
+    /// warehouse, `ctx` belongs to the query's worker session, not to the session that runs
+    /// the query: a table whose content depends on that session decides in `get_partitions`,
+    /// on the planning node, and reads the decision from `part` here.
+    #[async_backtrace::framed]
+    async fn get_full_data_of_part(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _part: &PartInfoPtr,
+    ) -> Result<DataBlock> {
+        self.get_full_data(ctx, push_downs).await
+    }
+
     #[async_backtrace::framed]
     async fn get_partitions(
         &self,
@@ -332,6 +347,8 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
 
         let inner_table = self.inner_table.clone();
         let push_downs = plan.push_downs.clone();
+        // Every node reads the same single partition, see `get_partitions`.
+        let part = plan.parts.partitions[0].clone();
         pipeline.add_source(
             |output| {
                 SystemTableAsyncSource::create(
@@ -339,6 +356,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
                     inner_table.clone(),
                     ctx.clone(),
                     push_downs.clone(),
+                    part.clone(),
                 )
             },
             1,
@@ -353,6 +371,7 @@ struct SystemTableAsyncSource<TTable: 'static + AsyncSystemTable> {
     inner: Arc<TTable>,
     context: Arc<dyn TableContext>,
     push_downs: Option<PushDownInfo>,
+    part: PartInfoPtr,
 }
 
 impl<TTable: 'static + AsyncSystemTable> SystemTableAsyncSource<TTable>
@@ -363,6 +382,7 @@ where Self: AsyncSource
         inner: Arc<TTable>,
         context: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        part: PartInfoPtr,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(
             context.get_scan_progress(),
@@ -372,6 +392,7 @@ where Self: AsyncSource
                 context,
                 finished: false,
                 push_downs,
+                part,
             },
         )
     }
@@ -390,7 +411,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
         self.finished = true;
         let block = self
             .inner
-            .get_full_data(self.context.clone(), self.push_downs.clone())
+            .get_full_data_of_part(self.context.clone(), self.push_downs.clone(), &self.part)
             .await?;
 
         #[cfg(debug_assertions)]
