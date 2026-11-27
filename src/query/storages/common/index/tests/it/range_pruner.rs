@@ -141,6 +141,143 @@ fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
     assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
+/// `CAST(column AS type) = constant` is folded as `column = constant`, with the constant
+/// converted to the type of the column, only when the conversion keeps the constant: `2.4` and
+/// `'02'` convert to `2`, but no integer casts to them. Otherwise the negation of the comparison
+/// would prune a block whose only value is the converted constant, where it is true on every
+/// row.
+#[test]
+fn test_range_index_eliminates_casts_of_exact_constants_only() {
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("d", TableDataType::Date),
+    ]));
+    let columns = [("a", Int32Type::data_type()), ("d", DataType::Date)];
+    // Every row of the block has `a = 2` and `d = '2020-01-01'`.
+    let date = Scalar::Date(18262);
+    let two = Scalar::Number(2i32.into());
+    let stats = create_stats(
+        &[("a", two.clone(), two), ("d", date.clone(), date)],
+        &schema,
+    );
+    let keeps = |filter: &str| {
+        // The planner folds the constants of a filter before it reaches the scan.
+        let expr = parse_expr(filter, &columns);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        index.apply(&stats, None, None, |_| false).unwrap()
+    };
+
+    // The conversion keeps these constants: the comparison is true on every row.
+    for filter in [
+        "a::string = '2'",
+        "a = 2.0",
+        "a::int64 = 2",
+        "d = '2020-01-01 00:00:00'::timestamp",
+    ] {
+        assert!(keeps(filter), "{filter}");
+        assert!(!keeps(&format!("not({filter})")), "{filter}");
+    }
+    // No value of the column casts to these: the comparison is false on every row.
+    for filter in [
+        "a = 2.4",
+        "a::string = '02'",
+        "a::string = '+2'",
+        "a::string = ' 2'",
+        "d = '2020-01-01 12:00:00'::timestamp",
+    ] {
+        assert!(keeps(&format!("not({filter})")), "{filter}");
+    }
+
+    // The rewrite itself. An implicit cast keeps the nullability of the column.
+    let rewrites = |filter: &str, data_type: &DataType| {
+        let expr = parse_expr(filter, &[("a", data_type.clone())]);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
+        let domains = HashMap::from([("a".to_string(), Domain::full(data_type))]);
+        eliminate_cast(&expr, domains, &func_ctx).is_some()
+    };
+    let int = Int32Type::data_type();
+    let nullable = int.wrap_nullable();
+    for (filter, data_type, rewritten) in [
+        ("a::string = '2'", &int, true),
+        ("a::string = '02'", &int, false),
+        ("a = 2.0", &int, true),
+        ("a = 2.4", &int, false),
+        ("a = 2.0", &nullable, true),
+        ("a = 2.4", &nullable, false),
+    ] {
+        assert_eq!(
+            rewrites(filter, data_type),
+            rewritten,
+            "{filter} {data_type}"
+        );
+    }
+}
+
+/// The statistics of a nested column are those of its leaves: a block whose arrays or maps are
+/// all empty, or hold only nulls, has no min and max, but its arrays and maps are not null.
+#[test]
+fn test_range_index_keeps_blocks_of_empty_arrays_and_maps() {
+    let func_ctx = FunctionContext::default();
+    let int = TableDataType::Number(NumberDataType::Int32);
+    let nullable_int = int.wrap_nullable();
+    let map = |value: &TableDataType| {
+        TableDataType::Map(Box::new(TableDataType::Tuple {
+            fields_name: vec!["key".to_string(), "value".to_string()],
+            fields_type: vec![TableDataType::String, value.clone()],
+        }))
+    };
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("arr", TableDataType::Array(Box::new(int.clone()))),
+        TableField::new(
+            "n_arr",
+            TableDataType::Array(Box::new(nullable_int.clone())).wrap_nullable(),
+        ),
+        TableField::new("mp", map(&int)),
+        TableField::new("n_mp", map(&nullable_int).wrap_nullable()),
+    ]));
+    let columns: Vec<(&str, DataType)> = schema
+        .fields()
+        .iter()
+        .map(|field| (field.name().as_str(), DataType::from(field.data_type())))
+        .collect();
+    // No leaf has a non-null value.
+    let stats: StatisticsOfColumns = schema
+        .leaf_fields()
+        .iter()
+        .map(|field| {
+            let stat = ColumnStatistics::new(Scalar::Null, Scalar::Null, 0, 0, None);
+            (field.column_id(), stat)
+        })
+        .collect();
+    for filter in [
+        "length(arr) = 0",
+        "arr = []",
+        "arr is not null",
+        "length(n_arr) = 0",
+        "n_arr is not null",
+        "n_arr is null",
+        "map_size(mp) = 0",
+        "mp is not null",
+        "mp['k'] is null",
+        "map_size(n_mp) = 0",
+        "n_mp is not null",
+        "n_mp is null",
+    ] {
+        let expr = parse_expr(filter, &columns);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        assert!(
+            index.apply(&stats, None, None, |_| false).unwrap(),
+            "{filter}"
+        );
+    }
+}
+
 #[test]
 fn test_range_index_prunes_by_virtual_column_statistics() {
     fn n(value: i32) -> Scalar {

@@ -90,3 +90,40 @@ WHERE ascii_value >= 'abcf' OR carry_value >= 'ac0';
 
 statement ok
 DROP TABLE t_string_stats_successor;
+
+# No string of the kept length is an upper bound of a string that starts with
+# as many U+10FFFF: the statistics keep a longer max instead of failing the
+# insert or leaving the column out, so the segment is not pruned by the max of
+# its other blocks.
+statement ok
+CREATE OR REPLACE TABLE t_string_stats_unbounded (id INT, s STRING);
+
+statement ok
+INSERT INTO t_string_stats_unbounded VALUES (1, 'a');
+
+statement ok
+INSERT INTO t_string_stats_unbounded VALUES
+    (2, repeat(char(0x10FFFF), 40)),
+    (3, concat(repeat(char(0x10FFFF), 40), '-suffix'));
+
+statement ok
+INSERT INTO t_string_stats_unbounded VALUES (4, concat(repeat(char(0x10FFFF), 40), '-suffix'));
+
+query II
+SELECT count(*), sum(id) FROM t_string_stats_unbounded WHERE s > 'z';
+----
+3 9
+
+query II
+SELECT count(*), sum(id) FROM t_string_stats_unbounded
+WHERE s >= concat(repeat(char(0x10FFFF), 40), '-suffix');
+----
+2 7
+
+query B
+SELECT MAX(s) = concat(repeat(char(0x10FFFF), 40), '-suffix') FROM t_string_stats_unbounded;
+----
+1
+
+statement ok
+DROP TABLE t_string_stats_unbounded;

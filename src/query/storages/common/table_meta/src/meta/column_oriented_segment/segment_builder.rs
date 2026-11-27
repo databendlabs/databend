@@ -125,7 +125,9 @@ struct ColStatBuilder {
 
 impl ColStatBuilder {
     fn new(data_type: &TableDataType, block_per_segment: usize) -> Self {
-        let data_type: DataType = data_type.into();
+        // The bounds are nullable in the segment schema even for a NOT NULL
+        // leaf: an empty array or map contributes no values for that leaf.
+        let data_type = DataType::from(data_type).wrap_nullable();
         Self {
             min: ColumnBuilder::with_capacity(&data_type, block_per_segment),
             max: ColumnBuilder::with_capacity(&data_type, block_per_segment),

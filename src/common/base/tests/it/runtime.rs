@@ -20,6 +20,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::block_on;
 use databend_common_base::runtime::dump_backtrace;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
@@ -89,6 +91,34 @@ async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
 
 struct RuntimeOwner {
     _runtime: Arc<Runtime>,
+}
+
+#[test]
+fn test_nested_block_on_keeps_wake_of_outer_future() -> anyhow::Result<()> {
+    let (done_tx, done_rx) = mpsc::channel();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()?;
+    Thread::spawn(move || {
+        runtime.block_on(async {
+            // The outer future is woken while the thread blocks on the nested one.
+            let (wake_tx, wake_rx) = tokio::sync::oneshot::channel::<()>();
+            Thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(50));
+                let _ = wake_tx.send(());
+            });
+            let nested = async { block_on(sleep(Duration::from_millis(300))) };
+            let _ = futures::join!(wake_rx, nested);
+        });
+        let _ = done_tx.send(());
+    });
+
+    assert!(
+        done_rx.recv_timeout(Duration::from_secs(30)).is_ok(),
+        "the outer future is not polled after its wake"
+    );
+    Ok(())
 }
 
 #[test]

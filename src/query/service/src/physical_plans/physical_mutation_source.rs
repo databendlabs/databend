@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use databend_common_base::runtime::Runtime;
@@ -23,21 +24,33 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
+use databend_common_expression::ExprVisitor;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
-use databend_common_sql::ColumnSet;
+use databend_common_sql::BaseTableColumn;
+use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::StreamContext;
@@ -72,7 +85,11 @@ pub struct MutationSource {
     pub has_hidden_secure_filters: bool,
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
-    pub read_partition_columns: ColumnSet,
+    /// The filter that the source evaluates on the columns it reads. `filters` refers to the
+    /// fields of tuples by name, as pruning does; this one takes them from the whole columns.
+    pub source_filter: Option<RemoteExpr<String>>,
+    /// The columns of the filters, as fields of the table.
+    pub read_partition_fields: Vec<FieldIndex>,
     pub truncate_table: bool,
 
     pub partitions: Partitions,
@@ -116,7 +133,8 @@ impl IPhysicalPlan for MutationSource {
             has_hidden_secure_filters: self.has_hidden_secure_filters,
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
-            read_partition_columns: self.read_partition_columns.clone(),
+            source_filter: self.source_filter.clone(),
+            read_partition_fields: self.read_partition_fields.clone(),
             truncate_table: self.truncate_table,
             partitions: self.partitions.clone(),
             statistics: self.statistics.clone(),
@@ -152,11 +170,7 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> = self
-            .read_partition_columns
-            .iter()
-            .map(|idx| idx.as_field_index())
-            .collect();
+        let read_partition_columns = self.read_partition_fields.clone();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         let partition_receiver = if is_lazy {
@@ -210,17 +224,13 @@ impl IPhysicalPlan for MutationSource {
             None
         };
 
-        let filter = self.filters.clone().map(|v| v.filter);
+        let filter = self.source_filter.clone();
         let mutation_action = if is_delete {
             MutationAction::Deletion
         } else {
             MutationAction::Update
         };
-        let col_indices = self
-            .read_partition_columns
-            .iter()
-            .map(|idx| idx.as_field_index())
-            .collect();
+        let col_indices = self.read_partition_fields.clone();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(
@@ -279,6 +289,59 @@ impl PhysicalPlanBuilder {
         let mutation_info = self.mutation_build_info.as_ref().unwrap();
 
         let metadata = self.metadata.read();
+        // The symbols of the columns are not their positions in the table: the fields of a
+        // tuple are columns too, and the source reads the tuple they belong to.
+        let table_schema = metadata
+            .table(mutation_source.table_index)
+            .table()
+            .schema_with_stream();
+        let stored_fields = table_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, field)| !matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .collect::<Vec<_>>();
+        let mut read_partition_fields = BTreeSet::new();
+        let mut tuple_fields = HashMap::new();
+        for symbol in mutation_source.read_partition_columns.iter() {
+            let field_index = match metadata.column(*symbol) {
+                ColumnEntry::BaseTableColumn(BaseTableColumn {
+                    column_name,
+                    path_indices: Some(path),
+                    ..
+                }) => {
+                    let (field_index, field) = stored_fields[path[0]];
+                    tuple_fields.insert(column_name.clone(), TupleField {
+                        column: field.name().clone(),
+                        data_type: DataType::from(field.data_type()),
+                        path: path[1..].to_vec(),
+                    });
+                    field_index
+                }
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                    table_schema.index_of(column_name)?
+                }
+                _ => symbol.as_field_index(),
+            };
+            read_partition_fields.insert(field_index);
+        }
+        let source_filter = if all_predicates.is_empty() {
+            None
+        } else {
+            let predicates = all_predicates
+                .iter()
+                .map(|predicate| {
+                    let expr = predicate
+                        .as_expr()?
+                        .project_column_ref(|col| Ok(col.column_name.clone()))?;
+                    let rewritten = visit_expr(&expr, &mut TupleFieldRewriter {
+                        fields: &tuple_fields,
+                    })?;
+                    Ok(rewritten.unwrap_or(expr))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Some(combine_filters(&self.ctx.get_function_context()?, predicates)?.filter)
+        };
         let mut fields = Vec::with_capacity(mutation_source.columns.len());
         for column_index in mutation_source.columns.iter() {
             let column = metadata.column(*column_index);
@@ -316,7 +379,8 @@ impl PhysicalPlanBuilder {
             display_filters,
             has_hidden_secure_filters: !mutation_source.secure_predicates.is_empty(),
             input_type: mutation_source.mutation_type.clone(),
-            read_partition_columns: mutation_source.read_partition_columns.clone(),
+            source_filter,
+            read_partition_fields: read_partition_fields.into_iter().collect(),
             truncate_table,
             meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),
@@ -337,7 +401,52 @@ pub fn create_push_down_filters(
                 .project_column_ref(|col| Ok(col.column_name.clone()))
         })
         .collect::<Result<Vec<_>>>()?;
+    combine_filters(func_ctx, predicates)
+}
 
+/// A field of a tuple column, however deep: the column and the positions that lead to it.
+struct TupleField {
+    column: String,
+    data_type: DataType,
+    path: Vec<usize>,
+}
+
+/// Replaces the references to fields of tuples by the fields taken from the tuples.
+struct TupleFieldRewriter<'a> {
+    fields: &'a HashMap<String, TupleField>,
+}
+
+impl ExprVisitor<String> for TupleFieldRewriter<'_> {
+    type Error = ErrorCode;
+
+    fn enter_column_ref(&mut self, column: &ColumnRef<String>) -> Result<Option<Expr<String>>> {
+        let Some(field) = self.fields.get(&column.id) else {
+            return Ok(None);
+        };
+        let mut expr = Expr::ColumnRef(ColumnRef {
+            span: column.span,
+            id: field.column.clone(),
+            data_type: field.data_type.clone(),
+            display_name: field.column.clone(),
+        });
+        for position in &field.path {
+            let position = Scalar::Number(NumberScalar::Int64(*position as i64 + 1));
+            expr = check_function(column.span, "get", &[position], &[expr], &BUILTIN_FUNCTIONS)?;
+        }
+        if expr.data_type() != &column.data_type {
+            expr = check_cast(
+                column.span,
+                false,
+                expr,
+                &column.data_type,
+                &BUILTIN_FUNCTIONS,
+            )?;
+        }
+        Ok(Some(expr))
+    }
+}
+
+fn combine_filters(func_ctx: &FunctionContext, predicates: Vec<Expr<String>>) -> Result<Filters> {
     let expr = predicates
         .into_iter()
         .try_reduce(|lhs, rhs| {

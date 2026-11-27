@@ -1556,13 +1556,19 @@ impl EqVisitor for RewriteVisitor<'_> {
             has_true: false,
         });
         let new_domain = if return_type.is_nullable() {
-            // generate `has_null` based on the `null_count` in column statistics.
+            // generate `has_null` based on the `null_count` in column statistics. The value of
+            // a key of a map is also null in the maps without the key, which no statistics
+            // count.
+            let is_map = matches!(
+                table_field.data_type().remove_nullable(),
+                TableDataType::Map(_)
+            );
             let has_null = match self.data_schema.column_id_of(col_name) {
-                Ok(col_id) => match self.column_stats.get(&col_id) {
+                Ok(col_id) if !is_map => match self.column_stats.get(&col_id) {
                     Some(stat) => stat.null_count > 0,
                     None => true,
                 },
-                Err(_) => true,
+                _ => true,
             };
             Domain::Nullable(NullableDomain {
                 has_null,

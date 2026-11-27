@@ -81,16 +81,20 @@ impl<'a> InferFilterOptimizer<'a> {
                         func.arguments[0].clone(),
                         func.arguments[1].clone(),
                     );
+                    let mut changed = false;
                     if left != func.arguments[0] {
                         func.arguments[0] = left;
+                        changed = true;
                     }
                     if right != func.arguments[1] {
                         func.arguments[1] = right;
+                        changed = true;
                     }
-                    *func.return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
-                        &func.arguments[0],
-                        &func.arguments[1],
-                    ]);
+                    // A comparison is not always null only where an argument is: comparing a
+                    // variant with a number casts the variant with `TRY_CAST`.
+                    if changed {
+                        func.refresh_return_type()?;
+                    }
                 }
             }
         }

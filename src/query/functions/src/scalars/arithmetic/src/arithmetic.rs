@@ -215,10 +215,15 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _>(
                     "minus",
                     |_, val| {
-                        FunctionDomain::Domain(SimpleDomain::<T> {
-                            min: -(AsPrimitive::<T>::as_(val.max)),
-                            max: -(AsPrimitive::<T>::as_(val.min)),
-                        })
+                        let min = -(AsPrimitive::<T>::as_(val.max));
+                        let max = -(AsPrimitive::<T>::as_(val.min));
+                        // NaN is the greatest float and its own negation: the negation of a
+                        // domain with a NaN, such as the full domain, is not between the
+                        // negations of its bounds.
+                        if min > max {
+                            return FunctionDomain::Full;
+                        }
+                        FunctionDomain::Domain(SimpleDomain::<T> { min, max })
                     },
                     |a, _| -(AsPrimitive::<T>::as_(a)),
                 );

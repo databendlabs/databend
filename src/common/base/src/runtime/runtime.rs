@@ -14,7 +14,10 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
+use std::future::poll_fn;
+use std::pin::pin;
 use std::sync::Arc;
+use std::task::Waker;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -169,13 +172,9 @@ impl Runtime {
     where F: Future<Output = Result<T, C>> {
         // Call location_future before closure since #[track_caller] doesn't propagate through closures
         let future = location_future(CatchUnwindFuture::create(future), None);
-        #[allow(clippy::disallowed_methods)]
-        tokio::task::block_in_place(|| {
-            self.handle
-                .block_on(future)
-                .with_context(|| "failed to block on future".to_string())
-                .flatten()
-        })
+        block_in_place_on(&self.handle, future)
+            .with_context(|| "failed to block on future".to_string())
+            .flatten()
     }
 
     // For each future of `futures`, before being executed
@@ -469,16 +468,14 @@ where
 pub fn block_on<F: Future>(future: F) -> F::Output {
     // Call location_future before closure since #[track_caller] doesn't propagate through closures
     let future = location_future(future, None);
-    #[expect(clippy::disallowed_methods)]
-    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
+    block_in_place_on(&tokio::runtime::Handle::current(), future)
 }
 
 #[track_caller]
 pub fn block_on_with_handle<F: Future>(handle: &Handle, future: F) -> F::Output {
     // Call location_future before closure since #[track_caller] doesn't propagate through closures
     let future = location_future(future, None);
-    #[expect(clippy::disallowed_methods)]
-    tokio::task::block_in_place(|| handle.block_on(future))
+    block_in_place_on(handle, future)
 }
 
 #[track_caller]
@@ -488,10 +485,40 @@ pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
         Ok(handler) => {
             // Call location_future before closure since #[track_caller] doesn't propagate through closures
             let future = location_future(future, None);
-            #[expect(clippy::disallowed_methods)]
-            Ok(tokio::task::block_in_place(|| handler.block_on(future)))
+            Ok(block_in_place_on(&handler, future))
         }
     }
+}
+
+/// Blocks the thread on `future`, on the runtime of `handle`.
+///
+/// The thread may already be blocked on an outer future by a `block_on`, which parks the
+/// thread on the same parker as this nested one. The nested `block_on` then consumes a wake of
+/// the outer future that arrives before the nested future is done, and the outer future is
+/// never polled again. So the parker is notified once more when the nested future is done:
+/// the outer `block_on` polls its future again, which changes nothing if no wake was lost.
+fn block_in_place_on<F: Future>(handle: &Handle, future: F) -> F::Output {
+    struct Parker(Option<Waker>);
+
+    impl Drop for Parker {
+        fn drop(&mut self) {
+            if let Some(waker) = self.0.take() {
+                waker.wake();
+            }
+        }
+    }
+
+    let mut parker = Parker(None);
+    let mut future = pin!(future);
+    // The waker of a future that `block_on` polls is the parker of the thread.
+    let future = poll_fn(|cx| {
+        if parker.0.is_none() {
+            parker.0 = Some(cx.waker().clone());
+        }
+        future.as_mut().poll(cx)
+    });
+    #[expect(clippy::disallowed_methods)]
+    tokio::task::block_in_place(|| handle.block_on(future))
 }
 
 #[track_caller]

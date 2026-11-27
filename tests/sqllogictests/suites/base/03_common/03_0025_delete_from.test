@@ -396,5 +396,45 @@ normal_data 11000.0
 normal_data 12000.0
 normal_data 13000.0
 
+# The filter of a mutation may refer to a field of a tuple, or to a column after a tuple.
+statement ok
+create table test_delete_tuple(id int, tp tuple(a int, b string), n_tp tuple(a int null, b string null) null, x int);
+
+statement ok
+insert into test_delete_tuple values
+    (1, (2, 'a'), (2, 'a'), 10), (2, (2, ''), null, 20), (3, (7, 'zz'), (7, null), 30), (4, (8, 'b'), (8, 'b'), 40);
+
+statement ok
+insert into test_delete_tuple values (5, (9, 'c'), (9, 'c'), 50), (6, (9, ''), null, 60);
+
+statement ok
+delete from test_delete_tuple where x = 40;
+
+statement ok
+delete from test_delete_tuple where tp.2 = 'zz';
+
+statement ok
+delete from test_delete_tuple where n_tp.1 = 9 and tp.1 = 9;
+
+query IIIII
+select id, tp.1, length(tp.2), n_tp.1, x from test_delete_tuple order by id;
+----
+1 2 1 2 10
+2 2 0 NULL 20
+6 9 0 NULL 60
+
+statement ok
+update test_delete_tuple set x = x + 1 where tp.2 <> '';
+
+statement ok
+update test_delete_tuple set tp = (0, 'u') where n_tp.2 is null and x = 60;
+
+query IIIII
+select id, tp.1, length(tp.2), n_tp.1, x from test_delete_tuple order by id;
+----
+1 2 1 2 11
+2 2 0 NULL 20
+6 0 1 NULL 60
+
 statement ok
 DROP DATABASE db1
