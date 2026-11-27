@@ -15,21 +15,6 @@
 use databend_common_base::runtime::ThreadTracker;
 use logforth::filter::FilterResult;
 
-/// Reserved for explicitly enabled, operator-controlled sinks. Records may contain real IPs.
-pub const UDF_PEER_LOG_TARGET: &str = "databend::log::udf_peer";
-
-#[derive(Debug)]
-pub struct ExcludeUdfPeerLog;
-
-impl logforth::Filter for ExcludeUdfPeerLog {
-    fn enabled(&self, metadata: &log::Metadata) -> FilterResult {
-        if metadata.target() == UDF_PEER_LOG_TARGET {
-            return FilterResult::Reject;
-        }
-        FilterResult::Neutral
-    }
-}
-
 #[derive(Debug)]
 pub struct ThreadTrackerFilter;
 

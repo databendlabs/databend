@@ -35,7 +35,6 @@ use databend_common_metrics::external_server::record_error_external;
 use databend_common_metrics::external_server::record_retry_external;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::planner::UDFValidator;
-use databend_common_tracing::UDF_PEER_LOG_TARGET;
 use databend_common_users::UserApiProvider;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
@@ -209,7 +208,6 @@ struct UdfCallLog<'a> {
     node_id: &'a str,
     function: &'a str,
     handler: &'a str,
-    endpoint: &'a Endpoint,
     call_id: Uuid,
 }
 
@@ -257,29 +255,6 @@ impl UdfCallLog<'_> {
             "{}",
             if delay.is_some() { "Retry udf error" } else { "UDF attempt failed" }
         );
-        if failure.connection.is_some()
-            && log::log_enabled!(target: UDF_PEER_LOG_TARGET, log::Level::Warn)
-        {
-            let uri = self.endpoint.uri();
-            let port = uri.port_u16().or(match uri.scheme_str() {
-                Some("http") => Some(80),
-                Some("https") => Some(443),
-                _ => None,
-            });
-            let peer_ip = dial.initial_peer_ip.map(|ip| ip.to_string());
-            log::warn!(
-                target: UDF_PEER_LOG_TARGET,
-                event = "udf_attempt_peer",
-                query_id = self.query_id,
-                node_id = self.node_id,
-                call_id:% = self.call_id,
-                attempt = attempt.attempt,
-                endpoint_host = uri.host(),
-                endpoint_port = port,
-                initial_peer_ip = peer_ip.as_deref();
-                "UDF initial dial peer"
-            );
-        }
     }
 }
 
@@ -339,7 +314,6 @@ impl AsyncTransform for TransformUdfServer {
                                 node_id: &cluster.local_id,
                                 function: &func.name,
                                 handler: &func.func_name,
-                                endpoint: &endpoint,
                                 call_id: Uuid::new_v4(),
                             };
                             let mut attempt = 0;

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::slice::from_ref;
 use std::sync::Arc;
@@ -63,14 +62,12 @@ use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::udf_client::UdfConnectResult;
 use databend_common_expression::udf_client::UdfFailurePhase;
 use databend_common_expression::udf_client::UdfFlightFailure;
+use databend_common_expression::udf_client::error_kind;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::UDFType;
-use databend_common_tracing::LogFormat;
-use databend_common_tracing::UDF_PEER_LOG_TARGET;
-use databend_common_tracing::init_logging;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::InterpreterFactory;
@@ -797,14 +794,7 @@ async fn logs_each_unavailable_attempt_without_secrets() -> Result<()> {
         }
     };
 
-    let dir = tempfile::tempdir()?;
-    let mut config = ConfigBuilder::create().config();
-    config.log.file.dir = dir.path().to_str().unwrap().to_string();
-    config.log.file.format = LogFormat::Text;
-    config.log.file.level = format!("INFO,{UDF_PEER_LOG_TARGET}=WARN");
-    // Own the guards so the test can flush the file sink before inspecting it.
-    let log_guards = init_logging("udf_attempt_test", &config.log, BTreeMap::new());
-    config.log.file.on = false;
+    let config = ConfigBuilder::create().config();
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings()
@@ -867,7 +857,6 @@ async fn logs_each_unavailable_attempt_without_secrets() -> Result<()> {
         assert!(error.message().contains("service is currently unavailable"));
     }
     let logs: Vec<_> = std::iter::from_fn(|| logs.pop().ok()).collect();
-    assert!(logs.iter().all(|line| !line.contains("udf_attempt_peer")));
     let failures: Vec<_> = logs
         .iter()
         .filter(|line| line.contains("event=\"udf_attempt_failure\""))
@@ -882,14 +871,14 @@ async fn logs_each_unavailable_attempt_without_secrets() -> Result<()> {
         assert!(line.contains("tcp_result=\"ok\""), "{line}");
         assert!(line.contains("tls_result=\"not_applicable\""), "{line}");
         assert!(line.contains("redial_started=false"), "{line}");
-        assert!(line.contains("phase=\"await_response\""), "{line}");
+        // The server answered with UNAVAILABLE, yet the phase is the same as for a request
+        // that never reached it (see `distinguishes_request_socket_loss_from_response_socket_loss`).
+        assert!(line.contains("phase=\"before_response_stream\""), "{line}");
         assert!(line.contains("grpc_code=14"), "{line}");
         assert!(line.contains("status_origin=\"unknown\""), "{line}");
         assert!(line.contains("elapsed_ms="), "{line}");
         for secret in [
             "127.0.0.1",
-            "initial_peer_ip",
-            "endpoint_host",
             "secret-path",
             "secret-url-token",
             "secret-header-value",
@@ -928,29 +917,6 @@ async fn logs_each_unavailable_attempt_without_secrets() -> Result<()> {
         assert_eq!(call_id(retry), call_id(terminal));
         assert!(recoveries.is_empty(), "{recoveries:?}");
     }
-
-    drop(log_guards);
-    let file_logs = std::fs::read_dir(dir.path())?
-        .map(|entry| std::fs::read_to_string(entry?.path()))
-        .collect::<std::io::Result<Vec<_>>>()?;
-    let mut peer_events: Vec<_> = file_logs
-        .iter()
-        .flat_map(|log| log.lines())
-        .filter(|line| line.contains("event=\"udf_attempt_peer\""))
-        .collect();
-    peer_events.sort_by_key(|line| !line.contains("attempt=1 "));
-    assert_eq!(peer_events.len(), failures.len(), "{peer_events:?}");
-    for (index, line) in peer_events.iter().enumerate() {
-        assert!(line.contains(&format!("query_id=\"{query_id}\"")), "{line}");
-        assert!(line.contains(&call_id(retry)), "{line}");
-        assert!(line.contains(&format!("attempt={} ", index + 1)), "{line}");
-        assert!(line.contains("initial_peer_ip=\"127.0.0.1\""), "{line}");
-        assert!(
-            line.contains(&format!("endpoint_port={}", address.port())),
-            "{line}"
-        );
-        assert!(!line.contains("secret-"), "{line}");
-    }
     Ok(())
 }
 
@@ -972,7 +938,6 @@ async fn reports_dns_failure_before_tcp() -> Result<()> {
     assert_eq!(failure.phase, UdfFailurePhase::Connect);
     assert_eq!(dial.dns, UdfConnectResult::Failed);
     assert_eq!(dial.tcp, UdfConnectResult::NotStarted);
-    assert_eq!(dial.initial_peer_ip, None);
     assert!(!failure.error.message().contains(&host));
     Ok(())
 }
@@ -992,7 +957,6 @@ async fn reports_tcp_refusal_without_a_peer() -> Result<()> {
     assert_eq!(failure.phase, UdfFailurePhase::Connect);
     assert_eq!(dial.dns, UdfConnectResult::NotApplicable);
     assert_eq!(dial.tcp, UdfConnectResult::Failed);
-    assert_eq!(dial.initial_peer_ip, None);
     assert_eq!(
         failure.io_error_kind,
         Some(std::io::ErrorKind::ConnectionRefused)
@@ -1019,8 +983,10 @@ async fn reports_tls_timeout_after_tcp() -> Result<()> {
     assert_eq!(failure.phase, UdfFailurePhase::Connect);
     assert_eq!(dial.tcp, UdfConnectResult::Ok);
     assert_eq!(dial.tls, UdfConnectResult::Timeout);
-    assert_eq!(dial.initial_peer_ip, Some(address.ip()));
-    assert!(!format!("{dial:?}").contains("127.0.0.1"));
+    // The redacted message must still drive the timeout bucket of the retry and error metrics.
+    let message = failure.error.message();
+    assert_eq!(error_kind(&message), "ConnectTimeout", "{message}");
+    assert!(!message.contains("127.0.0.1"));
     Ok(())
 }
 
@@ -1064,7 +1030,6 @@ async fn reports_dns_and_tls_outcomes_for_the_actual_socket() -> Result<()> {
     assert_eq!(dial.dns, UdfConnectResult::Ok);
     assert_eq!(dial.tcp, UdfConnectResult::Ok);
     assert_eq!(dial.tls, UdfConnectResult::Ok);
-    assert_eq!(dial.initial_peer_ip, Some(address.ip()));
     drop(client);
 
     let failure =
@@ -1076,7 +1041,6 @@ async fn reports_dns_and_tls_outcomes_for_the_actual_socket() -> Result<()> {
     assert_eq!(dial.dns, UdfConnectResult::Ok);
     assert_eq!(dial.tcp, UdfConnectResult::Ok);
     assert_eq!(dial.tls, UdfConnectResult::Failed);
-    assert_eq!(dial.initial_peer_ip, Some(address.ip()));
     assert!(!failure.error.message().contains("bad-name.invalid"));
 
     let _ = shutdown_tx.send(());
@@ -1111,13 +1075,15 @@ async fn cut_flight_data(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn distinguishes_request_socket_loss_from_response_socket_loss() -> Result<()> {
+    // A request cut before the server saw it reports the same phase as a server that
+    // answered with an error status (see `logs_each_unavailable_attempt_without_secrets`).
     for (cut_response, expected) in [
-        (false, UdfFailurePhase::AwaitResponse),
+        (false, UdfFailurePhase::BeforeResponseStream),
         (true, UdfFailurePhase::ReadResponseStream),
     ] {
         let backend = TcpListener::bind("127.0.0.1:0").await?;
         let backend_addr = backend.local_addr()?;
-        let server = tokio::spawn(
+        let server = spawn(
             Server::builder()
                 .add_service(FlightServiceServer::new(MockFlightService {
                     mode: MockMode::HoldAfterResponse,
@@ -1126,7 +1092,7 @@ async fn distinguishes_request_socket_loss_from_response_socket_loss() -> Result
         );
         let proxy = TcpListener::bind("127.0.0.1:0").await?;
         let address = proxy.local_addr()?;
-        let proxy = tokio::spawn(async move {
+        let proxy = spawn(async move {
             let (client, _) = proxy.accept().await?;
             let backend = TcpStream::connect(backend_addr).await?;
             let (mut from_client, mut to_client) = client.into_split();

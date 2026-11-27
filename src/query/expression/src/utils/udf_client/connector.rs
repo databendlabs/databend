@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::error::Error;
-use std::fmt;
 use std::io;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -56,24 +55,19 @@ impl UdfConnectResult {
 }
 
 /// Observations of the initial dial for this channel, not of a subsequent tonic reconnect.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct UdfConnectDiagnostics {
     pub dns: UdfConnectResult,
     pub tcp: UdfConnectResult,
     /// Includes tonic's HTTP/2 ALPN check. Plaintext connections report `NotApplicable`.
     pub tls: UdfConnectResult,
-    pub initial_peer_ip: Option<IpAddr>,
     pub redial_started: bool,
 }
 
-impl fmt::Debug for UdfConnectDiagnostics {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UdfConnectDiagnostics")
-            .field("dns", &self.dns)
-            .field("tcp", &self.tcp)
-            .field("tls", &self.tls)
-            .field("redial_started", &self.redial_started)
-            .finish_non_exhaustive()
+impl UdfConnectDiagnostics {
+    /// True if the initial dial ran out of time at any observed step.
+    pub fn timed_out(&self) -> bool {
+        [self.dns, self.tcp, self.tls].contains(&UdfConnectResult::Timeout)
     }
 }
 
@@ -162,9 +156,8 @@ impl ConnectObservation {
                 let result = connect.await;
                 if let Some(dial) = &dial {
                     dial.update(|d| match &result {
-                        Ok(socket) => {
+                        Ok(_) => {
                             d.tcp = UdfConnectResult::Ok;
-                            d.initial_peer_ip = socket.inner().peer_addr().ok().map(|a| a.ip());
                             if d.tls != UdfConnectResult::NotApplicable {
                                 d.tls = UdfConnectResult::Unknown;
                             }
@@ -219,17 +212,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn redial_does_not_replace_initial_peer() {
+    fn redial_keeps_initial_dial_results() {
         let observation = ConnectObservation::default();
         let initial = observation
             .start(&Uri::from_static("https://initial.example.com"))
             .unwrap();
-        let peer: IpAddr = "192.0.2.1".parse().unwrap();
         initial.update(|d| {
             d.dns = UdfConnectResult::Ok;
             d.tcp = UdfConnectResult::Ok;
             d.tls = UdfConnectResult::Ok;
-            d.initial_peer_ip = Some(peer);
         });
 
         assert!(!observation.snapshot().redial_started);
@@ -240,10 +231,17 @@ mod tests {
         );
         let result = observation.snapshot();
         assert!(result.redial_started);
-        assert_eq!(result.initial_peer_ip, Some(peer));
         assert_eq!(result.dns, UdfConnectResult::Ok);
         assert_eq!(result.tcp, UdfConnectResult::Ok);
         assert_eq!(result.tls, UdfConnectResult::Ok);
-        assert!(!format!("{result:?}").contains(&peer.to_string()));
+    }
+
+    #[test]
+    fn timeout_at_any_dial_step_is_reported() {
+        let mut dial = UdfConnectDiagnostics::default();
+        assert!(!dial.timed_out());
+        dial.tcp = UdfConnectResult::Ok;
+        dial.tls = UdfConnectResult::Timeout;
+        assert!(dial.timed_out());
     }
 }

@@ -35,15 +35,11 @@ diagnostics do not send extra traffic. `udf_call_recovered` is emitted at INFO
 only when a retry succeeds. Match it to earlier failures using `query_id`,
 `node_id`, and `call_id`; `attempt` is the successful attempt number.
 
-The actual initial TCP peer IP (`initial_peer_ip`) is in a separate
-`udf_attempt_peer` event. Join on `query_id`, `node_id`, `call_id`, and `attempt`.
-A failed TCP dial does not have a connected peer. The peer can be a load balancer
-or proxy, not necessarily the UDF backend.
+`phase=before_response_stream` means the client failed before it had a readable
+response stream. The request may never have reached the UDF server, or the
+server may have answered with an error status; the worker cannot tell these
+apart. `read_response_stream` means the response stream had started and then
+failed. Neither phase identifies which side closed the connection.
 
-Peer events are off by default. Query capture, log history, stderr, and trace
-export exclude them. Operators may append `databend::log::udf_peer=WARN` to
-`log.file.level` or `log.otlp.level` on an enabled sink **only if** its storage,
-forwarding, and access controls are restricted to authorized operators. For the
-file sink, use `json` or `text` so that structured fields are retained. Remove
-the directive after diagnosis. Neither event includes the URL path or query,
-headers, DNS answer lists, or UDF data.
+The events do not include peer IP addresses, the URL path or query, headers,
+raw status messages, or UDF data.

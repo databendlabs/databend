@@ -102,7 +102,10 @@ pub enum UdfFailurePhase {
     AccessCheck,
     Connect,
     PrepareRequest,
-    AwaitResponse,
+    /// The client failed before it had a readable response stream. This covers both
+    /// a request that never reached the server and an error status the server sent
+    /// back, so it does not identify which side failed.
+    BeforeResponseStream,
     ReadResponseStream,
     Decode,
 }
@@ -114,7 +117,7 @@ impl UdfFailurePhase {
             Self::AccessCheck => "access_check",
             Self::Connect => "connect",
             Self::PrepareRequest => "prepare_request",
-            Self::AwaitResponse => "await_response",
+            Self::BeforeResponseStream => "before_response_stream",
             Self::ReadResponseStream => "read_response_stream",
             Self::Decode => "decode",
         }
@@ -167,7 +170,7 @@ impl UdfFlightFailure {
     }
 
     fn response_status(status: Status) -> Self {
-        let phase = UdfFailurePhase::AwaitResponse;
+        let phase = UdfFailurePhase::BeforeResponseStream;
         let (grpc_code, status_origin, io_error_kind) = Self::grpc_diagnostics(&status);
         Self {
             error: status.into(),
@@ -273,14 +276,25 @@ impl UDFFlightClient {
         let channel = connection
             .connect(&endpoint, Duration::from_secs(conn_timeout))
             .await
-            .map_err(|err| UdfFlightFailure {
-                io_error_kind: find_io_error_kind(&err),
+            .map_err(|err| {
+                let io_error_kind = find_io_error_kind(&err);
+                let dial = connection.snapshot();
                 // The raw transport error can contain an IP, and the URI can contain credentials.
-                ..UdfFlightFailure::new(
-                    ErrorCode::UDFServerConnectError("Cannot connect to UDF Server"),
-                    UdfFailurePhase::Connect,
-                )
-                .with_connection(connection.snapshot())
+                // Keep only the timeout fact, which `error_kind` uses for retry and error metrics.
+                let message = if dial.timed_out() || io_error_kind == Some(io::ErrorKind::TimedOut)
+                {
+                    "Cannot connect to UDF Server: connect timeout"
+                } else {
+                    "Cannot connect to UDF Server"
+                };
+                UdfFlightFailure {
+                    io_error_kind,
+                    ..UdfFlightFailure::new(
+                        ErrorCode::UDFServerConnectError(message),
+                        UdfFailurePhase::Connect,
+                    )
+                    .with_connection(dial)
+                }
             })?;
         let inner =
             FlightServiceClient::new(channel).max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
@@ -707,8 +721,8 @@ pub fn is_transport_error_message(message: &str) -> bool {
 pub fn error_kind(message: &str) -> &'static str {
     let message = message.to_ascii_lowercase();
     if message.contains("timeout") || message.contains("timedout") {
-        // Error(Connect, Custom)
-        if message.contains("connect,") {
+        // Error(Connect, Custom), or the redacted connect failure from `connect_with_diagnostics`.
+        if message.contains("connect,") || message.contains("cannot connect") {
             "ConnectTimeout"
         } else {
             "RequestTimeout"
