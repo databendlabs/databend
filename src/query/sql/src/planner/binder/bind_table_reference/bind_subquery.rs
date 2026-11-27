@@ -41,6 +41,7 @@ impl Binder {
                 BindContext::with_opt_parent(bind_context.parent.as_ref().map(|c| c.as_ref()))?;
             // Hiding sibling columns must not reset the binding depth.
             new_bind_context.binding_depth = bind_context.next_depth()?;
+            new_bind_context.recursive_cte_id = bind_context.recursive_cte_id;
             new_bind_context
                 .cte_context
                 .set_cte_context_and_name(bind_context.cte_context.clone());

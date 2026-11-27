@@ -397,6 +397,10 @@ pub struct BindContext {
 
     pub cte_context: CteContext,
 
+    /// The recursive CTE whose recursive member is currently being bound.
+    /// Keep this in the context so scalar subqueries inherit it when creating a new binder.
+    pub recursive_cte_id: Option<u32>,
+
     /// A copy of the binder's definition scope, for binders that the type checker
     /// creates from this context (scalar subqueries) without access to the binder.
     /// Every `BindContext` built during binding must copy it; the binder checks this
@@ -566,6 +570,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
+            recursive_cte_id: None,
             definition_scope: DefinitionScope::session(),
             grouping_key_scope: None,
             binding_views: HashSet::new(),
@@ -617,6 +622,7 @@ impl BindContext {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
+            recursive_cte_id: parent.recursive_cte_id,
             definition_scope: parent.definition_scope.clone(),
             grouping_key_scope: None,
             binding_views: parent.binding_views.clone(),
@@ -639,6 +645,7 @@ impl BindContext {
         bind_context.parent = self.parent.clone();
         bind_context.binding_depth = self.depth();
         bind_context.cte_context = self.cte_context.clone();
+        bind_context.recursive_cte_id = self.recursive_cte_id;
         bind_context.definition_scope = self.definition_scope.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
