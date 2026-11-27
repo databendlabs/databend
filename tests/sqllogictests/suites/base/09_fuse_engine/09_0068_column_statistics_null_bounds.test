@@ -226,5 +226,29 @@ select id from t_string order by id;
 3
 9
 
+# Null bounds alone do not tell that every row is NULL. The summary of the
+# compacted segment has null bounds for `k`, from the block of the NULL row,
+# but does not cover the block written before `k` was added, whose row reads
+# as the default.
+statement ok
+create or replace table t_added(id int not null);
+
+statement ok
+insert into t_added values (1);
+
+statement ok
+alter table t_added add column k int null default 7;
+
+statement ok
+insert into t_added values (2, null);
+
+statement ok
+optimize table t_added compact segment;
+
+query II
+select min(k), max(k) from t_added;
+----
+7 7
+
 statement ok
 drop database db_column_statistics_null_bounds;

@@ -34,6 +34,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 
 use crate::pruning_pipeline::pruned_segment_meta::PrunedSegmentMeta;
@@ -109,14 +110,20 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> RuntimeTopNSegmentReorder<M> {
         }
     }
 
-    fn column_stats(block: &DataBlock) -> Option<&HashMap<ColumnId, ColumnStatistics>> {
+    fn summary(block: &DataBlock) -> Option<&Statistics> {
         let meta = block.get_meta()?;
         let meta = M::downcast_ref_from(meta)?;
-        Some(&meta.segment().summary().col_stats)
+        Some(meta.segment().summary())
+    }
+
+    fn column_stats(block: &DataBlock) -> Option<&HashMap<ColumnId, ColumnStatistics>> {
+        Self::summary(block).map(|summary| &summary.col_stats)
     }
 
     fn should_prune(&self, block: &DataBlock) -> bool {
-        let stats = RuntimeScanStatistics::from_columns(Self::column_stats(block));
+        let summary = Self::summary(block);
+        let stats = RuntimeScanStatistics::from_columns(summary.map(|summary| &summary.col_stats))
+            .with_row_count(summary.map(|summary| summary.row_count));
         self.filter.should_prune(stats)
     }
 }
@@ -175,7 +182,6 @@ mod tests {
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
     use databend_storages_common_table_meta::meta::SegmentInfo;
-    use databend_storages_common_table_meta::meta::Statistics;
 
     use super::*;
     use crate::SegmentLocation;
@@ -186,18 +192,24 @@ mod tests {
     }
 
     fn segment_block_with_nulls(location: &str, min: i64, max: i64, null_count: u64) -> DataBlock {
-        let col_stats = HashMap::from([(
-            3,
-            ColumnStatistics::new(
-                Scalar::Number(NumberScalar::Int64(min)),
-                Scalar::Number(NumberScalar::Int64(max)),
-                null_count,
-                0,
-                None,
-            ),
-        )]);
+        let stats = ColumnStatistics::new(
+            Scalar::Number(NumberScalar::Int64(min)),
+            Scalar::Number(NumberScalar::Int64(max)),
+            null_count,
+            0,
+            None,
+        );
+        segment_block_with_stats(location, stats, 0)
+    }
+
+    fn segment_block_with_stats(
+        location: &str,
+        stats: ColumnStatistics,
+        row_count: u64,
+    ) -> DataBlock {
         let summary = Statistics {
-            col_stats,
+            row_count,
+            col_stats: HashMap::from([(3, stats)]),
             ..Statistics::default()
         };
         let segment = CompactSegmentInfo::try_from(SegmentInfo::new(vec![], summary)).unwrap();
@@ -295,6 +307,29 @@ mod tests {
         // Draining re-checks buffered segments with the tightened boundary.
         let drained = reorder.on_finish(true)?;
         assert_eq!(locations(&drained), vec!["keep"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_null_bounds_prune_only_segments_of_null_rows() -> Result<()> {
+        let boundary = Arc::new(RuntimeTopNBoundary::new(true, false));
+        let filter = Arc::new(RuntimeTopNFilter::new(3, boundary.clone()));
+        let order = filter.preferred_order().unwrap();
+        let mut reorder =
+            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 8);
+        boundary.update(&Scalar::Number(NumberScalar::Int64(10)));
+
+        let null_bounds = || ColumnStatistics::new(Scalar::Null, Scalar::Null, 1, 0, None);
+        // Every row of the segment is NULL and sorts after the boundary.
+        let all_null = segment_block_with_stats("all_null", null_bounds(), 1);
+        assert!(reorder.transform(all_null)?.is_empty());
+        // The summary does not cover one of the two rows, as that of a block
+        // written before the column was added: the row may hold any value.
+        let uncovered = segment_block_with_stats("uncovered", null_bounds(), 2);
+        assert!(reorder.transform(uncovered)?.is_empty());
+
+        let drained = reorder.on_finish(true)?;
+        assert_eq!(locations(&drained), vec!["uncovered"]);
         Ok(())
     }
 }
