@@ -1064,6 +1064,8 @@ mod tests {
                 .grouping_key_memo
                 .forms
                 .get_mut(&(root.index, 0))
+                .unwrap()
+                .as_mut()
                 .unwrap();
             form.bound.data_type = reported_type.clone();
             form.input_unavailable = true;
