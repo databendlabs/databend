@@ -124,10 +124,6 @@ impl Metadata {
         self.tables.as_slice()
     }
 
-    pub(crate) fn mark_show_system_table(&mut self, index: IndexType) {
-        self.tables[index].show_system_table = true;
-    }
-
     /// Return the logical source table IDs referenced by the query.
     ///
     /// Materialized-view rewrite adds candidate read plans to the same metadata. Those
@@ -461,7 +457,6 @@ impl Metadata {
             alias_name: table_alias_name,
             source_of_view,
             source_of_stage,
-            show_system_table: false,
             stream_lineage_source: None,
         };
         self.tables.push(table_entry);
@@ -709,7 +704,6 @@ pub struct TableEntry {
     source_of_view: bool,
 
     source_of_stage: bool,
-    show_system_table: bool,
     /// Source relation for a transparent stream scan. Stream data columns are
     /// attributed to this relation; stream metadata columns are excluded.
     stream_lineage_source: Option<LineageSourceRelation>,
@@ -787,11 +781,6 @@ impl TableEntry {
     /// Return true if it is source from stage.
     pub fn is_source_of_stage(&self) -> bool {
         self.source_of_stage
-    }
-
-    /// Whether this reference was introduced by a SHOW rewrite and needs no SELECT grant.
-    pub fn is_show_system_table(&self) -> bool {
-        self.show_system_table
     }
 
     pub(crate) fn stream_lineage_source(&self) -> Option<&LineageSourceRelation> {

@@ -2088,7 +2088,7 @@ impl AccessChecker for PrivilegeAccess {
                             }
                         }
                     }
-                    Some(RewriteKind::ShowTags) => {
+                    Some(RewriteKind::ShowTags { .. }) => {
                         self.validate_access(
                             &GrantObject::Global,
                             UserPrivilegeType::Super,
@@ -2135,7 +2135,8 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
                     }
-                    if table.is_show_system_table() || table.is_source_of_view() || table.table().is_temp() {
+                    if matches!(rewrite_kind, Some(RewriteKind::ShowTags { generated_table_index: Some(index) }) if *index == table.index())
+                        || table.is_source_of_view() || table.table().is_temp() {
                         continue;
                     }
 

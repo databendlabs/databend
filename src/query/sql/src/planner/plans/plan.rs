@@ -32,6 +32,7 @@ use super::ModifyTableConnectionPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::binder::ExplainConfig;
 use crate::optimizer::ir::QueryPlan;
@@ -543,7 +544,10 @@ pub enum RewriteKind {
     ShowStatistics,
 
     ShowStreams(String),
-    ShowTags,
+    ShowTags {
+        /// Only the generated outer FROM is covered by the SHOW privilege.
+        generated_table_index: Option<IndexType>,
+    },
 
     ShowFunctions,
     ShowUserFunctions,

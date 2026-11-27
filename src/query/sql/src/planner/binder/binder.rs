@@ -21,6 +21,7 @@ use std::time::Instant;
 
 use databend_common_ast::ast::ExternalAccessStmt;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::quote::QuotedString;
@@ -118,9 +119,6 @@ pub struct Binder {
     pub enable_materialized_view_rewrite: bool,
 
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
-
-    /// The generated FROM table for the next SHOW SELECT, consumed before binding its clauses.
-    pub(super) show_system_table: Option<&'static str>,
 }
 
 impl Binder {
@@ -154,7 +152,6 @@ impl Binder {
             enable_result_cache,
             enable_materialized_view_rewrite,
             subquery_executor: None,
-            show_system_table: None,
         }
     }
 
@@ -218,29 +215,7 @@ impl Binder {
         stmt: &Statement,
     ) -> Result<Plan> {
         let plan = match stmt {
-            Statement::Query(query) => {
-                let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
-
-                // Remove unused cache columns and join conditions and construct ExpressionScan's child.
-                (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-                // A stored definition scope can change the meaning of identical SQL
-                // text, so do not share ordinary result-cache keys.
-                let formatted_ast = if self.definition_scope.is_session()
-                    && self.ctx.get_settings().get_enable_query_result_cache()?
-                {
-                    Some(stmt.to_string())
-                } else {
-                    None
-                };
-                Plan::Query {
-                    s_expr: Box::new(s_expr.into()),
-                    metadata: self.metadata.clone(),
-                    bind_context: Box::new(bind_context),
-                    rewrite_kind: None,
-                    ignore_result: query.ignore_result,
-                    formatted_ast,
-                }
-            }
+            Statement::Query(query) => self.bind_query_plan(bind_context, query, None)?,
 
             Statement::StatementWithSettings { settings: _, stmt } => {
                 if let deref!(Statement::StatementWithSettings { .. }) = stmt {
@@ -998,17 +973,44 @@ impl Binder {
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-        // SHOW TAGS checks SUPER separately; exempt only its generated FROM reference.
-        let show_system_table = matches!(rewrite_kind_r, RewriteKind::ShowTags).then_some("tags");
-        let previous = mem::replace(&mut self.show_system_table, show_system_table);
-        let result = self.bind_statement(bind_context, &stmt).await;
-        self.show_system_table = previous;
-        let mut plan = result?;
+        let Statement::Query(query) = stmt else {
+            return Err(ErrorCode::Internal("expected rewrite to produce a query"));
+        };
+        self.bind_query_plan(bind_context, &query, Some(rewrite_kind_r))
+    }
 
-        if let Plan::Query { rewrite_kind, .. } = &mut plan {
-            *rewrite_kind = Some(rewrite_kind_r)
-        }
-        Ok(plan)
+    fn bind_query_plan(
+        &mut self,
+        bind_context: &mut BindContext,
+        query: &Query,
+        mut rewrite_kind: Option<RewriteKind>,
+    ) -> Result<Plan> {
+        let target = match &mut rewrite_kind {
+            Some(RewriteKind::ShowTags {
+                generated_table_index,
+            }) => Some(generated_table_index),
+            _ => None,
+        };
+        let (s_expr, bind_context) =
+            self.bind_query_with_outer_from(bind_context, query, target)?;
+        // Remove unused cache columns and join conditions and construct ExpressionScan's child.
+        let (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
+        // A stored definition scope can change the meaning of identical SQL text.
+        let formatted_ast = if self.definition_scope.is_session()
+            && self.ctx.get_settings().get_enable_query_result_cache()?
+        {
+            Some(query.to_string())
+        } else {
+            None
+        };
+        Ok(Plan::Query {
+            s_expr: Box::new(s_expr.into()),
+            metadata: self.metadata.clone(),
+            bind_context: Box::new(bind_context),
+            rewrite_kind,
+            ignore_result: query.ignore_result,
+            formatted_ast,
+        })
     }
 
     /// Create a new ColumnBinding for derived column

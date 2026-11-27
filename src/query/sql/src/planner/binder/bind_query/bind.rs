@@ -43,6 +43,7 @@ use databend_common_expression::types::convert_to_type_name;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_CTE;
 
 use crate::CteResolution;
+use crate::IndexType;
 use crate::NameResolutionContext;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -81,11 +82,20 @@ impl Visitor for CTERefCounter {
 }
 
 impl Binder {
-    #[recursive::recursive]
     pub(crate) fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
         query: &Query,
+    ) -> Result<(SExpr, BindContext)> {
+        self.bind_query_with_outer_from(bind_context, query, None)
+    }
+
+    #[recursive::recursive]
+    pub(in crate::planner::binder) fn bind_query_with_outer_from(
+        &mut self,
+        bind_context: &mut BindContext,
+        query: &Query,
+        outer_from: Option<&mut Option<IndexType>>,
     ) -> Result<(SExpr, BindContext)> {
         bind_context.definition_scope = self.definition_scope.clone();
         let mut with = query.with.clone();
@@ -120,8 +130,12 @@ impl Binder {
         let (limit, offset) = self.extract_limit_and_offset(query)?;
 
         // Bind query body.
-        let (mut s_expr, mut bind_context) =
-            self.bind_set_expr(bind_context, body, &query.order_by, limit, None)?;
+        let (mut s_expr, mut bind_context) = match (outer_from, body) {
+            (Some(index), SetExpr::Select(stmt)) => {
+                self.bind_select(bind_context, stmt, &query.order_by, limit, Some(index))?
+            }
+            _ => self.bind_set_expr(bind_context, body, &query.order_by, limit, None)?,
+        };
 
         // Bind order by for `SetOperation` and `Values`.
         s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;

@@ -30,7 +30,7 @@ impl Binder {
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
-            SetExpr::Select(stmt) => self.bind_select(bind_context, stmt, order_by, limit),
+            SetExpr::Select(stmt) => self.bind_select(bind_context, stmt, order_by, limit, None),
             SetExpr::Query(stmt) => self.bind_query(bind_context, stmt),
             SetExpr::SetOperation(set_operation) => self.bind_set_operator(
                 bind_context,

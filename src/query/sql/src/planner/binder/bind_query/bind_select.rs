@@ -51,6 +51,7 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use unicase::Ascii;
 
 use crate::AsyncFunctionRewriter;
+use crate::IndexType;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
@@ -385,10 +386,9 @@ impl Binder {
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
         limit: Option<usize>,
+        outer_from: Option<&mut Option<IndexType>>,
     ) -> Result<(SExpr, BindContext)> {
         self.debug_assert_definition_scope(bind_context);
-        // Only this SELECT's FROM can receive the exemption, not a nested SELECT.
-        let show_system_table = self.show_system_table.take();
         // whether allow rewrite virtual column and pushdown
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
@@ -399,18 +399,19 @@ impl Binder {
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
         let (s_expr, from_context) = self.bind_select_from(bind_context, stmt)?;
-        if let Some(expected_name) = show_system_table
+        // Capture the generated FROM scan itself, before binding user-supplied WHERE subqueries.
+        if let Some(index) = outer_from
             && matches!(stmt.from.as_slice(), [TableReference::Table { .. }])
             && let RelOperator::Scan(scan) = s_expr.plan()
         {
-            let mut metadata = self.metadata.write();
+            let metadata = self.metadata.read();
             let table = metadata.table(scan.table_index);
             if table.catalog() == CATALOG_DEFAULT
                 && table.database() == "system"
-                && table.name() == expected_name
+                && table.name() == "tags"
                 && !table.table().is_temp()
             {
-                metadata.mark_show_system_table(scan.table_index);
+                *index = Some(scan.table_index);
             }
         }
         // The clauses after FROM are lowered once, and bound from these nodes.
