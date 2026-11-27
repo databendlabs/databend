@@ -30,20 +30,26 @@ Commit
         ├── branch 2: orders_placed.order_id (#0), 'StandardHandling'
         ├── branch 3: orders_placed.order_id (#0), 'ReviewNeeded'
         └── Filter
-            ├── branch 0: is_true(orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL))
-            ├── branch 1: is_true((NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)))
-            ├── branch 2: is_true(((NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)) AND orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL)))
-            ├── branch 3: is_true(((NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)) AND NOT orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL)))
+            ├── branch 0: _insert_multi_matched_0 (#4)
+            ├── branch 1: _insert_multi_matched_1 (#5)
+            ├── branch 2: _insert_multi_matched_2 (#6)
+            ├── branch 3: NOT ((_insert_multi_matched_0 (#4) OR _insert_multi_matched_1 (#5)) OR _insert_multi_matched_2 (#6))
             └── Duplicate
                 ├── Duplicate data to 4 branch
-                └── TableScan
-                    ├── table: default.default.orders_placed
-                    ├── scan id: 0
-                    ├── output columns: [order_id (#0), order_amount (#2)]
-                    ├── read rows: 5
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 5.00
+                └── MultiInsertRoute
+                    ├── output columns: [orders_placed.order_id (#0), orders_placed.order_amount (#2), _insert_multi_matched_0 (#4), _insert_multi_matched_1 (#5), _insert_multi_matched_2 (#6)]
+                    ├── kind: FIRST
+                    ├── when 0: is_true(orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL))
+                    ├── when 1: is_true(orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL))
+                    ├── when 2: is_true(orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL))
+                    └── TableScan
+                        ├── table: default.default.orders_placed
+                        ├── scan id: 0
+                        ├── output columns: [order_id (#0), order_amount (#2)]
+                        ├── read rows: 5
+                        ├── read size: < 1 KiB
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 5.00
