@@ -295,10 +295,19 @@ impl RuntimeTopNBoundary {
     /// Return true only when every row in a block is strictly worse than the
     /// current boundary. Equal values are retained for tie safety.
     ///
-    /// `min`/`max` describe the non-null values of the block and `null_count`
-    /// its null rows; boundaries are never null, so null rows rank by
-    /// `nulls_first` alone. A bound may be null on its own when it is unknown,
-    /// as the upper bound of a string column can be.
+    /// The boundary is the published TopN value held in `self.boundary`: the
+    /// worst sort value a row may have and still make the TopN. It is never
+    /// null ([`Self::update`] ignores a null), so the null rows of a block
+    /// rank by `nulls_first` alone.
+    ///
+    /// `min`, `max` and `null_count` are the statistics of the sort column over
+    /// a block or a segment. `min` and `max` come in three shapes:
+    /// - neither is null: they are the range of the non-null values;
+    /// - both are null: the rows the statistics cover hold no non-null value.
+    ///   This relies on the writers, which store a `min` whenever the column
+    ///   has a non-null value, and on the statistics covering all those rows;
+    /// - only one is null: that side is unknown, as the `max` of a string that
+    ///   has no truncated upper bound. The block is not excluded by that side.
     pub fn boundary_excludes(&self, min: &Scalar, max: &Scalar, null_count: u64) -> bool {
         let boundary = self.boundary.read();
         let Some(boundary) = boundary.as_ref() else {
