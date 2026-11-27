@@ -91,14 +91,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::session_access::SessionAccess;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_sql::plans::KillPlan;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
@@ -115,22 +111,6 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
-
-/// Authorization captured on the requesting node and carried over authenticated Flight RPC.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct KillQueryAccess {
-    pub tenant: String,
-    pub user: UserIdentity,
-    pub is_super: bool,
-}
-
-impl KillQueryAccess {
-    pub fn can_kill(&self, target_tenant: &str, target_user: Option<&UserIdentity>) -> bool {
-        !self.tenant.is_empty()
-            && self.tenant == target_tenant
-            && (self.is_super || target_user == Some(&self.user))
-    }
-}
 
 /// The internal session prefix selects lookup order, not a reserved namespace.
 /// Numeric ids retain MySQL semantics and are never resolved as query ids.
@@ -156,7 +136,7 @@ pub struct KillInterpreter {
     ctx: Arc<QueryContext>,
     plan: KillPlan,
     proxy_to_warehouse: bool,
-    access: Option<KillQueryAccess>,
+    access: Option<SessionAccess>,
 }
 
 impl KillInterpreter {
@@ -172,7 +152,7 @@ impl KillInterpreter {
     pub fn from_flight(
         ctx: Arc<QueryContext>,
         plan: KillPlan,
-        access: KillQueryAccess,
+        access: SessionAccess,
     ) -> Result<Self> {
         Ok(KillInterpreter {
             ctx,
@@ -183,7 +163,7 @@ impl KillInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn kill_warehouse_query(&self, access: &KillQueryAccess) -> Result<PipelineBuildResult> {
+    async fn kill_warehouse_query(&self, access: &SessionAccess) -> Result<PipelineBuildResult> {
         let settings = self.ctx.get_settings();
         let warehouse = self.ctx.get_warehouse_cluster().await?;
 
@@ -241,16 +221,7 @@ impl KillInterpreter {
     async fn execute_kill(&self) -> Result<PipelineBuildResult> {
         let access = match &self.access {
             Some(access) => access.clone(),
-            None => {
-                let session = self.ctx.get_current_session();
-                KillQueryAccess {
-                    tenant: session.get_current_tenant().tenant_name().to_string(),
-                    user: session.get_current_user()?.identity(),
-                    is_super: session
-                        .has_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
-                        .await?,
-                }
-            }
+            None => SessionAccess::of_current_user(self.ctx.as_ref()).await?,
         };
 
         if access.tenant.is_empty() {
@@ -267,7 +238,7 @@ impl KillInterpreter {
             let mut denied = None;
             for session in manager.get_sessions_by_query_id(&access.tenant, id) {
                 let user = session.get_current_user().ok().map(|user| user.identity());
-                if access.can_kill(session.get_current_tenant().tenant_name(), user.as_ref()) {
+                if access.can_access(session.get_current_tenant().tenant_name(), user.as_ref()) {
                     return Some(session);
                 }
                 // Keep a denied match so it cannot turn into sid/peer fallback.
@@ -348,7 +319,7 @@ impl KillInterpreter {
         Ok(PipelineBuildResult::create())
     }
 
-    fn check_access(&self, access: &KillQueryAccess, kill_session: &Session) -> Result<()> {
+    fn check_access(&self, access: &SessionAccess, kill_session: &Session) -> Result<()> {
         let target_tenant = kill_session.get_current_tenant();
         if access.tenant.is_empty() || access.tenant != target_tenant.tenant_name() {
             return Err(self.unknown_session());
@@ -357,7 +328,7 @@ impl KillInterpreter {
             .get_current_user()
             .ok()
             .map(|user| user.identity());
-        if !access.can_kill(target_tenant.tenant_name(), target_user.as_ref()) {
+        if !access.can_access(target_tenant.tenant_name(), target_user.as_ref()) {
             return Err(ErrorCode::PermissionDenied(format!(
                 "Permission denied: not owner of target {}; global SUPER privilege is required",
                 self.plan.id

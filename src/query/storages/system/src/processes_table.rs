@@ -24,6 +24,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::session_access::SessionAccess;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -40,28 +41,22 @@ use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::utils::FromData;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 
 use crate::AsyncOneBlockSystemTable;
 use crate::AsyncSystemTable;
-use crate::util::has_global_privilege;
 
 pub struct ProcessesTable {
     table_info: TableInfo,
 }
 
-/// The sessions a query may list, decided on the node that plans it and sent to every node
-/// of the warehouse, which reads its sessions with a worker context. As for `KILL`: the
-/// sessions of the user in its tenant, or all sessions of the tenant with SUPER.
+/// The sessions a query may list, as for `KILL`. Decided on the node that plans the query and
+/// sent to every node of the warehouse, which reads its sessions with a worker context.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ProcessesPart {
-    tenant: String,
-    /// None: all sessions of the tenant.
-    user: Option<UserIdentity>,
+    access: SessionAccess,
 }
 
 #[typetag::serde(name = "system_processes")]
@@ -82,25 +77,15 @@ impl PartInfo for ProcessesPart {
 }
 
 impl ProcessesPart {
-    async fn of_session(ctx: &dyn TableContext) -> Result<Self> {
-        let user = match has_global_privilege(ctx, UserPrivilegeType::Super).await? {
-            true => None,
-            false => Some(ctx.get_current_user()?.identity()),
-        };
+    async fn of_current_user(ctx: &dyn TableContext) -> Result<Self> {
         Ok(ProcessesPart {
-            tenant: ctx.get_tenant().tenant_name().to_string(),
-            user,
+            access: SessionAccess::of_current_user(ctx).await?,
         })
     }
 
     fn can_list(&self, process: &ProcessInfo) -> bool {
-        process.tenant == self.tenant
-            && self.user.as_ref().is_none_or(|user| {
-                process
-                    .user
-                    .as_ref()
-                    .is_some_and(|process_user| process_user.identity() == *user)
-            })
+        let user = process.user.as_ref().map(|user| user.identity());
+        self.access.can_access(&process.tenant, user.as_ref())
     }
 }
 
@@ -121,7 +106,7 @@ impl AsyncSystemTable for ProcessesTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let part = ProcessesPart::of_session(ctx.as_ref()).await?;
+        let part = ProcessesPart::of_current_user(ctx.as_ref()).await?;
         Self::list_processes(ctx.as_ref(), &part)
     }
 
@@ -144,7 +129,7 @@ impl AsyncSystemTable for ProcessesTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let part = ProcessesPart::of_session(ctx.as_ref()).await?;
+        let part = ProcessesPart::of_current_user(ctx.as_ref()).await?;
         Ok((
             PartStatistics::default(),
             Partitions::create(PartitionsShuffleKind::BroadcastWarehouse, vec![Arc::new(
