@@ -325,26 +325,20 @@ impl ClusterDiscovery {
         let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
         let common = &cfg.query.common;
-        if cfg
-            .cache
-            .is_meta_service_cache_enabled(MetaServiceCache::ClusterNode)
+        // A system-managed node can move between clusters, so it has no fixed cluster to watch.
+        if !common.cluster_id.is_empty()
+            && cfg
+                .cache
+                .is_meta_service_cache_enabled(MetaServiceCache::ClusterNode)
         {
-            if common.cluster_id.is_empty() {
-                // A system-managed node: the warehouse management assigns its cluster at runtime
-                // and can move it, so there is no fixed cluster to watch.
-                warn!(
-                    "cluster_node in cache.meta_service_caches needs a configured cluster_id: this node reads its cluster from meta-service"
-                );
-            } else {
-                cluster_manager = cluster_manager
-                    .watch_cluster_nodes(
-                        client,
-                        &common.warehouse_id,
-                        &common.cluster_id,
-                        &cfg.query.node_id,
-                    )
-                    .await?;
-            }
+            cluster_manager = cluster_manager
+                .watch_cluster_nodes(
+                    client,
+                    &common.warehouse_id,
+                    &common.cluster_id,
+                    &cfg.query.node_id,
+                )
+                .await?;
         }
 
         Ok((lift_time, Arc::new(cluster_manager)))
