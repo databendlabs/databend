@@ -284,10 +284,9 @@ pub struct ReadState {
     /// owns its `ReadState`, so they are reused across its blocks without synchronization.
     pre_field_levels: FieldLevelsCache,
     remain_field_levels: FieldLevelsCache,
-    pub filters: Option<Expr>,
-    /// The executor of `filters`.
+    /// The executor of the prewhere filter.
     prewhere_executor: Option<FilterExecutor>,
-    /// Whether `filters` is set and deterministic. Evaluating a non-deterministic filter (e.g.
+    /// Whether the prewhere filter is set and deterministic. Evaluating a non-deterministic filter (e.g.
     /// seeded `rand()`) in batches yields different results than evaluating it on the whole
     /// block, so such filters skip the batched scan.
     filters_deterministic: bool,
@@ -507,7 +506,6 @@ impl ReadState {
             remain_field_levels: remain_reader.field_levels_cache(),
             pre_reader: prewhere_reader,
             remain_reader,
-            filters: prewhere_filter,
             prewhere_executor,
             filters_deterministic,
             runtime_filters,
@@ -1020,13 +1018,10 @@ impl ReadState {
         // The condition cache is read and filled by `deserialize_and_filter` only.
         self.condition_key.is_none()
             && part.nums_rows > self.batch_rows
-            && self
-                .filters
-                .as_ref()
-                .is_none_or(|_| self.filters_deterministic)
+            && (self.prewhere_executor.is_none() || self.filters_deterministic)
             && !(no_output_columns && self.early.is_none() && self.runtime_filters.is_empty())
             && !(self.pre_column_ids.is_empty()
-                && (self.filters.is_some() || !self.runtime_filters.is_empty()))
+                && (self.prewhere_executor.is_some() || !self.runtime_filters.is_empty()))
     }
 
     /// The stage reading `remain_reader` in batches, pushing down `RowSelection` when
