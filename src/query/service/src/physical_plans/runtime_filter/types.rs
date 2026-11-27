@@ -103,3 +103,15 @@ pub struct PhysicalRuntimeFilter {
     /// Enable min-max filter for this runtime filter
     pub enable_min_max_runtime_filter: bool,
 }
+
+/// A runtime filter on the scans of a materialized CTE producer.
+///
+/// Its keys are the union of the build keys of `source_filters`. Each source
+/// is a join runtime filter that drops the rows of at least one CTE consumer,
+/// and together the sources cover every consumer.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PhysicalCteRuntimeFilter {
+    pub cte_name: String,
+    pub filter: PhysicalRuntimeFilter,
+    pub source_filters: Vec<usize>,
+}

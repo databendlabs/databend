@@ -1,0 +1,544 @@
+statement ok
+set enable_materialized_cte = 1;
+
+statement ok
+set enable_auto_materialize_cte = 1;
+
+statement ok
+set enable_cse_optimizer = 0;
+
+statement ok
+set max_threads = 1;
+
+statement ok
+create or replace table cte_rf_fact as select number % 1000 as k, number % 7 as v from numbers(100000);
+
+statement ok
+create or replace table cte_rf_dim1 as select number as k from numbers(5);
+
+statement ok
+create or replace table cte_rf_dim2 as select number + 500 as k from numbers(5);
+
+statement ok
+create or replace table cte_rf_dim3 as select number * 2 as k from numbers(5);
+
+# Each consumer is covered by a different join. The producer keeps the union
+# of their keys.
+query T
+explain with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select 'a' as n, sum(s) as total from c join cte_rf_dim1 on c.k = cte_rf_dim1.k
+union all
+select 'b' as n, sum(s) as total from c join cte_rf_dim2 on c.k = cte_rf_dim2.k;
+----
+Sequence
+├── cte join filters:
+│   └── filter id:2, cte:c, union of:[#0, #1], probe targets:[CAST(k (#0) AS UInt64 NULL)@scan0], filter type:bloom,inlist,min_max
+├── MaterializedCTE: c
+│   └── AggregateFinal
+│       ├── output columns: [sum(v) (#2), cte_rf_fact.k (#0)]
+│       ├── group by: [k]
+│       ├── aggregate functions: [sum(v)]
+│       ├── estimated rows: 961.00
+│       └── AggregatePartial
+│           ├── group by: [k]
+│           ├── aggregate functions: [sum(v)]
+│           ├── estimated rows: 961.00
+│           └── TableScan
+│               ├── table: default.default.cte_rf_fact
+│               ├── scan id: 0
+│               ├── output columns: [k (#0), v (#1)]
+│               ├── read rows: 100000
+│               ├── read size: 10.39 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               ├── apply join filters: [#2]
+│               └── estimated rows: 100000.00
+└── UnionAll
+    ├── output columns: [n (#15), total (#16)]
+    ├── estimated rows: 2.00
+    ├── EvalScalar
+    │   ├── output columns: [sum(s) (#7), n (#8)]
+    │   ├── expressions: ['a']
+    │   ├── estimated rows: 1.00
+    │   └── AggregateFinal
+    │       ├── output columns: [sum(s) (#7)]
+    │       ├── group by: []
+    │       ├── aggregate functions: [sum(sum(v))]
+    │       ├── estimated rows: 1.00
+    │       └── AggregatePartial
+    │           ├── group by: []
+    │           ├── aggregate functions: [sum(sum(v))]
+    │           ├── estimated rows: 1.00
+    │           └── HashJoin
+    │               ├── output columns: [sum(v) (#5)]
+    │               ├── join type: INNER
+    │               ├── build keys: [cte_rf_dim1.k (#6)]
+    │               ├── probe keys: [CAST(c.k (#3) AS UInt64 NULL)]
+    │               ├── keys is null equal: [false]
+    │               ├── filters: []
+    │               ├── build join filters:
+    │               │   └── filter id:0, build key:cte_rf_dim1.k (#6), probe targets:[], filter type:bloom,inlist,min_max
+    │               ├── estimated rows: 5.00
+    │               ├── TableScan(Build)
+    │               │   ├── table: default.default.cte_rf_dim1
+    │               │   ├── scan id: 2
+    │               │   ├── output columns: [k (#6)]
+    │               │   ├── read rows: 5
+    │               │   ├── read size: < 1 KiB
+    │               │   ├── partitions total: 1
+    │               │   ├── partitions scanned: 1
+    │               │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │               │   ├── push downs: [filters: [], limit: NONE]
+    │               │   └── estimated rows: 5.00
+    │               └── MaterializeCTERef(Probe)
+    │                   ├── cte_name: c
+    │                   ├── cte_schema: [k (#3), sum(v) (#5)]
+    │                   └── estimated rows: 961.00
+    └── EvalScalar
+        ├── output columns: [sum(s) (#13), n (#14)]
+        ├── expressions: ['b']
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [sum(s) (#13)]
+            ├── group by: []
+            ├── aggregate functions: [sum(sum(v))]
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: []
+                ├── aggregate functions: [sum(sum(v))]
+                ├── estimated rows: 1.00
+                └── HashJoin
+                    ├── output columns: [sum(v) (#11)]
+                    ├── join type: INNER
+                    ├── build keys: [cte_rf_dim2.k (#12)]
+                    ├── probe keys: [CAST(c.k (#9) AS UInt64 NULL)]
+                    ├── keys is null equal: [false]
+                    ├── filters: []
+                    ├── build join filters:
+                    │   └── filter id:1, build key:cte_rf_dim2.k (#12), probe targets:[], filter type:bloom,inlist,min_max
+                    ├── estimated rows: 5.00
+                    ├── TableScan(Build)
+                    │   ├── table: default.default.cte_rf_dim2
+                    │   ├── scan id: 4
+                    │   ├── output columns: [k (#12)]
+                    │   ├── read rows: 5
+                    │   ├── read size: < 1 KiB
+                    │   ├── partitions total: 1
+                    │   ├── partitions scanned: 1
+                    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    │   ├── push downs: [filters: [], limit: NONE]
+                    │   └── estimated rows: 5.00
+                    └── MaterializeCTERef(Probe)
+                        ├── cte_name: c
+                        ├── cte_schema: [k (#9), sum(v) (#11)]
+                        └── estimated rows: 961.00
+
+query TI rowsort
+with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select 'a' as n, sum(s) as total from c join cte_rf_dim1 on c.k = cte_rf_dim1.k
+union all
+select 'b' as n, sum(s) as total from c join cte_rf_dim2 on c.k = cte_rf_dim2.k;
+----
+a 1492
+b 1508
+
+# The second IN joins its consumer with a build side that reads the first
+# consumer. The first IN's build keys contain its keys, so they cover both.
+query T
+explain with c as (select f1.k from cte_rf_fact f1 join cte_rf_fact f2 on f1.k = f2.k and f1.v <> f2.v where f1.v < 2)
+select count(*) from cte_rf_dim3
+where cte_rf_dim3.k in (select k from c)
+  and cte_rf_dim3.k in (select cte_rf_dim1.k from cte_rf_dim1, c where cte_rf_dim1.k = c.k);
+----
+Sequence
+├── cte join filters:
+│   └── filter id:3, cte:c, union of:[#1], probe targets:[CAST(k (#0) AS UInt64 NULL)@scan0, CAST(f2.k (#2) AS UInt64 NULL)@scan1], filter type:bloom,inlist,min_max
+├── MaterializedCTE: c
+│   └── HashJoin
+│       ├── output columns: [f1.k (#0)]
+│       ├── join type: INNER
+│       ├── build keys: [f1.k (#0)]
+│       ├── probe keys: [f2.k (#2)]
+│       ├── keys is null equal: [false]
+│       ├── filters: [f1.v (#1) <> f2.v (#3)]
+│       ├── build join filters:
+│       │   └── filter id:0, build key:f1.k (#0), probe targets:[f2.k (#2)@scan1], filter type:bloom,inlist,min_max
+│       ├── estimated rows: 2973093.50
+│       ├── TableScan(Build)
+│       │   ├── table: default.default.cte_rf_fact
+│       │   ├── scan id: 0
+│       │   ├── output columns: [k (#0), v (#1)]
+│       │   ├── read rows: 100000
+│       │   ├── read size: 10.39 KiB
+│       │   ├── partitions total: 1
+│       │   ├── partitions scanned: 1
+│       │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       │   ├── push downs: [filters: [is_true(cte_rf_fact.v (#1) < 2)], limit: NONE]
+│       │   ├── apply join filters: [#3]
+│       │   └── estimated rows: 28571.43
+│       └── TableScan(Probe)
+│           ├── table: default.default.cte_rf_fact
+│           ├── scan id: 1
+│           ├── output columns: [k (#2), v (#3)]
+│           ├── read rows: 100000
+│           ├── read size: 10.39 KiB
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│           ├── push downs: [filters: [], limit: NONE]
+│           ├── apply join filters: [#3, #0]
+│           └── estimated rows: 100000.00
+└── AggregateFinal
+    ├── output columns: [COUNT(*) (#14)]
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── HashJoin
+            ├── output columns: []
+            ├── join type: RIGHT SEMI
+            ├── build keys: [cte_rf_dim3.k (#4)]
+            ├── probe keys: [subquery_9 (#9)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:2, build key:cte_rf_dim3.k (#4), probe targets:[cte_rf_dim1.k (#9)@scan5], filter type:bloom,inlist,min_max
+            ├── estimated rows: 4.56
+            ├── HashJoin(Build)
+            │   ├── output columns: [cte_rf_dim3.k (#4)]
+            │   ├── join type: RIGHT SEMI
+            │   ├── build keys: [cte_rf_dim3.k (#4)]
+            │   ├── probe keys: [CAST(subquery_5 (#5) AS UInt64 NULL)]
+            │   ├── keys is null equal: [false]
+            │   ├── filters: []
+            │   ├── build join filters:
+            │   │   └── filter id:1, build key:cte_rf_dim3.k (#4), probe targets:[], filter type:bloom,inlist,min_max
+            │   ├── estimated rows: 4.83
+            │   ├── TableScan(Build)
+            │   │   ├── table: default.default.cte_rf_dim3
+            │   │   ├── scan id: 2
+            │   │   ├── output columns: [k (#4)]
+            │   │   ├── read rows: 5
+            │   │   ├── read size: < 1 KiB
+            │   │   ├── partitions total: 1
+            │   │   ├── partitions scanned: 1
+            │   │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │   │   ├── push downs: [filters: [], limit: NONE]
+            │   │   └── estimated rows: 5.00
+            │   └── MaterializeCTERef(Probe)
+            │       ├── cte_name: c
+            │       ├── cte_schema: [k (#5)]
+            │       └── estimated rows: 2973093.50
+            └── HashJoin(Probe)
+                ├── output columns: [cte_rf_dim1.k (#9)]
+                ├── join type: INNER
+                ├── build keys: [cte_rf_dim1.k (#9)]
+                ├── probe keys: [CAST(c.k (#10) AS UInt64 NULL)]
+                ├── keys is null equal: [false]
+                ├── filters: []
+                ├── estimated rows: 15468.75
+                ├── TableScan(Build)
+                │   ├── table: default.default.cte_rf_dim1
+                │   ├── scan id: 5
+                │   ├── output columns: [k (#9)]
+                │   ├── read rows: 5
+                │   ├── read size: < 1 KiB
+                │   ├── partitions total: 1
+                │   ├── partitions scanned: 1
+                │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                │   ├── push downs: [filters: [], limit: NONE]
+                │   ├── apply join filters: [#2]
+                │   └── estimated rows: 5.00
+                └── MaterializeCTERef(Probe)
+                    ├── cte_name: c
+                    ├── cte_schema: [k (#10)]
+                    └── estimated rows: 2973093.50
+
+query I
+with c as (select f1.k from cte_rf_fact f1 join cte_rf_fact f2 on f1.k = f2.k and f1.v <> f2.v where f1.v < 2)
+select count(*) from cte_rf_dim3
+where cte_rf_dim3.k in (select k from c)
+  and cte_rf_dim3.k in (select cte_rf_dim1.k from cte_rf_dim1, c where cte_rf_dim1.k = c.k);
+----
+3
+
+# A consumer without a covering join keeps every producer row.
+query T
+explain with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select 'a' as n, count(*) as total from c
+union all
+select 'b' as n, sum(s) as total from c join cte_rf_dim1 on c.k = cte_rf_dim1.k;
+----
+Sequence
+├── MaterializedCTE: c
+│   └── AggregateFinal
+│       ├── output columns: [sum(v) (#2), cte_rf_fact.k (#0)]
+│       ├── group by: [k]
+│       ├── aggregate functions: [sum(v)]
+│       ├── estimated rows: 961.00
+│       └── AggregatePartial
+│           ├── group by: [k]
+│           ├── aggregate functions: [sum(v)]
+│           ├── estimated rows: 961.00
+│           └── TableScan
+│               ├── table: default.default.cte_rf_fact
+│               ├── scan id: 0
+│               ├── output columns: [k (#0), v (#1)]
+│               ├── read rows: 100000
+│               ├── read size: 10.39 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 100000.00
+└── UnionAll
+    ├── output columns: [n (#14), total (#15)]
+    ├── estimated rows: 2.00
+    ├── EvalScalar
+    │   ├── output columns: [COUNT(*) (#6), n (#7)]
+    │   ├── expressions: ['a']
+    │   ├── estimated rows: 1.00
+    │   └── AggregateFinal
+    │       ├── output columns: [COUNT(*) (#6)]
+    │       ├── group by: []
+    │       ├── aggregate functions: [count()]
+    │       ├── estimated rows: 1.00
+    │       └── AggregatePartial
+    │           ├── group by: []
+    │           ├── aggregate functions: [count()]
+    │           ├── estimated rows: 1.00
+    │           └── MaterializeCTERef
+    │               ├── cte_name: c
+    │               ├── cte_schema: [k (#3), sum(v) (#5)]
+    │               └── estimated rows: 961.00
+    └── EvalScalar
+        ├── output columns: [sum(s) (#12), n (#13)]
+        ├── expressions: ['b']
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [sum(s) (#12)]
+            ├── group by: []
+            ├── aggregate functions: [sum(sum(v))]
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: []
+                ├── aggregate functions: [sum(sum(v))]
+                ├── estimated rows: 1.00
+                └── HashJoin
+                    ├── output columns: [sum(v) (#10)]
+                    ├── join type: INNER
+                    ├── build keys: [cte_rf_dim1.k (#11)]
+                    ├── probe keys: [CAST(c.k (#8) AS UInt64 NULL)]
+                    ├── keys is null equal: [false]
+                    ├── filters: []
+                    ├── estimated rows: 5.00
+                    ├── TableScan(Build)
+                    │   ├── table: default.default.cte_rf_dim1
+                    │   ├── scan id: 3
+                    │   ├── output columns: [k (#11)]
+                    │   ├── read rows: 5
+                    │   ├── read size: < 1 KiB
+                    │   ├── partitions total: 1
+                    │   ├── partitions scanned: 1
+                    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    │   ├── push downs: [filters: [], limit: NONE]
+                    │   └── estimated rows: 5.00
+                    └── MaterializeCTERef(Probe)
+                        ├── cte_name: c
+                        ├── cte_schema: [k (#8), sum(v) (#10)]
+                        └── estimated rows: 961.00
+
+# Each consumer is only covered by a join that reads the other consumer.
+query T
+explain with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select count(*) from c c1 join c c2 on c1.k = c2.k;
+----
+Sequence
+├── MaterializedCTE: c
+│   └── AggregateFinal
+│       ├── output columns: [cte_rf_fact.k (#0)]
+│       ├── group by: [k]
+│       ├── aggregate functions: []
+│       ├── estimated rows: 961.00
+│       └── AggregatePartial
+│           ├── group by: [k]
+│           ├── aggregate functions: []
+│           ├── estimated rows: 961.00
+│           └── TableScan
+│               ├── table: default.default.cte_rf_fact
+│               ├── scan id: 0
+│               ├── output columns: [k (#0)]
+│               ├── read rows: 100000
+│               ├── read size: 9.96 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 100000.00
+└── AggregateFinal
+    ├── output columns: [COUNT(*) (#9)]
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── HashJoin
+            ├── output columns: []
+            ├── join type: INNER
+            ├── build keys: [c2.k (#6)]
+            ├── probe keys: [c1.k (#3)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── estimated rows: 961.00
+            ├── MaterializeCTERef(Build)
+            │   ├── cte_name: c
+            │   ├── cte_schema: [k (#6)]
+            │   └── estimated rows: 961.00
+            └── MaterializeCTERef(Probe)
+                ├── cte_name: c
+                ├── cte_schema: [k (#3)]
+                └── estimated rows: 961.00
+
+query I
+with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select count(*) from c c1 join c c2 on c1.k = c2.k;
+----
+1000
+
+statement ok
+set enable_materialized_cte_runtime_filter = 0;
+
+query T
+explain with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select 'a' as n, sum(s) as total from c join cte_rf_dim1 on c.k = cte_rf_dim1.k
+union all
+select 'b' as n, sum(s) as total from c join cte_rf_dim2 on c.k = cte_rf_dim2.k;
+----
+Sequence
+├── MaterializedCTE: c
+│   └── AggregateFinal
+│       ├── output columns: [sum(v) (#2), cte_rf_fact.k (#0)]
+│       ├── group by: [k]
+│       ├── aggregate functions: [sum(v)]
+│       ├── estimated rows: 961.00
+│       └── AggregatePartial
+│           ├── group by: [k]
+│           ├── aggregate functions: [sum(v)]
+│           ├── estimated rows: 961.00
+│           └── TableScan
+│               ├── table: default.default.cte_rf_fact
+│               ├── scan id: 0
+│               ├── output columns: [k (#0), v (#1)]
+│               ├── read rows: 100000
+│               ├── read size: 10.39 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 100000.00
+└── UnionAll
+    ├── output columns: [n (#15), total (#16)]
+    ├── estimated rows: 2.00
+    ├── EvalScalar
+    │   ├── output columns: [sum(s) (#7), n (#8)]
+    │   ├── expressions: ['a']
+    │   ├── estimated rows: 1.00
+    │   └── AggregateFinal
+    │       ├── output columns: [sum(s) (#7)]
+    │       ├── group by: []
+    │       ├── aggregate functions: [sum(sum(v))]
+    │       ├── estimated rows: 1.00
+    │       └── AggregatePartial
+    │           ├── group by: []
+    │           ├── aggregate functions: [sum(sum(v))]
+    │           ├── estimated rows: 1.00
+    │           └── HashJoin
+    │               ├── output columns: [sum(v) (#5)]
+    │               ├── join type: INNER
+    │               ├── build keys: [cte_rf_dim1.k (#6)]
+    │               ├── probe keys: [CAST(c.k (#3) AS UInt64 NULL)]
+    │               ├── keys is null equal: [false]
+    │               ├── filters: []
+    │               ├── estimated rows: 5.00
+    │               ├── TableScan(Build)
+    │               │   ├── table: default.default.cte_rf_dim1
+    │               │   ├── scan id: 2
+    │               │   ├── output columns: [k (#6)]
+    │               │   ├── read rows: 5
+    │               │   ├── read size: < 1 KiB
+    │               │   ├── partitions total: 1
+    │               │   ├── partitions scanned: 1
+    │               │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │               │   ├── push downs: [filters: [], limit: NONE]
+    │               │   └── estimated rows: 5.00
+    │               └── MaterializeCTERef(Probe)
+    │                   ├── cte_name: c
+    │                   ├── cte_schema: [k (#3), sum(v) (#5)]
+    │                   └── estimated rows: 961.00
+    └── EvalScalar
+        ├── output columns: [sum(s) (#13), n (#14)]
+        ├── expressions: ['b']
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [sum(s) (#13)]
+            ├── group by: []
+            ├── aggregate functions: [sum(sum(v))]
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: []
+                ├── aggregate functions: [sum(sum(v))]
+                ├── estimated rows: 1.00
+                └── HashJoin
+                    ├── output columns: [sum(v) (#11)]
+                    ├── join type: INNER
+                    ├── build keys: [cte_rf_dim2.k (#12)]
+                    ├── probe keys: [CAST(c.k (#9) AS UInt64 NULL)]
+                    ├── keys is null equal: [false]
+                    ├── filters: []
+                    ├── estimated rows: 5.00
+                    ├── TableScan(Build)
+                    │   ├── table: default.default.cte_rf_dim2
+                    │   ├── scan id: 4
+                    │   ├── output columns: [k (#12)]
+                    │   ├── read rows: 5
+                    │   ├── read size: < 1 KiB
+                    │   ├── partitions total: 1
+                    │   ├── partitions scanned: 1
+                    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    │   ├── push downs: [filters: [], limit: NONE]
+                    │   └── estimated rows: 5.00
+                    └── MaterializeCTERef(Probe)
+                        ├── cte_name: c
+                        ├── cte_schema: [k (#9), sum(v) (#11)]
+                        └── estimated rows: 961.00
+
+query TI rowsort
+with c as (select k, sum(v) as s from cte_rf_fact group by k)
+select 'a' as n, sum(s) as total from c join cte_rf_dim1 on c.k = cte_rf_dim1.k
+union all
+select 'b' as n, sum(s) as total from c join cte_rf_dim2 on c.k = cte_rf_dim2.k;
+----
+a 1492
+b 1508
+
+statement ok
+unset enable_materialized_cte_runtime_filter;
+
+statement ok
+drop table cte_rf_fact;
+
+statement ok
+drop table cte_rf_dim1;
+
+statement ok
+drop table cte_rf_dim2;
+
+statement ok
+drop table cte_rf_dim3;

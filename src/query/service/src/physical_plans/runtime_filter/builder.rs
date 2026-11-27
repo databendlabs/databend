@@ -90,15 +90,18 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
 /// * `build_keys` - Build side keys, cast to the common type of each equi condition
 ///
 /// # Returns
-/// Collection of runtime filters to be applied
+/// Join filters, and the subset that supplies materialized CTE producers by equi-condition index.
 pub async fn build_runtime_filter(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
     join: &Join,
     s_expr: &PExpr,
     build_keys: &[RemoteExpr],
-) -> Result<PhysicalRuntimeFilters> {
-    if join.runtime_filters.is_empty() || !ctx.get_settings().get_enable_join_runtime_filter()? {
+    cte_sources: &[usize],
+) -> Result<(PhysicalRuntimeFilters, Vec<(usize, PhysicalRuntimeFilter)>)> {
+    if (join.runtime_filters.is_empty() && cte_sources.is_empty())
+        || !ctx.get_settings().get_enable_join_runtime_filter()?
+    {
         return Ok(Default::default());
     }
 
@@ -126,6 +129,7 @@ pub async fn build_runtime_filter(
     collect_scan_runtime_filters(s_expr.probe_side_child(), &mut scan_targets);
 
     let mut filters = Vec::new();
+    let mut cte_source_filters = Vec::new();
     for runtime_filter in join.runtime_filters.iter() {
         let Some(index) = join.equi_conditions.iter().position(|condition| {
             !condition.is_null_equal
@@ -134,9 +138,7 @@ pub async fn build_runtime_filter(
         }) else {
             continue;
         };
-        let Some(targets) = scan_targets.get(&runtime_filter.id) else {
-            continue;
-        };
+        let targets = scan_targets.get(&runtime_filter.id).into_iter().flatten();
 
         let build_key = &build_keys[index];
         let target_type = build_key.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
@@ -159,7 +161,7 @@ pub async fn build_runtime_filter(
                 probe_target_keys.push((scan_probe_key, *scan_id));
             }
         }
-        if probe_targets.is_empty() {
+        if probe_targets.is_empty() && !cte_sources.contains(&index) {
             continue;
         }
 
@@ -178,7 +180,7 @@ pub async fn build_runtime_filter(
         let probe_table_rows = get_table_rows(ctx.clone(), metadata, probe_table_index).await?;
         let data_type = target_type.remove_nullable();
         let id = metadata.write().next_runtime_filter_id();
-        filters.push(PhysicalRuntimeFilter {
+        let filter = PhysicalRuntimeFilter {
             id,
             build_key: build_key.clone(),
             probe_targets,
@@ -187,10 +189,14 @@ pub async fn build_runtime_filter(
             enable_bloom_runtime_filter: is_type_supported_for_bloom_filter(&data_type),
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: is_type_supported_for_min_max_filter(&data_type),
-        });
+        };
+        if cte_sources.contains(&index) {
+            cte_source_filters.push((index, filter.clone()));
+        }
+        filters.push(filter);
     }
 
-    Ok(PhysicalRuntimeFilters { filters })
+    Ok((PhysicalRuntimeFilters { filters }, cte_source_filters))
 }
 
 /// Collect the runtime filters that reached scans, as (probe key, scan id) per filter.
@@ -412,7 +418,7 @@ async fn get_table_rows(
     Ok(table_stats.and_then(|s| s.num_rows))
 }
 
-fn supported_probe_key_for_runtime_filter(
+pub(super) fn supported_probe_key_for_runtime_filter(
     probe_key: &RemoteExpr<String>,
     func_ctx: &FunctionContext,
 ) -> bool {
@@ -455,7 +461,7 @@ fn safe_expression_domain(expr: &Expr<String>, func_ctx: &FunctionContext) -> Op
     }
 }
 
-fn normalize_probe_target(
+pub(super) fn normalize_probe_target(
     target: &RemoteExpr<String>,
     target_type: &DataType,
     func_ctx: &FunctionContext,
@@ -475,7 +481,7 @@ fn normalize_probe_target(
 }
 
 /// Push a target unless it is already present. Returns whether it was pushed.
-fn push_unique_target(
+pub(super) fn push_unique_target(
     targets: &mut Vec<(RemoteExpr<String>, usize)>,
     expr: RemoteExpr<String>,
     scan_id: usize,

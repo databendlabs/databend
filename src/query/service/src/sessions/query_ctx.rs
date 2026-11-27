@@ -169,7 +169,12 @@ use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::CoordinationManager;
+use crate::physical_plans::PhysicalCteRuntimeFilter;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::CteFilterSourceKeys;
+use crate::pipelines::processors::transforms::CteFilterThresholds;
+use crate::pipelines::processors::transforms::CteRuntimeFilterCollector;
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::NodePerfCounters;
@@ -1050,6 +1055,82 @@ impl QueryContext {
         receivers.pop().unwrap()
     }
 
+    /// Registers a filter on the scans of a CTE producer, and makes those
+    /// scans wait for it. Its source joins publish their keys with
+    /// `publish_cte_runtime_filter_sources`.
+    pub fn register_cte_runtime_filter(&self, filter: &PhysicalCteRuntimeFilter) -> Result<()> {
+        let settings = self.get_settings();
+        let thresholds = CteFilterThresholds {
+            inlist: settings.get_inlist_runtime_filter_threshold()? as usize,
+            bloom: settings.get_bloom_runtime_filter_threshold()? as usize,
+            min_max: settings.get_min_max_runtime_filter_threshold()? as usize,
+            selectivity: settings.get_join_runtime_filter_selectivity_threshold()?,
+            max_threads: settings.get_max_threads()? as usize,
+        };
+        self.shared
+            .runtime_filter_state
+            .register_cte_runtime_filter(Arc::new(CteRuntimeFilterCollector::create(
+                filter, thresholds,
+            )));
+        Ok(())
+    }
+
+    /// The keys in `packet` of the filters that feed a CTE producer filter.
+    pub fn cte_runtime_filter_sources(
+        &self,
+        packet: &JoinRuntimeFilterPacket,
+        filter_ids: impl IntoIterator<Item = usize>,
+    ) -> Vec<CteRuntimeFilterSource> {
+        let state = &self.shared.runtime_filter_state;
+        let mut sources = Vec::new();
+        for filter_id in filter_ids {
+            for collector in state.get_cte_runtime_filters(filter_id) {
+                let keys = CteFilterSourceKeys::from_packet(packet, filter_id);
+                sources.push((collector, filter_id, keys));
+            }
+        }
+        sources
+    }
+
+    /// Hands source keys to their collectors. Installs each CTE producer
+    /// filter whose last source arrives, and wakes its scans.
+    pub async fn publish_cte_runtime_filter_sources(
+        &self,
+        sources: Vec<CteRuntimeFilterSource>,
+    ) -> Result<()> {
+        for (collector, filter_id, keys) in sources {
+            let Some(all_keys) = collector.add_source(filter_id, keys) else {
+                continue;
+            };
+            let installed = collector.build(all_keys).await.map(|filters| {
+                if let Some(filters) = filters {
+                    self.set_runtime_filter(filters);
+                }
+            });
+            // Wake the scans even on error, so that they do not wait for
+            // the timeout before they observe the aborted query.
+            collector.notify_ready();
+            installed?;
+        }
+        Ok(())
+    }
+
+    /// Marks source filters whose join finished without publishing keys.
+    /// The producer filters fed by them keep every row.
+    pub fn abandon_cte_runtime_filter_sources(&self, filter_ids: impl IntoIterator<Item = usize>) {
+        let state = &self.shared.runtime_filter_state;
+        for filter_id in filter_ids {
+            for collector in state.get_cte_runtime_filters(filter_id) {
+                if collector
+                    .add_source(filter_id, CteFilterSourceKeys::Unknown)
+                    .is_some()
+                {
+                    collector.notify_ready();
+                }
+            }
+        }
+    }
+
     /// Marks materialized CTEs whose consumers are built after the query pipeline: the
     /// recursive CTE source builds the pipelines of its steps when they run.
     pub fn defer_materialized_cte_consumers(&self, cte_names: impl IntoIterator<Item = String>) {
@@ -1084,6 +1165,9 @@ impl QueryContext {
         )))
     }
 }
+
+/// A collector, the id of one of its source filters, and that source's keys.
+pub type CteRuntimeFilterSource = (Arc<CteRuntimeFilterCollector>, usize, CteFilterSourceKeys);
 
 impl QueryContext {
     #[cfg(feature = "python-udf")]
