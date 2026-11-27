@@ -256,7 +256,7 @@ impl Binder {
             .map(|root| self.bind_grouped_where(from_context, items.lend(), root))
             .transpose()?;
 
-        Self::prepare_grouping_scope(from_context);
+        Self::prepare_grouping_scope(from_context)?;
         let select_list = self.bind_select_list(from_context, clauses, &mut items.forms)?;
         Ok((select_list, GroupedSelect {
             items,

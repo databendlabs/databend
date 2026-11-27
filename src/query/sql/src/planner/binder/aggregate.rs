@@ -44,6 +44,7 @@ use crate::binder::AliasLookup;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::GroupingKeyParts;
 use crate::binder::GroupingKeyScope;
 use crate::binder::GroupingScopeState;
 use crate::binder::NameResolutionResult;
@@ -74,6 +75,7 @@ use crate::plans::ScalarItem;
 use crate::plans::UDAFCall;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
+use crate::plans::walk_expr;
 use crate::plans::walk_expr_mut;
 
 /// Information for `GROUPING SETS`.
@@ -321,6 +323,26 @@ impl AggregateInfo {
             )
             .build()
         })
+    }
+
+    /// The input expressions of the keys and every expression in them.
+    fn grouping_key_parts(&self) -> Result<GroupingKeyParts> {
+        struct Parts(GroupingKeyParts);
+        impl<'a> Visitor<'a> for Parts {
+            fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+                if self.0.insert(expr) {
+                    walk_expr(self, expr)?;
+                }
+                Ok(())
+            }
+        }
+        let mut parts = Parts(GroupingKeyParts::default());
+        for item in &self.group_items {
+            if self.is_grouping_key_output(item.index) {
+                parts.visit(&item.scalar)?;
+            }
+        }
+        Ok(parts.0)
     }
 
     /// Whether `index` is the output symbol of a grouping key.
@@ -1232,6 +1254,7 @@ impl Binder {
             state: GroupingScopeState::GroupBy,
             folding_policy,
             input_columns: Default::default(),
+            key_parts: None,
         });
     }
 
@@ -1239,11 +1262,22 @@ impl Binder {
     /// aggregate, only the GROUP BY, the WHERE and the SELECT items they refer
     /// to are bound, which either fail on aggregate functions or register
     /// what is evaluated before the aggregate.
-    pub(crate) fn prepare_grouping_scope(bind_context: &mut BindContext) {
+    pub(crate) fn prepare_grouping_scope(bind_context: &mut BindContext) -> Result<()> {
         let input_columns = bind_context.column_set();
+        let keeps_structure = bind_context
+            .grouping_key_scope
+            .as_ref()
+            .is_some_and(|scope| !scope.folding_policy.allows_folding());
+        let key_parts = if keeps_structure {
+            Some(Arc::new(bind_context.aggregate_info.grouping_key_parts()?))
+        } else {
+            None
+        };
         let scope = bind_context.grouping_key_scope.get_or_insert_default();
         scope.state = GroupingScopeState::Active;
         scope.input_columns = input_columns;
+        scope.key_parts = key_parts;
+        Ok(())
     }
 
     pub fn bind_aggregate(

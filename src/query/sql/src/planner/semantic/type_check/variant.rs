@@ -1135,6 +1135,16 @@ struct StaticVariantAccess {
     kind: StaticVariantAccessKind,
 }
 
+/// Whether the call is a static variant access, which binding may turn into a
+/// virtual column instead of a call over its arguments.
+pub(super) fn is_static_variant_access_call(
+    arena: &CoreExprArena<'_>,
+    func_name: &str,
+    args: &CoreExprArgs,
+) -> bool {
+    StaticVariantAccess::from_function_call(arena, func_name, args).is_some()
+}
+
 impl StaticVariantAccess {
     /// Extract a static variant access from an arbitrary CoreExpr (used by cast pushdown).
     ///

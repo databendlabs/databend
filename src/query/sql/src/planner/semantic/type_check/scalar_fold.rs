@@ -365,7 +365,7 @@ where A: TypeCheckAdapter
 
     /// Facts of a function call over children with known facts, without
     /// folding it.
-    fn call_facts(
+    pub(super) fn call_facts(
         &self,
         span: Span,
         func_name: &str,
