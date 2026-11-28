@@ -24,7 +24,19 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 
+/// The hash table entries of one build chunk. Entries are laid out in the row order of the
+/// chunk's valid keys and each holds its encoded key.
+pub struct BuildArena {
+    pub chunk_index: usize,
+    pub num_keys: usize,
+    pub data: Vec<u8>,
+}
+
 pub struct BasicHashJoinState {
+    /// Whether the build chunks are encoded by `EncodedBuild`, as restored from spilled data,
+    /// instead of blocks of the build schema.
+    pub encoded_build: bool,
+
     pub mutex: Mutex<()>,
     pub build_rows: CStyleCell<usize>,
     pub chunks: CStyleCell<Vec<DataBlock>>,
@@ -32,7 +44,7 @@ pub struct BasicHashJoinState {
     pub column_types: CStyleCell<Vec<DataType>>,
     pub build_queue: CStyleCell<VecDeque<usize>>,
 
-    pub arenas: CStyleCell<Vec<Vec<u8>>>,
+    pub arenas: CStyleCell<Vec<BuildArena>>,
     pub hash_table: CStyleCell<HashJoinHashTable>,
     pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 
@@ -41,8 +53,9 @@ pub struct BasicHashJoinState {
 }
 
 impl BasicHashJoinState {
-    pub fn create() -> Self {
+    pub fn create(encoded_build: bool) -> Self {
         BasicHashJoinState {
+            encoded_build,
             mutex: Mutex::new(()),
             build_rows: CStyleCell::new(0),
             chunks: CStyleCell::new(Vec::new()),

@@ -24,6 +24,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
+use databend_common_expression::KeysState;
+use databend_common_expression::ProjectedBlock;
 use databend_common_settings::Settings;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
@@ -40,6 +42,9 @@ use crate::pipelines::processors::transforms::UniqueSingleBinaryHashJoinHashTabl
 use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
+use crate::pipelines::processors::transforms::new_hash_join::encoded_build::keys_state;
+use crate::pipelines::processors::transforms::new_hash_join::encoded_build::split_encoded;
+use crate::pipelines::processors::transforms::new_hash_join::memory::BuildArena;
 
 pub struct BasicHashJoin {
     pub(crate) desc: Arc<HashJoinDesc>,
@@ -102,11 +107,35 @@ impl BasicHashJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
-        let keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
-        let mut keys_block = DataBlock::new(keys_entries, chunk_block.num_rows());
+        let num_rows = chunk_block.num_rows();
+        let (projected, mut keys_block, valids) = match self.state.encoded_build {
+            false => {
+                let keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
+                let keys_block = DataBlock::new(keys_entries, num_rows);
+                let valids = self.desc.build_valids_by_keys(&keys_block)?;
+                (
+                    chunk_block.project(&self.desc.build_projection),
+                    keys_block,
+                    valids,
+                )
+            }
+            true => {
+                let (projected, key) = split_encoded(chunk_block);
+                let valids = match &key {
+                    Column::Nullable(key) => Some(key.validity().clone()),
+                    _ => None,
+                };
+                let key = key.remove_nullable();
+                (
+                    projected,
+                    DataBlock::new(vec![key.into()], num_rows),
+                    valids,
+                )
+            }
+        };
 
-        chunk_block = chunk_block.project(&self.desc.build_projection);
-        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+        chunk_block = projected;
+        if let Some(bitmap) = valids {
             if bitmap.true_count() != bitmap.len() {
                 keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
@@ -120,7 +149,15 @@ impl BasicHashJoin {
             }
         }
 
-        self.desc.remove_keys_nullable(&mut keys_block);
+        let num_keys = keys_block.num_rows();
+        let keys_state = match self.state.encoded_build {
+            false => {
+                self.desc.remove_keys_nullable(&mut keys_block);
+                self.method
+                    .build_keys_state(ProjectedBlock::from(keys_block.columns()), num_keys)?
+            }
+            true => keys_state(&self.method, keys_block.get_last_column().clone())?,
+        };
 
         let num_rows = chunk_block.num_rows();
         let num_bytes = chunk_block.memory_size();
@@ -138,7 +175,7 @@ impl BasicHashJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
-        self.build_hash_table(keys_block, chunk_index)?;
+        self.build_hash_table(&keys_state, num_keys, chunk_index)?;
 
         Ok(Some(ProgressValues {
             rows: num_rows,
@@ -295,34 +332,55 @@ impl BasicHashJoin {
         };
     }
 
-    fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
+    fn build_hash_table(&self, keys: &KeysState, num_keys: usize, chunk_idx: usize) -> Result<()> {
         let mut arena = Vec::with_capacity(0);
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
-            HashJoinHashTable::Serializer(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::SingleBinary(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU16(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU32(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU64(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU128(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU256(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueSerializer(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueSingleBinary(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueKeysU8(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueKeysU16(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueKeysU32(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueKeysU64(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueKeysU128(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::UniqueKeysU256(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::Serializer(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::SingleBinary(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::KeysU8(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU16(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU32(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU64(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU128(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU256(v) => v.insert(keys, num_keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::UniqueSerializer(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueSingleBinary(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueKeysU8(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueKeysU16(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueKeysU32(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueKeysU64(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueKeysU128(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
+            HashJoinHashTable::UniqueKeysU256(v) => {
+                v.insert(keys, num_keys, chunk_idx, &mut arena)?
+            }
         };
 
-        if arena.capacity() != 0 {
-            let locked = self.state.mutex.lock();
-            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-            self.state.arenas.as_mut().push(arena);
-        }
+        // Recorded even when empty: it marks the chunk as rewritten by `final_build`.
+        let locked = self.state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.state.arenas.as_mut().push(BuildArena {
+            chunk_index: chunk_idx,
+            num_keys,
+            data: arena,
+        });
 
         Ok(())
     }

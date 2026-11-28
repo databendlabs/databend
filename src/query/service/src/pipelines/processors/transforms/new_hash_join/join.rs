@@ -43,6 +43,20 @@ pub trait Join: Send + Sync + 'static {
         false
     }
 
+    /// Whether `final_build` stopped early because the join has to spill. The build final
+    /// stage must then run again after `prepare_final_build_spill`. Turns false once this
+    /// processor has switched to spilling.
+    fn final_build_spill_requested(&self) -> bool {
+        false
+    }
+
+    /// Discard the partially built in-memory hash table and switch the join to spilling.
+    /// Called by every processor after the build final stage barrier, when no processor
+    /// builds the hash table anymore; only the first call does the work.
+    fn prepare_final_build_spill(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     /// Whether probing can be skipped when the entire distributed build side is empty.
     fn can_skip_probe(&self) -> bool {
         false

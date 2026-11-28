@@ -58,6 +58,69 @@ select count(*), sum(t2.v) from t1 right anti join t2 on t1.k = t2.k;
 ----
 4000 12998000
 
+# All-NULL build keys restore as Const(Null) and re-partition at level 1.
+statement ok
+create or replace table t_null_build as select null::bigint as k, number as v from numbers(100);
+
+query III
+select count(*), sum(t1.v), sum(t_null_build.v) from t1 join t_null_build on t1.k = t_null_build.k;
+----
+0 NULL NULL
+
+query III
+select count(*), count(t1.k), sum(t_null_build.v) from t1 right join t_null_build on t1.k = t_null_build.k;
+----
+100 0 4950
+
+# Nullable 128-bit, 256-bit, and string build keys re-partition at level 1 after Parquet drops
+# the bytes of NULL slots.
+statement ok
+create or replace table t_wide_probe as
+select
+    number::bigint as k1,
+    (number * 10)::bigint as k2,
+    (number * 100)::bigint as k3,
+    number::decimal(20, 2) as d,
+    concat('s', number::varchar) as s,
+    number as v
+from numbers(200);
+
+statement ok
+create or replace table t_wide_build as
+select
+    if(number % 5 = 0, null, (number % 150)::bigint) as k1,
+    if(number % 7 = 0, null, ((number % 150) * 10)::bigint) as k2,
+    if(number % 11 = 0, null, ((number % 150) * 100)::bigint) as k3,
+    if(number % 5 = 0, null, (number % 150)::decimal(20, 2)) as d,
+    if(number % 5 = 0, null, concat('s', (number % 150)::varchar)) as s,
+    number as v
+from numbers(500);
+
+query III
+select count(*), sum(t_wide_probe.v), sum(t_wide_build.v) from t_wide_probe join t_wide_build on t_wide_probe.d = t_wide_build.d;
+----
+400 28000 100000
+
+query III
+select count(*), count(t_wide_probe.v), sum(t_wide_build.v) from t_wide_probe right join t_wide_build on t_wide_probe.d = t_wide_build.d;
+----
+500 400 124750
+
+query III
+select count(*), count(t_wide_probe.v), sum(t_wide_build.v) from t_wide_probe right join t_wide_build on t_wide_probe.k1 = t_wide_build.k1 and t_wide_probe.k2 = t_wide_build.k2;
+----
+500 343 124750
+
+query III
+select count(*), count(t_wide_probe.v), sum(t_wide_build.v) from t_wide_probe right join t_wide_build on t_wide_probe.k1 = t_wide_build.k1 and t_wide_probe.k2 = t_wide_build.k2 and t_wide_probe.k3 = t_wide_build.k3;
+----
+500 312 124750
+
+query III
+select count(*), count(t_wide_probe.v), sum(t_wide_build.v) from t_wide_probe right join t_wide_build on t_wide_probe.s = t_wide_build.s;
+----
+500 400 124750
+
 # Level 3 uses a small key domain to bound the number of restored partitions.
 statement ok
 set max_hash_join_spill_level = 3;
@@ -103,3 +166,12 @@ drop table if exists t3;
 
 statement ok
 drop table if exists t4;
+
+statement ok
+drop table if exists t_null_build;
+
+statement ok
+drop table if exists t_wide_probe;
+
+statement ok
+drop table if exists t_wide_build;

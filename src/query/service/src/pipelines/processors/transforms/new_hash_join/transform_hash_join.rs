@@ -261,6 +261,23 @@ impl Processor for TransformHashJoin {
                 self.instant = Instant::now();
                 Stage::BuildFinal(BuildFinalState::new())
             }
+            Stage::BuildFinal(_) if self.join.final_build_spill_requested() => {
+                // A processor only gets here after its `final_build` returned, so past the
+                // barrier no processor inserts into the hash table anymore.
+                self.join.prepare_final_build_spill()?;
+
+                let wait_elapsed = self.instant.elapsed() - elapsed;
+                log::info!(
+                    "HashJoin build final stage interrupted by spill, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    elapsed,
+                    wait_elapsed
+                );
+
+                // The runtime filters were globalized from the complete build side before this
+                // stage, so they stay valid after switching to grace mode.
+                self.instant = Instant::now();
+                Stage::BuildFinal(BuildFinalState::new())
+            }
             Stage::BuildFinal(_) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(
