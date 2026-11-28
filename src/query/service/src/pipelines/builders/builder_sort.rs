@@ -27,6 +27,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
+use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort_without_combiner;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge;
 
@@ -177,6 +178,33 @@ impl SortPipelineBuilder {
         }
 
         self.build_multi_merge(pipeline, !keep_order_col)
+    }
+
+    /// Merge already sorted input streams into at most `outputs` sorted outputs, each
+    /// non-decreasing on its own, without the combiner that restores one global order
+    /// across them. A single input stream stays one output. Mergers also emit a batch
+    /// once it reaches about `batch_bytes`.
+    pub fn build_merge_sort_without_combiner_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        outputs: usize,
+        batch_bytes: Option<usize>,
+    ) -> Result<()> {
+        let need_multi_merge = pipeline.output_len() > 1;
+        self.build_merge_sort(pipeline, false, need_multi_merge)?;
+        if !need_multi_merge {
+            return Ok(());
+        }
+        add_k_way_merge_sort_without_combiner(
+            pipeline,
+            self.key_desc.clone(),
+            outputs.max(1),
+            self.block_size,
+            batch_bytes,
+            true,
+            self.enable_loser_tree,
+            self.enable_fixed_rows,
+        )
     }
 
     pub fn build_multi_merge(self, pipeline: &mut Pipeline, remove_order_col: bool) -> Result<()> {

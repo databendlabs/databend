@@ -823,6 +823,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_recluster_multiway_merge")? != 0)
     }
 
+    pub fn get_recluster_depth_reduction(&self) -> Result<u64> {
+        self.try_get_u64("recluster_depth_reduction")
+    }
+
     pub fn set_recluster_block_size(&self, val: u64) -> Result<()> {
         self.try_set_u64("recluster_block_size", val)
     }

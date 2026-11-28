@@ -1,0 +1,207 @@
+# Parallel sorted outputs of a recluster MergeBlocks task: with
+# recluster_depth_reduction set, a task over many overlapping blocks writes several
+# sorted outputs without one global order. The data must stay intact.
+#
+# 40 blocks overlap everywhere. At 87% with eight threads, the task writes
+# 1 + 13% * 39 = 6 sorted outputs. Blocks of one output do not overlap except on a key
+# shared across a cut, so the depth left behind is at most twice the outputs.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0055_parallel
+
+statement ok
+CREATE DATABASE db_09_0055_parallel
+
+statement ok
+USE db_09_0055_parallel
+
+statement ok
+set max_threads = 8
+
+statement ok
+CREATE TABLE t(k int not null, payload string not null) CLUSTER BY(k) row_per_block=1000
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 0) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 1) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 2) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 3) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 4) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 5) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 6) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 7) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 8) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 9) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 10) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 11) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 12) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 13) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 14) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 15) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 16) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 17) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 18) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 19) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 20) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 21) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 22) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 23) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 24) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 25) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 26) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 27) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 28) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 29) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 30) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 31) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 32) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 33) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 34) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 35) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 36) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 37) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 38) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+statement ok
+INSERT INTO t SELECT (number * 37 + 39) % 1000, concat('p', to_string(number)) FROM numbers(1000)
+
+query III
+SELECT count(), sum(k), count(DISTINCT payload) FROM t
+----
+40000 19980000 1000
+
+statement ok
+set recluster_depth_reduction = 87
+
+statement ok
+ALTER TABLE t RECLUSTER
+
+query III
+SELECT count(), sum(k), count(DISTINCT payload) FROM t
+----
+40000 19980000 1000
+
+query II
+SELECT k, count() FROM t WHERE k IN (0, 499, 999) GROUP BY k ORDER BY k
+----
+0 40
+499 40
+999 40
+
+query I
+SELECT (info:max_depth::INT <= 12)::INT FROM clustering_information('db_09_0055_parallel','t')
+----
+1
+
+statement ok
+ALTER TABLE t RECLUSTER FINAL
+
+query III
+SELECT count(), sum(k), count(DISTINCT payload) FROM t
+----
+40000 19980000 1000
+
+query I
+SELECT (info:max_depth::INT <= 12)::INT FROM clustering_information('db_09_0055_parallel','t')
+----
+1
+
+# 100 removes the whole depth, the same as the merge into one global order.
+statement ok
+set recluster_depth_reduction = 100
+
+statement ok
+INSERT INTO t SELECT number, 'extra' FROM numbers(10)
+
+statement ok
+ALTER TABLE t RECLUSTER FINAL
+
+query II
+SELECT count(), sum(k) FROM t
+----
+40010 19980045
+
+statement ok
+unset recluster_depth_reduction
+
+statement ok
+unset max_threads
+
+statement ok
+DROP DATABASE db_09_0055_parallel

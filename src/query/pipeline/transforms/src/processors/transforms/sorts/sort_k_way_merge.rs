@@ -56,6 +56,75 @@ pub fn add_k_way_merge_sort(
     enable_loser_tree: bool,
     enable_fixed_rows: bool,
 ) -> Result<()> {
+    add_k_way_merge(
+        pipeline,
+        key_desc,
+        worker,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows,
+        KWayMergeOutput::Combined,
+    )
+}
+
+/// Merge the sorted input streams with `worker` mergers and keep their outputs apart,
+/// without the combiner that restores one global order.
+///
+/// The partitioner hands consecutive, disjoint key ranges to the mergers in ascending
+/// order, so each output is non-decreasing on its own and the outputs together hold
+/// every input row. A consumer that does not need one global order, such as recluster,
+/// can process the outputs independently.
+///
+/// A merger emits a batch at `block_size` rows or, given `batch_bytes`, once the batch
+/// reaches about that many bytes, whichever comes first, so wide rows reach the
+/// consumer in batches no larger than it needs.
+#[allow(clippy::too_many_arguments)]
+pub fn add_k_way_merge_sort_without_combiner(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    worker: usize,
+    block_size: usize,
+    batch_bytes: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows: bool,
+) -> Result<()> {
+    add_k_way_merge(
+        pipeline,
+        key_desc,
+        worker,
+        block_size,
+        None,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows,
+        KWayMergeOutput::PerWorker { batch_bytes },
+    )
+}
+
+/// How the k-way mergers hand their outputs on.
+#[derive(Clone, Copy)]
+enum KWayMergeOutput {
+    /// The combiner replays the merger outputs into one global order.
+    Combined,
+    /// Each merger output stays a sorted output of its own.
+    PerWorker { batch_bytes: Option<usize> },
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_k_way_merge(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    worker: usize,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows: bool,
+    output: KWayMergeOutput,
+) -> Result<()> {
     if pipeline.is_empty() {
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
     }
@@ -72,6 +141,7 @@ pub fn add_k_way_merge_sort(
                 limit,
                 remove_order_col,
                 enable_loser_tree,
+                output,
                 pipeline,
             };
             select_row_type(&mut builder, enable_fixed_rows)
@@ -87,6 +157,7 @@ struct Builder<'a> {
     limit: Option<usize>,
     remove_order_col: bool,
     enable_loser_tree: bool,
+    output: KWayMergeOutput,
     pipeline: &'a mut Pipeline,
 }
 
@@ -122,6 +193,10 @@ impl Builder<'_> {
         self.pipeline
             .add_pipe(self.create_partitioner::<A>(self.stream_size, sort_row_offset));
 
+        let (task_meta, batch_bytes) = match self.output {
+            KWayMergeOutput::Combined => (true, None),
+            KWayMergeOutput::PerWorker { batch_bytes } => (false, batch_bytes),
+        };
         self.pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(
                 KWayMergeWorkerProcessor::<A>::new(
@@ -131,11 +206,15 @@ impl Builder<'_> {
                     self.block_size,
                     remove_order_col,
                     sort_row_offset,
+                    task_meta,
+                    batch_bytes,
                 ),
             )))
         })?;
 
-        self.pipeline.add_pipe(self.create_combiner());
+        if matches!(self.output, KWayMergeOutput::Combined) {
+            self.pipeline.add_pipe(self.create_combiner());
+        }
         Ok(())
     }
 
@@ -307,6 +386,10 @@ where A: SortAlgorithm
     batch_rows: usize,
     remove_order_col: bool,
     sort_row_offset: usize,
+    /// Tag outputs with their task for the combiner.
+    task_meta: bool,
+    /// Also emit a batch once it reaches about this many bytes.
+    batch_bytes: Option<usize>,
 
     buffer: Vec<DataBlock>,
     task: Option<TaskState>,
@@ -324,6 +407,8 @@ where A: SortAlgorithm
         batch_rows: usize,
         remove_order_col: bool,
         sort_row_offset: usize,
+        task_meta: bool,
+        batch_bytes: Option<usize>,
     ) -> Self {
         Self {
             input,
@@ -333,6 +418,8 @@ where A: SortAlgorithm
             batch_rows,
             remove_order_col,
             sort_row_offset,
+            task_meta,
+            batch_bytes,
             buffer: Vec::new(),
             task: None,
             _a: Default::default(),
@@ -341,6 +428,16 @@ where A: SortAlgorithm
 
     fn ready(&self) -> bool {
         self.task.is_some_and(|state| state.done())
+    }
+
+    /// Rows per output batch for `rows` rows of `bytes`: `batch_rows`, lowered to about
+    /// `batch_bytes` at their average row width.
+    fn batch_rows_for(&self, bytes: usize, rows: usize) -> usize {
+        let Some(batch_bytes) = self.batch_bytes else {
+            return self.batch_rows;
+        };
+        let row_bytes = bytes.div_ceil(rows.max(1)).max(1);
+        self.batch_rows.min((batch_bytes / row_bytes).max(1))
     }
 
     fn pull(&mut self) -> Result<Event> {
@@ -381,8 +478,22 @@ where A: SortAlgorithm
                 if self.remove_order_col {
                     block.remove_column(self.sort_row_offset);
                 }
-
-                self.output_data.push_back(block);
+                if self.task_meta {
+                    self.output_data.push_back(block);
+                    return Ok(Event::NeedConsume);
+                }
+                block.take_meta();
+                // A task of one block bypasses the merger: slice it to the batch size.
+                let bytes = block.estimate_block_size(block.num_columns());
+                let batch_rows = self.batch_rows_for(bytes, rows);
+                if batch_rows >= rows {
+                    self.output_data.push_back(block);
+                } else {
+                    for start in (0..rows).step_by(batch_rows) {
+                        let end = (start + batch_rows).min(rows);
+                        self.output_data.push_back(block.slice(start..end));
+                    }
+                }
                 Ok(Event::NeedConsume)
             }
             None => {
@@ -458,12 +569,22 @@ where A: SortAlgorithm + 'static
         debug_assert!(self.ready());
         let task = self.task.take().unwrap();
 
+        let batch_rows = if self.batch_bytes.is_some() {
+            let bytes = self
+                .buffer
+                .iter()
+                .map(|block| block.estimate_block_size(block.num_columns()))
+                .sum::<usize>();
+            self.batch_rows_for(bytes, task.total)
+        } else {
+            self.batch_rows
+        };
         let mut merger = Merger::<A, _>::new(
             self.streams(),
-            if task.total > self.batch_rows {
-                task.total / (task.total / self.batch_rows)
+            if task.total > batch_rows {
+                task.total / (task.total / batch_rows)
             } else {
-                self.batch_rows
+                batch_rows
             },
             None,
         );
@@ -472,6 +593,10 @@ where A: SortAlgorithm + 'static
         while let Some(block) = merger.next_block()? {
             rows += block.num_rows();
 
+            if !self.task_meta {
+                self.output_data.push_back(block);
+                continue;
+            }
             let meta = SortTaskMeta {
                 id: task.id,
                 total: task.total,

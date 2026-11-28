@@ -1082,6 +1082,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("recluster_depth_reduction", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Percentage of the overlap depth a recluster MergeBlocks task must still remove when it writes several ordered runs in parallel instead of one; 0 disables parallel runs.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",
