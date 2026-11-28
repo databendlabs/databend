@@ -42,6 +42,28 @@ fn test_comparison() {
     test_like(file);
     test_regexp(file);
     test_decimal(file);
+    test_compare_empty_string(file);
+}
+
+fn test_compare_empty_string(file: &mut impl Write) {
+    let columns = &[
+        (
+            "a",
+            StringType::from_data(vec!["", "x", "a value longer than twelve bytes", " ", ""]),
+        ),
+        (
+            "b",
+            StringType::from_data_with_validity(vec!["", "", "y", "z", ""], vec![
+                true, false, true, true, false,
+            ]),
+        ),
+    ];
+    for expr in [
+        "a = ''", "a <> ''", "a > ''", "a >= ''", "a < ''", "a <= ''", "'' = a", "'' < a",
+        "'' >= a", "b = ''", "b <> ''",
+    ] {
+        run_ast(file, expr, columns);
+    }
 }
 
 fn test_singleton_domain_equality(file: &mut impl Write) {
@@ -569,6 +591,72 @@ fn test_like_filter_operand_order() -> databend_common_exception::Result<()> {
                 expected_indices.iter().map(|&idx| values[idx]).collect(),
             );
             assert_eq!(actual.num_rows(), expected_indices.len(), "{sql}");
+            assert_eq!(
+                actual.get_by_offset(0).as_column().unwrap(),
+                &expected,
+                "{sql}, enable_selector={enable_selector}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_empty_string_filter() -> databend_common_exception::Result<()> {
+    let values = vec![
+        Some(""),
+        Some("a"),
+        None,
+        Some("a value longer than twelve bytes"),
+        Some("\0"),
+        Some(""),
+    ];
+    let column = StringType::from_opt_data(values.clone());
+    let block = DataBlock::new_from_columns(vec![column.clone()]);
+    let cases: &[(&str, &[usize])] = &[
+        ("s = ''", &[0, 5]),
+        ("s <> ''", &[1, 3, 4]),
+        ("s > ''", &[1, 3, 4]),
+        ("s <= ''", &[0, 5]),
+        ("s >= ''", &[0, 1, 3, 4, 5]),
+        ("s < ''", &[]),
+        ("'' = s", &[0, 5]),
+        ("'' < s", &[1, 3, 4]),
+        ("'' >= s", &[0, 5]),
+        ("NOT (s <> '')", &[0, 5]),
+        ("s <> '' AND s <> 'a'", &[3, 4]),
+        ("s = 'a' OR s = ''", &[0, 1, 5]),
+        ("s <> 'a' AND s <> ''", &[3, 4]),
+    ];
+
+    for (sql, expected_indices) in cases {
+        let raw_expr = super::parser::parse_raw_expr(
+            &format!("is_true({sql})"),
+            &[("s", column.data_type())],
+            &BUILTIN_FUNCTIONS,
+        );
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let (expr, _) = ConstantFolder::fold(
+            Cow::Owned(expr),
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+        for enable_selector in [true, false] {
+            let mut executor = FilterExecutor::new(
+                expr.clone().into_owned(),
+                FunctionContext {
+                    enable_selector_executor: enable_selector,
+                    ..Default::default()
+                },
+                block.num_rows(),
+                None,
+                &BUILTIN_FUNCTIONS,
+                true,
+            );
+            let actual = executor.filter(block.clone())?;
+            let expected = StringType::from_opt_data(
+                expected_indices.iter().map(|&idx| values[idx]).collect(),
+            );
             assert_eq!(
                 actual.get_by_offset(0).as_column().unwrap(),
                 &expected,

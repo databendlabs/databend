@@ -169,7 +169,7 @@ impl TableSnapshot {
 
         if segment_block_timestamp < snapshot_timestamp_adjusted {
             let mut err_msg = format!(
-                "Unresolvable conflict: Transaction conflicts with commit at {:?}. Can only merge with commits before {:?}.",
+                "Snapshot timestamp conflict: adjusted snapshot timestamp {:?} exceeds the segment/block timestamp {:?}.",
                 snapshot_timestamp_adjusted, segment_block_timestamp
             );
 
@@ -190,7 +190,7 @@ impl TableSnapshot {
                 }
             }
 
-            return Err(ErrorCode::TransactionTimeout(err_msg));
+            return Err(ErrorCode::SnapshotTimestampConflict(err_msg));
         }
 
         ensure_segments_unique(&segments)?;
@@ -580,6 +580,36 @@ mod tests {
         assert_eq!(snapshot.cluster_key_meta, None);
         assert_eq!(snapshot.cluster_type, None);
         assert_eq!(snapshot.summary.cluster_stats, None);
+    }
+
+    #[test]
+    fn test_snapshot_timestamp_conflict_uses_adjusted_boundary() {
+        let timestamp = DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+        let make_snapshot = |previous, segment_block_timestamp| {
+            TableSnapshot::try_new(
+                None,
+                previous,
+                TableSchema::default(),
+                Statistics::default(),
+                vec![],
+                None,
+                None,
+                TableMetaTimestamps {
+                    segment_block_timestamp,
+                    snapshot_timestamp: timestamp,
+                    snapshot_timestamp_validation_context: None,
+                },
+            )
+        };
+        let previous = Arc::new(make_snapshot(None, timestamp).unwrap());
+
+        // The previous snapshot advances the effective boundary by one millisecond.
+        let error = make_snapshot(Some(previous.clone()), timestamp).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::SNAPSHOT_TIMESTAMP_CONFLICT);
+        assert!(error.message().starts_with("Snapshot timestamp conflict:"));
+        let boundary = timestamp + TimeDelta::milliseconds(1);
+        let snapshot = make_snapshot(Some(previous), boundary).unwrap();
+        assert_eq!(snapshot.timestamp, Some(boundary));
     }
 
     fn snapshot(previous: Option<Arc<TableSnapshot>>) -> TableSnapshot {

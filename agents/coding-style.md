@@ -28,6 +28,10 @@
   the subsystem can hand back its own handle, use that instead of recomputing
   the position (see how the inverted index uses the `Field`s returned by
   `create_index_schema`).
+- Prefer `match` over `if` chains when the branches select a value or
+  destructure an enum/`Option`: one `match` on the inputs (a tuple when there
+  are several) with arm guards reads as a single table of cases. Keep `if` for
+  plain boolean guards that only return early.
 
 ## Tests and Fixtures
 - Rust unit tests go in a single `#[cfg(test)] mod tests { ... }` block at the

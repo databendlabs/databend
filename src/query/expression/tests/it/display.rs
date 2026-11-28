@@ -40,6 +40,13 @@ fn test_fmt_expr() {
         |_, _, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar("x".to_string()),
     );
+    // Type checking only accepts a cast that has an implementation.
+    fake_registry.register_1_arg_core::<BooleanType, StringType, _, _>(
+        "to_string",
+        |_, _| FunctionDomain::Full,
+        |_, _| Value::Scalar("x".to_string()),
+    );
+    fake_registry.register_cast_with(Some(DataType::Boolean), DataType::String, "to_string");
 
     let raw_expr = RawExpr::Cast {
         span: None,

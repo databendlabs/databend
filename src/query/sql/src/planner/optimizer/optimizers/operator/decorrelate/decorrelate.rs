@@ -843,7 +843,7 @@ impl SubqueryDecorrelatorOptimizer {
                             let common_type = common_super_type(
                                 value_type.clone(),
                                 expr_type.clone(),
-                                &BUILTIN_FUNCTIONS.default_cast_rules,
+                                BUILTIN_FUNCTIONS.default_cast_rules(),
                             )
                             .ok_or_else(|| {
                                 ErrorCode::IllegalDataType(format!(

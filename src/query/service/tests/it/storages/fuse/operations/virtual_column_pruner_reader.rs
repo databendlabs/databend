@@ -22,6 +22,7 @@ use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
@@ -132,7 +133,13 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         "{0,k}",
     ]) {
         let key_paths = parse_key_paths(key_path.as_bytes()).unwrap().to_owned();
-        let field = build_virtual_column_field(source_column_id, "v", column_id, key_paths);
+        let field = build_virtual_column_field(
+            source_column_id,
+            "v",
+            column_id,
+            key_paths,
+            TableDataType::Variant,
+        );
         virtual_column_fields.push(field);
         column_ids.push(column_id);
     }
@@ -260,13 +267,14 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         Some(VirtualColumnSharedDataType::String)
     );
 
+    let source_schema = DataSchema::from(schema.as_ref());
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal.clone(),
-        schema.clone(),
         virtual_column_info,
         write_settings.table_compression,
         CachePolicy::DEFAULT,
+        0,
     )?;
 
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -279,8 +287,12 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         )
         .await
         .expect("virtual block read result");
-    let result_block =
-        reader.deserialize_virtual_columns(block.clone(), Some(virtual_data), None)?;
+    let result_block = reader.deserialize_virtual_columns(
+        block.clone(),
+        &source_schema,
+        Some(virtual_data),
+        None,
+    )?;
 
     assert_eq!(
         result_block.num_columns(),
@@ -345,6 +357,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let empty_selection = RowSelection::from(vec![RowSelector::skip(block.num_rows())]);
     let empty_block = reader.deserialize_virtual_columns(
         block.slice(0..0),
+        &source_schema,
         Some(virtual_data),
         Some(empty_selection),
     )?;
@@ -371,18 +384,21 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let schema = table.get_table_info().meta.schema.clone();
     let source_column_id = schema.column_id_of("v")?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let write_settings = fuse_table.get_write_settings();
+    let mut write_settings = fuse_table.get_write_settings();
+    write_settings.enable_parquet_dictionary = true;
     let location = ("_b/virtual_column_block_meta_direct.parquet".to_string(), 0);
     let block = DataBlock::new(
         vec![
-            Int32Type::from_data(vec![1, 2]).into(),
+            Int32Type::from_data(vec![1, 2, 3, 4]).into(),
             VariantType::from_opt_data(vec![
-                Some(OwnedJsonb::from_str(r#"{"id":1}"#)?.to_vec()),
-                Some(OwnedJsonb::from_str(r#"{"id":2}"#)?.to_vec()),
+                Some(OwnedJsonb::from_str(r#"{"kind":"a"}"#)?.to_vec()),
+                Some(OwnedJsonb::from_str(r#"{"kind":""}"#)?.to_vec()),
+                Some(OwnedJsonb::from_str(r#"{"kind":"a"}"#)?.to_vec()),
+                Some(OwnedJsonb::from_str("{}")?.to_vec()),
             ])
             .into(),
         ],
-        2,
+        4,
     );
     let mut builder = VirtualColumnBuilder::try_create(schema.clone(), Default::default())?;
     builder.add_block(&block)?;
@@ -395,7 +411,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let draft_meta = draft_columns
         .virtual_column_metas
         .iter()
-        .find(|meta| meta.name == "id")
+        .find(|meta| meta.name == "kind")
         .unwrap();
     let segment_column_id = 7;
     let virtual_block_meta = VirtualBlockMeta {
@@ -408,7 +424,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         column_paths: vec![VirtualSegmentColumnPath {
             source_column_id,
             paths: vec![VirtualSegmentPath {
-                path: "id".to_string(),
+                path: "kind".to_string(),
                 column_id: segment_column_id,
             }],
         }],
@@ -418,7 +434,8 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         source_column_id,
         "v",
         query_column_id,
-        parse_key_paths(b"{id}")?.to_owned(),
+        parse_key_paths(b"{kind}")?.to_owned(),
+        TableDataType::String.wrap_nullable(),
     );
     let push_down = PushDownInfo {
         virtual_column: Some(VirtualColumnInfo {
@@ -454,10 +471,10 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         DataType::from(&draft_meta.column_meta.data_type())
     );
 
+    let source_schema = DataSchema::from(schema.as_ref());
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal,
-        schema,
         VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
             ignorable_source_column_ids: HashSet::from([source_column_id]),
@@ -465,6 +482,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         },
         write_settings.table_compression,
         CachePolicy::DEFAULT,
+        100,
     )?;
     let table_ctx: Arc<dyn TableContext> = ctx;
     let read_settings = ReadSettings::from_ctx(&table_ctx)?;
@@ -472,10 +490,24 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         .read_parquet_data_by_merge_io(&read_settings, &Some(&index), block.num_rows())
         .await
         .unwrap();
-    let result = reader.deserialize_virtual_columns(block, Some(virtual_data), None)?;
-    assert_variant_column(&result.get_by_offset(2).to_column(), &[
-        Some("1"),
-        Some("2"),
+    let result =
+        reader.deserialize_virtual_columns(block, &source_schema, Some(virtual_data), None)?;
+    let kind = result.get_by_offset(2).to_column();
+    let Column::Nullable(nullable) = &kind else {
+        panic!("expected nullable kind column");
+    };
+    assert!(
+        nullable.column().is_dict_encoded(),
+        "expected dictionary codes for kind"
+    );
+    assert_eq!(nullable.validity().iter().collect::<Vec<_>>(), [
+        true, true, true, false
+    ]);
+    assert_eq!(kind.iter().collect::<Vec<_>>(), [
+        ScalarRef::String("a"),
+        ScalarRef::String(""),
+        ScalarRef::String("a"),
+        ScalarRef::Null,
     ]);
     Ok(())
 }
@@ -485,6 +517,7 @@ fn build_virtual_column_field(
     source_name: &str,
     query_column_id: u32,
     key_paths: OwnedKeyPaths,
+    data_type: TableDataType,
 ) -> VirtualColumnField {
     VirtualColumnField {
         source_column_id,
@@ -492,7 +525,7 @@ fn build_virtual_column_field(
         query_column_id,
         name: format_virtual_column_name(source_name, &key_paths),
         key_paths,
-        data_type: Box::new(TableDataType::Variant),
+        data_type: Box::new(data_type),
         is_try: true,
     }
 }

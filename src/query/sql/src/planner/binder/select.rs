@@ -355,7 +355,7 @@ impl Binder {
                     if let Some(data_type) = common_super_type(
                         *left_col.data_type.clone(),
                         *right_col.data_type.clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                        BUILTIN_FUNCTIONS.default_cast_rules(),
                     ) {
                         coercion_types.push(data_type);
                     } else {

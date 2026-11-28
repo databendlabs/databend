@@ -24,10 +24,13 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
+use databend_common_expression::expr::ColumnRef;
 use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
@@ -38,6 +41,7 @@ mod binary;
 mod bitmap;
 mod boolean;
 mod cast;
+mod cast_behavior;
 mod comparison;
 mod control;
 mod datetime;
@@ -107,6 +111,39 @@ impl<'a> TestContext<'a> {
     }
 }
 
+/// Writes the heading of a golden file: its title and what its cases show.
+pub fn write_file_heading(file: &mut impl Write, title: &str, description: &str) {
+    write_heading(file, '=', title, description);
+}
+
+/// Writes the heading of a group of cases: its title and the rule the cases show.
+pub fn write_section(file: &mut impl Write, title: &str, description: &str) {
+    write_heading(file, '-', title, description);
+}
+
+fn write_heading(file: &mut impl Write, rule: char, title: &str, description: &str) {
+    const WIDTH: usize = 100;
+    let rule = rule.to_string().repeat(WIDTH);
+    writeln!(file, "{rule}").unwrap();
+    writeln!(file, "{title}").unwrap();
+    for paragraph in description.split("\n\n") {
+        writeln!(file).unwrap();
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > WIDTH {
+                writeln!(file, "{line}").unwrap();
+                line.clear();
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+        writeln!(file, "{line}").unwrap();
+    }
+    writeln!(file, "{rule}\n\n").unwrap();
+}
+
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
     let entries = &columns
         .iter()
@@ -119,6 +156,92 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         input_domains: None,
         strict_eval: true,
     })
+}
+
+/// Asserts that every call of `expr`, checked again with its arguments made
+/// nullable, all of them and each one alone, gets the overload and the type
+/// that candidate search selects for them, see
+/// `type_check::check_nullable_arguments`.
+fn assert_nullable_arguments(expr: &Expr) {
+    let columns = |types: &[DataType]| {
+        types
+            .iter()
+            .enumerate()
+            .map(|(id, data_type)| {
+                Expr::from(ColumnRef {
+                    span: None,
+                    id,
+                    data_type: data_type.clone(),
+                    display_name: format!("#{id}"),
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    match expr {
+        Expr::FunctionCall(call) => {
+            for arg in &call.args {
+                assert_nullable_arguments(arg);
+            }
+            let types = call
+                .args
+                .iter()
+                .map(|arg| arg.data_type().clone())
+                .collect::<Vec<_>>();
+            let widened = std::iter::once(None)
+                .chain(
+                    (0..types.len())
+                        .filter(|i| !types[*i].is_nullable_or_null())
+                        .map(Some),
+                )
+                .filter(|only| only.is_none() || types.len() > 1);
+            for only in widened {
+                let nullable = types
+                    .iter()
+                    .enumerate()
+                    .map(|(i, data_type)| match only {
+                        Some(only) if only != i => data_type.clone(),
+                        _ => data_type.wrap_nullable(),
+                    })
+                    .collect::<Vec<_>>();
+                if nullable == types {
+                    continue;
+                }
+                let name = call.id.name();
+                let params = call.id.params();
+                let search = type_check::check_function(
+                    None,
+                    &name,
+                    params,
+                    &columns(&nullable),
+                    &BUILTIN_FUNCTIONS,
+                );
+                let checked = type_check::check_nullable_arguments(
+                    call,
+                    columns(&nullable),
+                    &BUILTIN_FUNCTIONS,
+                );
+                match (&search, &checked) {
+                    (Ok(search), Ok(checked)) => assert_eq!(
+                        search, checked,
+                        "{} with nullable arguments {nullable:?}",
+                        call.function.signature
+                    ),
+                    (Err(_), Err(_)) => {}
+                    _ => panic!(
+                        "{} with nullable arguments {nullable:?}: candidate search gives {search:?}, check_nullable_arguments {checked:?}",
+                        call.function.signature
+                    ),
+                }
+            }
+        }
+        Expr::Cast(cast) => assert_nullable_arguments(&cast.expr),
+        Expr::LambdaFunctionCall(call) => {
+            for arg in &call.args {
+                assert_nullable_arguments(arg);
+            }
+        }
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
+    }
 }
 
 pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ctx: TestContext) {
@@ -135,6 +258,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         );
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        assert_nullable_arguments(&expr);
         let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
 
         let input_domains = ctx.input_domains();

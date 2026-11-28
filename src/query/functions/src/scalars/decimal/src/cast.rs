@@ -196,33 +196,13 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         })
     };
 
-    registry.register_function_factory(
-        "to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            Some(Arc::new(factory(params, args_type, false)?))
-        })),
-    );
-    registry.register_function_factory(
-        "to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let f = factory(params, args_type, false)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
+    registry.register_passthrough_nullable_factory("to_decimal", move |params, args_type| {
+        factory(params, args_type, false)
+    });
     registry.register_aliases("to_decimal", &["to_numeric", "to_number"]);
-    registry.register_function_factory(
-        "try_to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            Some(Arc::new(factory(params, args_type, true)?))
-        })),
-    );
-    registry.register_function_factory(
-        "try_to_decimal",
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let f = factory(params, args_type, true)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
+    registry.register_passthrough_nullable_factory("try_to_decimal", move |params, args_type| {
+        factory(params, args_type, true)
+    });
     registry.register_aliases("try_to_decimal", &["try_to_numeric", "try_to_number"]);
 
     let as_decimal = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
@@ -336,38 +316,16 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
 
     let name = if is_f32 { "to_float32" } else { "to_float64" };
 
-    registry.register_function_factory(
-        name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            Some(Arc::new(factory(params, args_type, data_type)?))
-        })),
-    );
-    registry.register_function_factory(
-        name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            let f = factory(params, args_type, data_type)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
-    registry.register_function_factory(
+    registry.register_passthrough_nullable_factory(name, move |params, args_type| {
+        factory(params, args_type, NumberType::<T>::data_type())
+    });
+    registry.register_passthrough_nullable_factory(
         &format!("try_{name}"),
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            let mut f = factory(params, args_type, data_type)?;
+        move |params, args_type| {
+            let mut f = factory(params, args_type, NumberType::<T>::data_type())?;
             f.signature.name = format!("try_{name}");
-            Some(Arc::new(f.error_to_null()))
-        })),
-    );
-    registry.register_function_factory(
-        &format!("try_{name}"),
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let data_type = NumberType::<T>::data_type();
-            let mut f = factory(params, args_type, data_type)?;
-            f.signature.name = format!("try_{name}");
-            Some(Arc::new(f.error_to_null().passthrough_nullable()))
-        })),
+            Some(f.error_to_null())
+        },
     );
 }
 
@@ -424,35 +382,12 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
         Some(function)
     };
 
-    registry.register_function_factory(
-        &name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            Some(Arc::new(factory(params, args_type)?))
-        })),
-    );
-    registry.register_function_factory(
-        &name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let f = factory(params, args_type)?;
-            Some(Arc::new(f.passthrough_nullable()))
-        })),
-    );
-    registry.register_function_factory(
-        &try_name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let mut f = factory(params, args_type)?;
-            f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
-            Some(Arc::new(f.error_to_null()))
-        })),
-    );
-    registry.register_function_factory(
-        &try_name,
-        FunctionFactory::Closure(Box::new(move |params, args_type| {
-            let mut f = factory(params, args_type)?;
-            f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
-            Some(Arc::new(f.error_to_null().passthrough_nullable()))
-        })),
-    );
+    registry.register_passthrough_nullable_factory(&name, factory);
+    registry.register_passthrough_nullable_factory(&try_name, move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
+        Some(f.error_to_null())
+    });
 }
 
 pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
@@ -1190,6 +1125,20 @@ fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
         Ok(format!("-{}", final_result))
     } else {
         Ok(final_result)
+    }
+}
+
+/// The casts to and from decimals.
+pub fn register_decimal_casts(registry: &mut FunctionRegistry) {
+    let decimal = DataType::Decimal(DecimalSize::default());
+
+    let mut sources = vec![DataType::Boolean, decimal.clone(), DataType::String];
+    sources.extend(ALL_NUMERICS_TYPES.iter().map(|num| DataType::Number(*num)));
+    for src in sources {
+        registry.register_cast(Some(src), decimal.clone());
+    }
+    for num in ALL_NUMERICS_TYPES {
+        registry.register_cast(Some(decimal.clone()), DataType::Number(*num));
     }
 }
 

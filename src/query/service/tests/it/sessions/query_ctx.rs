@@ -521,3 +521,26 @@ async fn test_query_ctx_rejects_recreated_database() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_check_materialized_cte_receivers_taken() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.check_materialized_cte_receivers_taken()?;
+
+    // Two channels, one consumer so far.
+    let _senders = ctx.get_materialized_cte_senders("cte", 2, Some(2));
+    let _first = ctx.get_materialized_cte_receiver("cte");
+    let err = ctx.check_materialized_cte_receivers_taken().unwrap_err();
+    assert_eq!(err.code(), ErrorCode::INTERNAL);
+    assert!(err.message().contains("cte (1)"), "{}", err.message());
+
+    let _second = ctx.get_materialized_cte_receiver("cte");
+    ctx.check_materialized_cte_receivers_taken()?;
+
+    // A consumer built later, by a recursive CTE step, has not taken its channel yet.
+    let _senders = ctx.get_materialized_cte_senders("deferred", 1, Some(2));
+    ctx.defer_materialized_cte_consumers(["deferred".to_string()]);
+    ctx.check_materialized_cte_receivers_taken()?;
+    Ok(())
+}

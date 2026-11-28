@@ -222,6 +222,10 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
             |(_, _, return_failed_only)| CopyIntoTableOption::ReturnFailedOnly(return_failed_only),
         ),
+        map(
+            rule! { SORTED_BY_CLUSTER_KEY ~ "=" ~ ^#literal_bool },
+            |(_, _, sorted)| CopyIntoTableOption::SortedByClusterKey(sorted),
+        ),
         map_res(
             rule! { SCHEMA_EVOLUTION ~ "=" ~ "(" ~ #comma_separated_list0(schema_evolution_option) ~ ")" },
             |(_, _, _, opts, _)| {

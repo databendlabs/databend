@@ -98,6 +98,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
         .register();
 
+    // The nullable overloads handle NULL by three-valued logic.
+    registry.register_nullable_variants(
+        |registry| {
     registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
         "and",
         |_, lhs, rhs| {
@@ -127,6 +130,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             (Value::Column(a), Value::Column(b)) => Value::Column(&a | &b),
         },
     );
+        },
+        |registry| {
 
     // https://en.wikibooks.org/wiki/Structured_Query_Language/NULLs_and_the_Three_Valued_Logic
     registry.register_2_arg_core::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>, _, _>(
@@ -220,6 +225,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+        },
+    );
 
     registry.register_passthrough_nullable_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "xor",
@@ -269,25 +276,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         error_to_null(eval_string_to_boolean),
     );
 
-    registry.register_1_arg_core::<BooleanType, BooleanType, _, _>(
-        "is_true",
-        |_, domain| FunctionDomain::Domain(*domain),
-        |val, _| val.to_owned(),
-    );
-
-    registry.register_1_arg_core::<NullableType<BooleanType>, BooleanType, _, _>(
-        "is_true",
-        |_, domain| {
-            FunctionDomain::Domain(BooleanDomain {
-                has_false: domain.has_null
-                    || domain.value.as_ref().map(|v| v.has_false).unwrap_or(false),
-                has_true: domain.value.as_ref().map(|v| v.has_true).unwrap_or(false),
-            })
+    // The nullable overload takes NULL as false.
+    registry.register_nullable_variants(
+        |registry| {
+            registry.register_1_arg_core::<BooleanType, BooleanType, _, _>(
+                "is_true",
+                |_, domain| FunctionDomain::Domain(*domain),
+                |val, _| val.to_owned(),
+            );
         },
-        |val, _| match val {
-            Value::Scalar(None) => Value::Scalar(false),
-            Value::Scalar(Some(scalar)) => Value::Scalar(scalar),
-            Value::Column(column) => Value::Column(column.column() & column.validity()),
+        |registry| {
+            registry.register_1_arg_core::<NullableType<BooleanType>, BooleanType, _, _>(
+                "is_true",
+                |_, domain| {
+                    FunctionDomain::Domain(BooleanDomain {
+                        has_false: domain.has_null
+                            || domain.value.as_ref().map(|v| v.has_false).unwrap_or(false),
+                        has_true: domain.value.as_ref().map(|v| v.has_true).unwrap_or(false),
+                    })
+                },
+                |val, _| match val {
+                    Value::Scalar(None) => Value::Scalar(false),
+                    Value::Scalar(Some(scalar)) => Value::Scalar(scalar),
+                    Value::Column(column) => Value::Column(column.column() & column.validity()),
+                },
+            );
         },
     );
 

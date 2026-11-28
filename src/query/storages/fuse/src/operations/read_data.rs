@@ -88,10 +88,10 @@ impl FuseTable {
                     VirtualColumnReader::try_create(
                         ctx,
                         self.operator.clone(),
-                        block_reader.schema(),
                         virtual_column.clone(),
                         self.table_compression,
                         block_reader.policy,
+                        block_reader.dictionary_ndv_ratio,
                     )
                 })
                 .transpose()?,

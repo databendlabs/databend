@@ -48,7 +48,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
 #[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::physical_plans::CommitSink;
@@ -94,11 +93,6 @@ impl Interpreter for ReplaceInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
-
             self.check_on_conflicts()?;
 
             // replace
@@ -158,7 +152,6 @@ impl ReplaceInterpreter {
             table.get_table_info().ident.table_id,
         );
 
-        // check mutability
         table.check_mutable()?;
 
         let schema = table.schema();
@@ -380,7 +373,6 @@ impl ReplaceInterpreter {
                 merge_meta: false,
             },
             update_stream_meta: update_stream_meta.clone(),
-            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             table_meta_timestamps,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),

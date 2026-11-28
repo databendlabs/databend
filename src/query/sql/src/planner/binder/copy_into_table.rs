@@ -34,6 +34,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::visit::Walk;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -42,7 +43,9 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::shrink_scalar;
@@ -58,6 +61,7 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use parking_lot::RwLock;
 
 use crate::BindContext;
@@ -70,6 +74,8 @@ use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::parse_file_format;
 use crate::binder::validate_stage_files_path_traversal;
+use crate::planner::expression::ClusterKeys;
+use crate::planner::expression::parse_cluster_keys;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -120,6 +126,91 @@ impl Binder {
                     .await
             }
         }
+    }
+
+    /// Bind `SORTED_BY_CLUSTER_KEY = TRUE` to the cluster key of the target table, and check
+    /// that preserving the file order keeps the blocks written from one file non-overlapping.
+    fn resolve_file_sort_keys(
+        &self,
+        table: &Arc<dyn Table>,
+        sorted_by_cluster_key: bool,
+        source_schema: &TableSchema,
+        is_transform: bool,
+        file_format_params: &FileFormatParams,
+        enable_schema_evolution: bool,
+    ) -> Result<Option<Vec<RemoteExpr<String>>>> {
+        if !sorted_by_cluster_key {
+            return Ok(None);
+        }
+        if is_transform {
+            return Err(ErrorCode::BadArguments(
+                "SORTED_BY_CLUSTER_KEY is not supported for COPY with a transform query",
+            ));
+        }
+        if table.engine() != "FUSE" {
+            return Err(ErrorCode::BadArguments(
+                "SORTED_BY_CLUSTER_KEY requires a FUSE target table",
+            ));
+        }
+        if table.options().contains_key(OPT_KEY_PARTITION_BY) {
+            return Err(ErrorCode::BadArguments(
+                "SORTED_BY_CLUSTER_KEY is not supported for tables with PARTITION BY",
+            ));
+        }
+        let cluster_keys = match table.resolve_cluster_keys() {
+            Some(ast_exprs) => parse_cluster_keys(self.ctx.clone(), table.clone(), ast_exprs)?,
+            None => {
+                return Err(ErrorCode::BadArguments(
+                    "SORTED_BY_CLUSTER_KEY requires the target table to have a linear cluster key",
+                ));
+            }
+        };
+        let ClusterKeys::Linear(cluster_keys) = cluster_keys else {
+            return Err(ErrorCode::BadArguments(
+                "SORTED_BY_CLUSTER_KEY requires the target table to have a linear cluster key",
+            ));
+        };
+
+        // Parquet keys are checked as the source reads them, before the NULL_IF and the
+        // STRUCT to VARIANT conversions that later steps of the load apply.
+        let parquet = match file_format_params {
+            FileFormatParams::Parquet(fmt) => {
+                if enable_schema_evolution || fmt.missing_field_as != NullAs::Error {
+                    return Err(ErrorCode::BadArguments(
+                        "SORTED_BY_CLUSTER_KEY does not support Parquet files with MISSING_FIELD_AS other than ERROR, or with schema evolution, for now",
+                    ));
+                }
+                if !fmt.null_if.is_empty() {
+                    return Err(ErrorCode::BadArguments(
+                        "SORTED_BY_CLUSTER_KEY does not support Parquet files with NULL_IF, for now",
+                    ));
+                }
+                true
+            }
+            _ => false,
+        };
+
+        let table_schema = table.schema();
+        let mut remote_keys = Vec::with_capacity(cluster_keys.len());
+        for key in cluster_keys {
+            let key = key.project_column_ref(|index| {
+                let field = table_schema.field(*index);
+                let name = field.name();
+                if source_schema.field_with_name(name).is_err() {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "SORTED_BY_CLUSTER_KEY requires the cluster key columns to be loaded from the files, but `{name}` is not"
+                    )));
+                }
+                if parquet && field.data_type().remove_nullable() == TableDataType::Variant {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "SORTED_BY_CLUSTER_KEY does not support VARIANT cluster key columns in Parquet files, such as `{name}`, for now"
+                    )));
+                }
+                Ok(name.to_string())
+            })?;
+            remote_keys.push(key.as_remote_expr());
+        }
+        Ok(Some(remote_keys))
     }
 
     pub(crate) fn resolve_copy_pattern(
@@ -218,6 +309,15 @@ impl Binder {
         let required_values_schema: DataSchemaRef =
             Arc::new(required_values_table_schema.clone().into());
 
+        let file_sort_keys = self.resolve_file_sort_keys(
+            &table,
+            stmt.options.sorted_by_cluster_key,
+            &required_values_table_schema,
+            is_transform,
+            &stage_info.file_format_params,
+            enable_schema_evolution,
+        )?;
+
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
                 DefaultExprBinder::try_new(self.ctx.clone())?
@@ -246,6 +346,7 @@ impl Binder {
                 default_exprs: default_values,
                 copy_into_table_options: stmt.options.clone(),
                 is_variant: false,
+                file_sort_keys,
                 ..Default::default()
             },
             values_consts: vec![],

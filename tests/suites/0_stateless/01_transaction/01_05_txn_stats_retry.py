@@ -2,7 +2,6 @@
 
 import os
 from contextlib import ExitStack, contextmanager
-from uuid import uuid4
 
 import mysql.connector
 
@@ -258,23 +257,6 @@ def run_single_update_case():
     passed("single logical UPDATE does not count the full rewritten block")
 
 
-def run_deduplicated_insert_case():
-    with sessions() as (txn, other):
-        create_table(other)
-        execute(txn, "BEGIN")
-        execute(txn, f"SET deduplicate_label = 'txn_stats_{uuid4().hex}'")
-        for _ in range(2):
-            execute(txn, f"INSERT INTO {TABLE_NAME} SELECT 1 FROM numbers(3)")
-        execute(txn, "SET deduplicate_label = ''")
-        # Data reads see buffered rows; system.statistics enumerates committed tables.
-        assert execute(txn, f"SELECT count(*) FROM {TABLE_NAME}") == [(103,)]
-        execute(other, f"INSERT INTO {TABLE_NAME} SELECT 2 FROM numbers(5)")
-        execute(txn, "COMMIT")
-        for cursor in [txn, other]:
-            check_statistics(cursor, 108, 108, 3)
-    passed("deduplicated INSERT records its delta once")
-
-
 def run_lifecycle_case(mode):
     with sessions() as (txn, other):
         create_table(other)
@@ -348,7 +330,6 @@ def main():
         150,
     )
     run_single_update_case()
-    run_deduplicated_insert_case()
     for mode in ["rollback", "failed statement", "commit"]:
         run_lifecycle_case(mode)
 

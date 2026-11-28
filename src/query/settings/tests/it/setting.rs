@@ -16,9 +16,8 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::default_server_memory_limit;
 use databend_common_io::prelude::HttpHandlerDataFormat;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::DefaultSettings;
-use databend_common_settings::SettingScope;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
 
@@ -222,17 +221,14 @@ async fn test_set_global_settings() {
 }
 
 #[test]
-fn test_deduplicate_label_is_session_scoped() {
-    let key = "deduplicate_label";
-    assert!(DefaultSettings::check_setting_scope(key, SettingScope::Global).is_err());
-
+fn test_deduplicate_label_is_not_a_setting() {
     let settings = Settings::create(Tenant::new_literal("test"));
-    settings
-        .set_setting(key.to_string(), "daily_import".to_string())
-        .unwrap();
+    let err = settings
+        .set_setting("deduplicate_label".to_string(), "legacy".to_string())
+        .unwrap_err();
     assert_eq!(
-        unsafe { settings.get_deduplicate_label().unwrap() }.as_deref(),
-        Some("daily_import")
+        err.code(),
+        databend_common_exception::ErrorCode::UNKNOWN_VARIABLE
     );
 }
 
@@ -388,6 +384,41 @@ async fn test_flight_query_leak_timeout_setting() {
         "0".to_string(),
     );
     assert!(result.is_err());
+}
+
+/// `queries_queue_retry_timeout` is in seconds, 300 by default: it takes its default and other
+/// timeouts in seconds, not only 0 and 1.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_queries_queue_retry_timeout_setting() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+    assert_eq!(settings.get_queries_queue_retry_timeout().unwrap(), 300);
+
+    for secs in [0, 300, 86400] {
+        settings
+            .set_setting("queries_queue_retry_timeout".to_string(), secs.to_string())
+            .unwrap();
+        assert_eq!(settings.get_queries_queue_retry_timeout().unwrap(), secs);
+    }
+}
+
+/// The default of every setting that has a range lies within that range. A default outside it
+/// could not be set again, with `SET` or in the config file.
+#[test]
+fn test_setting_defaults_are_within_their_ranges() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+
+    for item in settings.as_ref() {
+        let Some(range) = &item.range else {
+            continue;
+        };
+        let within = match &item.default_value {
+            UserSettingValue::UInt64(value) => range.is_within_numeric_range(*value),
+            UserSettingValue::String(value) => range.is_within_string_range(value).map(|_| ()),
+        };
+        if let Err(err) = within {
+            panic!("the default of {} is outside its range: {}", item.name, err);
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

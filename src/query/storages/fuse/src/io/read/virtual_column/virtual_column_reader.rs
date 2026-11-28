@@ -20,7 +20,6 @@ use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -63,10 +62,10 @@ use crate::io::IndexMetaReader;
 pub struct VirtualColumnReader {
     pub(super) ctx: Arc<dyn TableContext>,
     pub(super) dal: Operator,
-    pub(super) source_schema: TableSchemaRef,
     pub(super) compression: TableCompression,
     /// How the sidecar files are read: the policy of the scan.
     pub(super) policy: CachePolicy,
+    pub(super) dictionary_ndv_ratio: Option<u64>,
     pub virtual_column_info: VirtualColumnInfo,
 }
 
@@ -74,17 +73,17 @@ impl VirtualColumnReader {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        source_schema: TableSchemaRef,
         virtual_column_info: VirtualColumnInfo,
         compression: TableCompression,
         policy: CachePolicy,
+        dictionary_ndv_ratio: u64,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
             dal,
-            source_schema,
             compression,
             policy,
+            dictionary_ndv_ratio: (dictionary_ndv_ratio > 0).then_some(dictionary_ndv_ratio),
             virtual_column_info,
         })
     }

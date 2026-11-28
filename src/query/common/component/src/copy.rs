@@ -19,6 +19,7 @@ use std::sync::RwLock;
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_pipeline::core::InputError;
 use databend_common_storage::CopyStatus;
@@ -26,20 +27,22 @@ use databend_common_storage::FileStatus;
 
 type OnErrorMap = Arc<DashMap<String, HashMap<u16, InputError>>>;
 
-pub struct CopyState {
-    on_error_map: RwLock<Option<OnErrorMap>>,
-    on_error_mode: RwLock<Option<OnErrorMode>>,
-    copy_status: Arc<CopyStatus>,
+/// The options of the running COPY, set while the query is planned and read while it runs.
+#[derive(Default)]
+struct CopySettings {
+    on_error_map: Option<OnErrorMap>,
+    on_error_mode: Option<OnErrorMode>,
+    /// The cluster key of a COPY with `SORTED_BY_CLUSTER_KEY = TRUE`: when set, each input file's
+    /// order is preserved.
+    file_sort_keys: Option<Arc<[RemoteExpr<String>]>>,
 }
 
-impl Default for CopyState {
-    fn default() -> Self {
-        Self {
-            on_error_map: RwLock::new(None),
-            on_error_mode: RwLock::new(None),
-            copy_status: Default::default(),
-        }
-    }
+#[derive(Default)]
+pub struct CopyState {
+    settings: RwLock<CopySettings>,
+    // Updated for every chunk by the decoding threads, so it keeps its own concurrent map
+    // instead of sharing the lock of the settings.
+    copy_status: Arc<CopyStatus>,
 }
 
 impl CopyState {
@@ -52,19 +55,29 @@ impl CopyState {
     }
 
     pub fn set_on_error_map(&self, map: OnErrorMap) {
-        *self.on_error_map.write().unwrap() = Some(map);
+        self.settings.write().unwrap().on_error_map = Some(map);
     }
 
     pub fn get_on_error_map(&self) -> Option<OnErrorMap> {
-        self.on_error_map.read().unwrap().as_ref().cloned()
+        self.settings.read().unwrap().on_error_map.clone()
     }
 
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.on_error_mode.read().unwrap().clone()
+        self.settings.read().unwrap().on_error_mode.clone()
     }
 
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
-        *self.on_error_mode.write().unwrap() = Some(mode);
+        self.settings.write().unwrap().on_error_mode = Some(mode);
+    }
+
+    pub fn set_file_sort_keys(&self, keys: Option<Vec<RemoteExpr<String>>>) {
+        self.settings.write().unwrap().file_sort_keys = keys.map(Into::into);
+    }
+
+    /// The cluster key of the running COPY, if `SORTED_BY_CLUSTER_KEY` requires preserving the
+    /// input order.
+    pub fn get_file_sort_keys(&self) -> Option<Arc<[RemoteExpr<String>]>> {
+        self.settings.read().unwrap().file_sort_keys.clone()
     }
 
     pub fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {

@@ -51,7 +51,6 @@ pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
 pub use numbers::generate_numbers_parts;
 pub use others::LicenseInfoTable;
-pub use others::TenantQuotaTable;
 pub use policy_references::PolicyReferencesTable;
 #[cfg(feature = "task-support")]
 pub use private_task_cancel::PrivateTaskCancelTable;

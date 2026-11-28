@@ -75,7 +75,7 @@ csv/numbers.csv 18 0 NULL NULL
 statement error 1025
 select * from t100;
 
-statement error 4002
+statement error 4050
 select * from t1;
 
 statement ok

@@ -246,7 +246,6 @@ impl InsertMultiTableInterpreter {
 
             input,
             overwrite: self.plan.overwrite,
-            deduplicated_label: None,
             input_commit_meta: distributed_insert,
             targets: deduplicated_serializable_tables,
             meta: PhysicalPlanMeta::new("Commit"),

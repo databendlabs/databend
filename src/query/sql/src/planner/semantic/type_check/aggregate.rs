@@ -80,13 +80,6 @@ impl<'a> CoreExprArena<'a> {
         let display_name = format!("{original_expr:#}");
         let mut func_name = func_name.to_string();
 
-        if *distinct && !order_by.is_empty() {
-            return Err(
-                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
-                    .set_span(span),
-            );
-        }
-
         let remove_count_args = filter.is_none()
             && func_name.eq_ignore_ascii_case("count")
             && !*distinct
@@ -434,6 +427,20 @@ where A: TypeCheckAdapter
         } else {
             params
         };
+
+        // DISTINCT keeps only the unique argument values, so independent sort
+        // keys cannot be recovered. Follow PostgreSQL: every ORDER BY
+        // expression of a DISTINCT aggregate must appear in its argument list.
+        if distinct
+            && sort_descs
+                .iter()
+                .any(|desc| !arguments.contains(&desc.expr))
+        {
+            return Err(ErrorCode::SemanticError(
+                "in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list",
+            )
+            .set_span(span));
+        }
 
         let agg_func = AGGR_REGISTRY
             .resolve(RawAggregateCall {

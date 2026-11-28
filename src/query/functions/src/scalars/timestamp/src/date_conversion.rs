@@ -119,14 +119,12 @@ pub(super) fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    // to_timestamp must not use endpoint evaluation for its String overload:
-    // parsing does not preserve string ordering. Other overloads infer their own domains.
-    // Preserve the existing folding policy for the remaining conversions.
-    for name in &["to_timestamp_tz", "to_date"] {
-        registry
-            .properties
-            .insert(name.to_string(), FunctionProperty::default().monotonicity());
-    }
+    // to_timestamp and to_date infer domains per overload: parsing a String does not
+    // preserve its ordering, so neither function can use global endpoint evaluation.
+    registry.properties.insert(
+        "to_timestamp_tz".to_string(),
+        FunctionProperty::default().monotonicity(),
+    );
 
     // Do not mark to_string as monotonic: a timezone offset can move a valid
     // timestamp into local year 10000, whose leading '+' reverses byte ordering.

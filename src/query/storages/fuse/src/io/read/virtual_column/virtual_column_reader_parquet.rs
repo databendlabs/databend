@@ -26,6 +26,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -62,7 +63,9 @@ use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
+use crate::io::read::block::parquet::ColumnEncoding;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
+use crate::io::read::block::parquet::dictionary_hint_fields;
 
 pub struct VirtualBlockReadResult {
     pub virtual_block_location: String,
@@ -208,6 +211,7 @@ impl VirtualColumnReader {
     pub fn deserialize_virtual_columns(
         &self,
         mut data_block: DataBlock,
+        source_schema: &DataSchema,
         virtual_data: Option<VirtualBlockReadResult>,
         row_selection: Option<RowSelection>,
     ) -> Result<DataBlock> {
@@ -227,13 +231,28 @@ impl VirtualColumnReader {
             .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
+                // Slot IDs (not query column IDs) identify physical sidecar fields.
+                // Only request codes for strings projected directly as strings.
+                let hint = self.dictionary_ndv_ratio.and_then(|ratio| {
+                    let slots = self
+                        .virtual_column_info
+                        .virtual_column_fields
+                        .iter()
+                        .filter(|field| field.data_type.remove_nullable() == TableDataType::String)
+                        .filter_map(|field| match virtual_fields.get(&field.query_column_id)? {
+                            VirtualFieldReadPlan::Direct { slot } => Some(slot.0),
+                            _ => None,
+                        });
+                    dictionary_hint_fields(&virtual_data.schema, slots)
+                        .map(|fields| (fields, ratio))
+                });
                 column_chunks_to_record_batch(
                     &virtual_data.schema,
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
-                    None,
+                    hint,
                 )
             })
             .transpose()?;
@@ -259,14 +278,25 @@ impl VirtualColumnReader {
                                 "virtual sidecar record batch is missing for a read plan",
                             )
                         })?;
-                        eval_read_plan(
-                            plan,
-                            record_batch,
-                            &orig_schema,
-                            &virtual_read_slots,
-                            &func_ctx,
-                            data_block.num_rows(),
-                        )?
+                        if let VirtualFieldReadPlan::Direct { slot } = plan
+                            && target_type.remove_nullable().is_string()
+                        {
+                            read_direct_slot(
+                                *slot,
+                                record_batch,
+                                &orig_schema,
+                                self.dictionary_ndv_ratio,
+                            )?
+                        } else {
+                            eval_read_plan(
+                                plan,
+                                record_batch,
+                                &orig_schema,
+                                &virtual_read_slots,
+                                &func_ctx,
+                                data_block.num_rows(),
+                            )?
+                        }
                     }
                 };
                 let (value, data_type) = cast_to_target_type(
@@ -281,9 +311,7 @@ impl VirtualColumnReader {
                 continue;
             }
 
-            let src_index = self
-                .source_schema
-                .index_of(&virtual_column_field.source_name)?;
+            let src_index = source_schema.index_of(&virtual_column_field.source_name)?;
             let source = data_block.get_by_offset(src_index);
             let src_arg = (source.value(), source.data_type());
             let path_arg = (
@@ -378,6 +406,7 @@ fn column_from_record_batch(
     record_batch: &RecordBatch,
     orig_schema: &TableSchema,
     name: &str,
+    dictionary_ndv_ratio: Option<u64>,
 ) -> Result<Option<(Column, DataType)>> {
     let Some(arrow_array) = record_batch.column_by_name(name).cloned() else {
         return Ok(None);
@@ -386,8 +415,36 @@ fn column_from_record_batch(
         return Ok(None);
     };
     let orig_type: DataType = orig_field.data_type().into();
-    let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
+    let column = match dictionary_ndv_ratio {
+        // Sidecar arrays are not cached. Preserve existing dictionary codes, but
+        // do not build a new dictionary by hashing a plain string column per scan.
+        Some(ratio) if orig_type.remove_nullable().is_string() => {
+            ColumnEncoding::Dictionary.encode(arrow_array, &orig_type, ratio, false)?
+        }
+        _ => Column::from_arrow_rs(arrow_array, &orig_type)?,
+    };
     Ok(Some((column, orig_type)))
+}
+
+fn read_direct_slot(
+    slot: VirtualReadSlotId,
+    record_batch: &RecordBatch,
+    orig_schema: &TableSchema,
+    dictionary_ndv_ratio: Option<u64>,
+) -> Result<(Value<AnyType>, DataType)> {
+    let (column, data_type) = column_from_record_batch(
+        record_batch,
+        orig_schema,
+        &slot.0.to_string(),
+        dictionary_ndv_ratio,
+    )?
+    .ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "virtual read slot {} is missing from the sidecar record batch",
+            slot.0
+        ))
+    })?;
+    Ok((Value::Column(column), data_type))
 }
 
 fn validate_read_plan(plan: &VirtualFieldReadPlan, read_slots: &[VirtualReadSlot]) -> bool {
@@ -480,15 +537,7 @@ fn eval_read_plan(
     match plan {
         VirtualFieldReadPlan::Missing => Ok((Value::Scalar(Scalar::Null), DataType::Null)),
         VirtualFieldReadPlan::Direct { slot } => {
-            let (column, data_type) =
-                column_from_record_batch(record_batch, orig_schema, &slot.0.to_string())?
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "virtual read slot {} is missing from the sidecar record batch",
-                            slot.0
-                        ))
-                    })?;
-            Ok((Value::Column(column), data_type))
+            read_direct_slot(*slot, record_batch, orig_schema, None)
         }
         VirtualFieldReadPlan::FromParent {
             parent,
@@ -531,7 +580,7 @@ fn eval_read_plan(
                 .ok_or_else(|| ErrorCode::Internal("virtual shared value slot is out of bounds"))?;
             let shared_data_type = shared_data_type_from_physical(&value_slot.data_type)?;
             let (column, data_type) =
-                column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
+                column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string(), None)?
                     .ok_or_else(|| {
                         ErrorCode::Internal(format!(
                             "virtual shared key slot {} is missing from the sidecar record batch",
@@ -661,7 +710,7 @@ fn materialize_object_read_plan(
     let mut shared_object_groups = Vec::with_capacity(shared_groups.len());
     for ((key_slot, _value_slot), requests) in shared_groups {
         let (column, data_type) =
-            column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
+            column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string(), None)?
                 .ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "virtual shared key slot {} is missing from the sidecar record batch",

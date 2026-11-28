@@ -1,0 +1,65 @@
+# String columns of mid cardinality (30% of the rows distinct, many values of 128 bytes or more)
+# are written with Parquet dictionaries. With `enable_encoded_columns`, scans keep them as
+# dictionaries read straight from the pages: results must match the regular reader, also for
+# a prewhere selection over the dictionary column.
+statement ok
+CREATE OR REPLACE TABLE dictionary_chunks (n BIGINT NOT NULL, s STRING NOT NULL, u STRING NOT NULL) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO dictionary_chunks SELECT number, concat('https://example.com/', to_string(number % 30000), '/', repeat('p', number % 200)), concat('k', to_string(number % 100)) FROM numbers(100000);
+
+statement ok
+SET enable_encoded_columns = 0;
+
+query IIIT
+SELECT count(*), count(DISTINCT s), sum(length(s)), min(s) FROM dictionary_chunks;
+----
+100000 30000 12505560 https://example.com/0/
+
+query I
+SELECT count(*) FROM dictionary_chunks WHERE s LIKE '%/1234/%';
+----
+4
+
+query IIIT
+SELECT count(*), count(DISTINCT s), sum(length(s)), min(s) FROM dictionary_chunks WHERE n % 7 = 0;
+----
+14286 14286 1786573 https://example.com/0/
+
+query TIII
+SELECT u, count(*), count(DISTINCT s), max(length(s)) FROM dictionary_chunks GROUP BY u ORDER BY u LIMIT 3;
+----
+k0 1000 300 126
+k1 1000 300 127
+k10 1000 300 136
+
+statement ok
+SET enable_encoded_columns = 1;
+
+query IIIT
+SELECT count(*), count(DISTINCT s), sum(length(s)), min(s) FROM dictionary_chunks;
+----
+100000 30000 12505560 https://example.com/0/
+
+query I
+SELECT count(*) FROM dictionary_chunks WHERE s LIKE '%/1234/%';
+----
+4
+
+query IIIT
+SELECT count(*), count(DISTINCT s), sum(length(s)), min(s) FROM dictionary_chunks WHERE n % 7 = 0;
+----
+14286 14286 1786573 https://example.com/0/
+
+query TIII
+SELECT u, count(*), count(DISTINCT s), max(length(s)) FROM dictionary_chunks GROUP BY u ORDER BY u LIMIT 3;
+----
+k0 1000 300 126
+k1 1000 300 127
+k10 1000 300 136
+
+statement ok
+UNSET enable_encoded_columns;
+
+statement ok
+DROP TABLE dictionary_chunks;

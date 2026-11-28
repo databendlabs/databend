@@ -4197,6 +4197,7 @@ dependencies = [
  "ahash 0.8.12",
  "arrow",
  "arrow-array",
+ "arrow-buffer",
  "arrow-schema",
  "async-backtrace",
  "async-channel",
@@ -4262,6 +4263,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "simdutf8",
  "siphasher 0.3.11",
  "tantivy",
  "tantivy-jieba",
@@ -5797,6 +5799,7 @@ dependencies = [
  "goldenfile",
  "headers",
  "hex",
+ "hmac 0.12.1",
  "http 1.3.1",
  "humantime",
  "hyper-util",
@@ -6050,7 +6053,6 @@ dependencies = [
  "databend-storages-common-table-meta",
  "divan",
  "fastrace",
- "feistel-permutation-rs",
  "geo",
  "goldenfile",
  "half",
@@ -7037,12 +7039,6 @@ dependencies = [
  "chrono",
  "semver",
 ]
-
-[[package]]
-name = "feistel-permutation-rs"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db6c829a796418de937efceee04e784abd1c756a82037d84a26f868bc2279f2"
 
 [[package]]
 name = "ff"

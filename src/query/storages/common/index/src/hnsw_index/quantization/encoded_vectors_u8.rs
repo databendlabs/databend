@@ -153,7 +153,8 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
                 vector_parameters.dim,
                 calibration_count,
                 quantile,
-            ) {
+                stopped,
+            )? {
                 Self::alpha_offset_from_min_max(min, max)
             } else {
                 (alpha, offset)

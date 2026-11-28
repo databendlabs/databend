@@ -1266,6 +1266,8 @@ pub enum TokenKind {
     SNAPPY,
     #[token("SNAPSHOT", ignore(ascii_case))]
     SNAPSHOT,
+    #[token("SORTED_BY_CLUSTER_KEY", ignore(ascii_case))]
+    SORTED_BY_CLUSTER_KEY,
     #[token("SPLIT_SIZE", ignore(ascii_case))]
     SPLIT_SIZE,
     #[token("STAGE", ignore(ascii_case))]

@@ -69,13 +69,11 @@ pub fn gen_columns_statistics(
                 let (distinct_of_values, unset_bits) =
                     if s == Scalar::Null { (0, rows) } else { (1, 0) };
 
-                let Some((min, max)) = trim_column_min_max(
+                let (min, max) = trim_column_min_max(
                     s.clone(),
                     s.clone(),
                     col_stats_truncate_lens.get(&column_id).copied(),
-                ) else {
-                    continue;
-                };
+                );
 
                 // when we read it back from parquet, it is a Column instead of Scalar
                 let in_memory_size = s.as_ref().estimated_scalar_repeat_size(rows, &data_type);
@@ -116,15 +114,11 @@ pub fn gen_columns_statistics(
                         }
                     }
 
-                    let Some((trimmed_min, trimmed_max)) = trim_column_min_max(
+                    (min, max) = trim_column_min_max(
                         min,
                         max,
                         col_stats_truncate_lens.get(&column_id).copied(),
-                    ) else {
-                        continue;
-                    };
-                    min = trimmed_min;
-                    max = trimmed_max;
+                    );
                 }
 
                 let (is_all_null, bitmap) = col.validity();
@@ -161,25 +155,14 @@ pub fn gen_columns_statistics(
 }
 
 pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, Scalar)> {
-    if RangeIndex::supported_type(data_type) {
-        if let Some((min, Some(max))) = scalar
-            .clone()
-            .trim_min()
-            .map(|min| (min, scalar.trim_max()))
-        {
-            return Some((min, max));
-        }
-    }
-    None
+    RangeIndex::supported_type(data_type).then(|| (scalar.clone().trim_min(), scalar.trim_max()))
 }
 
-// Impls of this trait should preserve the property of min/max statistics:
-//
-// the trimmed max should be larger than the non-trimmed one (if possible).
-// and the trimmed min should be lesser than the non-trimmed one (if possible).
+// Trimming must preserve the bounds: trimmed min <= original min, and
+// trimmed max >= original max.
 pub trait Trim: Sized {
-    fn trim_min(self) -> Option<Self>;
-    fn trim_max(self) -> Option<Self>;
+    fn trim_min(self) -> Self;
+    fn trim_max(self) -> Self;
 }
 
 pub const END_OF_UNICODE_RANGE: char = '\u{10FFFF}';
@@ -208,100 +191,107 @@ pub(crate) fn trim_column_min_max(
     min: Scalar,
     max: Scalar,
     string_truncate_len: Option<usize>,
-) -> Option<(Scalar, Scalar)> {
+) -> (Scalar, Scalar) {
     match (min, max) {
         (Scalar::String(min), Scalar::String(max)) => {
             let truncate_len =
                 string_truncate_len.unwrap_or_else(|| auto_stats_string_prefix_len(&min, &max));
-            Some((
-                Scalar::String(trim_string_min_with_len(min, truncate_len)?),
-                Scalar::String(trim_string_max_with_len(max, truncate_len)?),
-            ))
+            (
+                Scalar::String(trim_string_min_with_len(min, truncate_len)),
+                Scalar::String(trim_string_max_with_len(max, truncate_len)),
+            )
         }
-        (min, max) => Some((min.trim_min()?, max.trim_max()?)),
+        (min, max) => (min.trim_min(), max.trim_max()),
     }
 }
 
 impl Trim for Scalar {
-    fn trim_min(self) -> Option<Self> {
-        match self {
-            Scalar::String(mut s) => {
-                if s.len() <= STATS_STRING_PREFIX_LEN {
-                    Some(Scalar::String(s))
-                } else {
-                    // find the character boundary to prevent String::truncate from panic
-                    let vs = s.as_str();
-                    let slice = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
-                        None => vs,
-                        Some((idx, _)) => &vs[..idx],
-                    };
-
-                    // do truncate
-                    Some(Scalar::String({
-                        s.truncate(slice.len());
-                        s
-                    }))
-                }
-            }
-            v => Some(v),
-        }
-    }
-
-    fn trim_max(self) -> Option<Self> {
+    fn trim_min(self) -> Self {
         match self {
             Scalar::String(s) => {
-                trim_string_max_with_len(s, STATS_STRING_PREFIX_LEN).map(Scalar::String)
+                Scalar::String(trim_string_min_with_len(s, STATS_STRING_PREFIX_LEN))
             }
-            v => Some(v),
+            v => v,
+        }
+    }
+
+    fn trim_max(self) -> Self {
+        match self {
+            Scalar::String(s) => {
+                Scalar::String(trim_string_max_with_len(s, STATS_STRING_PREFIX_LEN))
+            }
+            v => v,
         }
     }
 }
 
-pub fn trim_string_min_with_len(s: String, len: usize) -> Option<String> {
+pub fn trim_string_min_with_len(s: String, len: usize) -> String {
     if s.len() <= len {
-        return Some(s);
+        return s;
     }
-    let vs = s.as_str();
-    let slice = match vs.char_indices().nth(len) {
-        None => vs,
-        Some((idx, _)) => &vs[..idx],
-    };
-    let mut result = String::with_capacity(len);
-    result.push_str(slice);
-    Some(result)
+    match s.char_indices().nth(len) {
+        Some((idx, _)) => s[..idx].to_owned(),
+        None => s,
+    }
 }
 
-pub fn trim_string_max_with_len(s: String, len: usize) -> Option<String> {
+/// Returns an upper bound of `s`. A value with more than `len` scalars
+/// normally gets a bound of exactly `len` scalars.
+///
+/// If the first `len` scalars of `s` are all U+10FFFF, no string with at most
+/// `len` scalars is an upper bound. Advance the first incrementable scalar
+/// after the prefix only if there is a suffix to drop; otherwise keep `s`.
+/// Either way the bound has more than `len` scalars, so readers that infer
+/// `may_be_truncated` from the stored length still treat it as inexact.
+pub fn trim_string_max_with_len(mut s: String, len: usize) -> String {
     if s.len() <= len {
-        return Some(s);
+        return s;
     }
     let Some((end, _)) = s.char_indices().nth(len) else {
-        return Some(s);
+        return s;
     };
     let prefix = &s[..end];
 
-    // Carry past trailing U+10FFFF scalars. If the entire prefix is U+10FFFF,
-    // no string with at most `len` scalars can be an upper bound.
-    let (trailing_max_chars, (idx, c)) = prefix
+    // Carry past trailing U+10FFFF scalars of the prefix.
+    if let Some((trailing_max_chars, (idx, c))) = prefix
         .char_indices()
         .rev()
         .enumerate()
-        .find(|(_, (_, c))| *c < END_OF_UNICODE_RANGE)?;
-    let successor = match c {
-        // Surrogates (U+D800..=U+DFFF) are not valid Unicode scalars.
-        '\u{D7FF}' => '\u{E000}',
-        _ => char::from_u32(c as u32 + 1)?,
-    };
+        .find(|(_, (_, c))| *c < END_OF_UNICODE_RANGE)
+    {
+        let mut result = String::with_capacity(end);
+        result.push_str(&prefix[..idx]);
+        result.push(next_scalar(c));
+        // The incremented scalar makes the bound greater than the original value,
+        // so pad with the smallest scalar for the tightest fixed-length bound.
+        // Keep `len` scalars: readers infer may_be_truncated from the stored length
+        // and must not mistake a shortened successor for an exact max.
+        result.extend(std::iter::repeat_n('\0', trailing_max_chars));
+        return result;
+    }
 
-    let mut result = String::with_capacity(end);
-    result.push_str(&prefix[..idx]);
-    result.push(successor);
-    // The incremented scalar makes the bound greater than the original value,
-    // so pad with the smallest scalar for the tightest fixed-length bound.
-    // Keep `len` scalars: readers infer may_be_truncated from the stored length
-    // and must not mistake a shortened successor for an exact max.
-    result.extend(std::iter::repeat_n('\0', trailing_max_chars));
-    Some(result)
+    // Reuse the original buffer: the exceptional prefix can be large.
+    if let Some((offset, c)) = s[end..]
+        .char_indices()
+        .find(|(_, c)| *c < END_OF_UNICODE_RANGE)
+        && end + offset + c.len_utf8() < s.len()
+    {
+        s.truncate(end + offset);
+        s.push(next_scalar(c));
+        // The prefix may be short compared with the original value. Don't
+        // retain the full input allocation for a small statistics bound.
+        s.shrink_to_fit();
+    }
+    s
+}
+
+fn next_scalar(c: char) -> char {
+    debug_assert!(c < END_OF_UNICODE_RANGE);
+    // Surrogates (U+D800..=U+DFFF) are not valid Unicode scalars.
+    match c {
+        '\u{D7FF}' => '\u{E000}',
+        _ => char::from_u32(c as u32 + 1).unwrap(),
+    }
 }
 
 #[cfg(test)]
@@ -331,6 +321,7 @@ mod tests {
     use super::auto_stats_string_prefix_len;
     use super::gen_columns_statistics;
     use super::scalar_min_max;
+    use super::trim_column_min_max;
     use super::trim_string_max_with_len;
     use super::trim_string_min_with_len;
     use crate::statistics::END_OF_UNICODE_RANGE;
@@ -395,28 +386,45 @@ mod tests {
     }
 
     #[test]
+    fn test_trim_column_min_max_past_adaptive_prefix() {
+        let expected_min = "\u{10FFFF}".repeat(MAX_AUTO_STATS_STRING_PREFIX_LEN);
+        let prefix = format!("{expected_min}\u{10FFFF}");
+        let (min, max) = trim_column_min_max(
+            Scalar::String(format!("{prefix}a-suffix")),
+            Scalar::String(format!("{prefix}z-suffix")),
+            None,
+        );
+
+        assert_eq!(min, Scalar::String(expected_min));
+        assert_eq!(max, Scalar::String(format!("{prefix}{{")));
+    }
+
+    #[test]
     fn test_trim_string_max_with_len() {
         for (input, len, expected) in [
-            ("", 4, Some("")),
-            ("abc", 4, Some("abc")),
-            ("abcd", 4, Some("abcd")),
-            ("中文", 4, Some("中文")),
-            ("abcd-suffix", 4, Some("abce")),
-            ("ab\u{10FFFF}\u{10FFFF}-suffix", 4, Some("ac\0\0")),
-            ("a\u{10FFFF}\u{10FFFF}\u{10FFFF}-suffix", 4, Some("b\0\0\0")),
-            ("abc\u{D7FF}-suffix", 4, Some("abc\u{E000}")),
-            ("abc\u{10FFFE}-suffix", 4, Some("abc\u{10FFFF}")),
-            ("\u{7F}-suffix", 1, Some("\u{80}")),
-            ("\u{7FF}-suffix", 1, Some("\u{800}")),
-            ("\u{FFFF}-suffix", 1, Some("\u{10000}")),
-            ("\0-suffix", 1, Some("\u{1}")),
-            ("a\0\0z-suffix", 4, Some("a\0\0{")),
-            ("\u{10FFFF}", 1, Some("\u{10FFFF}")),
-            ("\u{10FFFF}-suffix", 1, None),
-            ("\u{10FFFF}\u{10FFFF}-suffix", 2, None),
+            ("", 4, ""),
+            ("abc", 4, "abc"),
+            ("abcd", 4, "abcd"),
+            ("中文", 4, "中文"),
+            ("abcd-suffix", 4, "abce"),
+            ("ab\u{10FFFF}\u{10FFFF}-suffix", 4, "ac\0\0"),
+            ("a\u{10FFFF}\u{10FFFF}\u{10FFFF}-suffix", 4, "b\0\0\0"),
+            ("abc\u{D7FF}-suffix", 4, "abc\u{E000}"),
+            ("abc\u{10FFFE}-suffix", 4, "abc\u{10FFFF}"),
+            ("\u{7F}-suffix", 1, "\u{80}"),
+            ("\u{7FF}-suffix", 1, "\u{800}"),
+            ("\u{FFFF}-suffix", 1, "\u{10000}"),
+            ("\0-suffix", 1, "\u{1}"),
+            ("a\0\0z-suffix", 4, "a\0\0{"),
+            ("\u{10FFFF}", 1, "\u{10FFFF}"),
+            ("\u{10FFFF}-suffix", 1, "\u{10FFFF}."),
+            ("\u{10FFFF}\u{10FFFF}-suffix", 1, "\u{10FFFF}\u{10FFFF}."),
+            ("\u{10FFFF}\u{10FFFF}z", 1, "\u{10FFFF}\u{10FFFF}z"),
+            ("\u{10FFFF}\u{7F}", 1, "\u{10FFFF}\u{7F}"),
+            ("\u{10FFFF}\u{10FFFF}", 1, "\u{10FFFF}\u{10FFFF}"),
         ] {
             assert_eq!(
-                trim_string_max_with_len(input.to_string(), len).as_deref(),
+                trim_string_max_with_len(input.to_string(), len),
                 expected,
                 "input={input:?}, len={len}"
             );
@@ -433,8 +441,8 @@ mod tests {
                         "{prefix}{c}{}-suffix",
                         END_OF_UNICODE_RANGE.to_string().repeat(trailing_max_chars)
                     );
-                    let min = trim_string_min_with_len(input.clone(), len).unwrap();
-                    let max = trim_string_max_with_len(input.clone(), len).unwrap();
+                    let min = trim_string_min_with_len(input.clone(), len);
+                    let max = trim_string_max_with_len(input.clone(), len);
                     let old_max = format!(
                         "{prefix}{}",
                         END_OF_UNICODE_RANGE
@@ -532,18 +540,32 @@ mod tests {
     #[test]
     fn test_trim_max() {
         {
-            let invalid = END_OF_UNICODE_RANGE
+            // No scalar can be incremented, so the value is its own upper bound.
+            let s = END_OF_UNICODE_RANGE
                 .to_string()
                 .repeat(STATS_STRING_PREFIX_LEN + 1);
-            assert_eq!(Scalar::String(invalid).trim_max(), None);
+            let scalar = Scalar::String(s);
+            assert_eq!(scalar.clone().trim_max(), scalar);
+        }
+
+        {
+            // The bound extends past the prefix to the first scalar it can increment.
+            let prefix = END_OF_UNICODE_RANGE
+                .to_string()
+                .repeat(STATS_STRING_PREFIX_LEN + 2);
+            for (suffix, successor) in [("z-suffix", '{'), ("\u{D7FF}-suffix", '\u{E000}')] {
+                let res = Scalar::String(format!("{prefix}{suffix}")).trim_max();
+                let exp = format!("{prefix}{successor}");
+                assert_eq!(res, Scalar::String(exp));
+            }
         }
 
         {
             let s = END_OF_UNICODE_RANGE
                 .to_string()
                 .repeat(STATS_STRING_PREFIX_LEN);
-            let scalar = Scalar::String(s.clone());
-            assert_eq!(scalar.clone().trim_max(), Some(scalar));
+            let scalar = Scalar::String(s);
+            assert_eq!(scalar.clone().trim_max(), scalar);
         }
 
         {
@@ -551,7 +573,7 @@ mod tests {
             let res = Scalar::String(s.clone()).trim_max();
             let mut exp = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 1);
             exp.push('👎');
-            assert_eq!(res, Some(Scalar::String(exp)));
+            assert_eq!(res, Scalar::String(exp));
         }
 
         {
@@ -565,7 +587,7 @@ mod tests {
             exp.push('👎');
             exp.push('\0');
 
-            assert_eq!(res, Some(Scalar::String(exp)));
+            assert_eq!(res, Scalar::String(exp));
         }
     }
 }

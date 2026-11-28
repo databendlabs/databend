@@ -208,19 +208,40 @@ status: error
 code: 1065
 message: FILTER clause is not supported for aggregate function `sum0`
 
-=== distinct_aggregate_order_by_reports_unsupported ===
-description: Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.
+=== distinct_aggregate_order_by_requires_argument ===
+description: DISTINCT aggregate ORDER BY must reference an argument because independent sort keys cannot be recovered after deduplication.
 sql: string_agg(DISTINCT text ORDER BY number)
 status: error
-code: 1005
-message: DISTINCT aggregate ORDER BY is not supported
+code: 1065
+message: in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list
+
+=== distinct_aggregate_order_by_argument ===
+description: DISTINCT aggregate ORDER BY on its own argument is accepted, following PostgreSQL.
+sql: string_agg(DISTINCT text ORDER BY text DESC)
+status: ok
+scalar: string_agg(DISTINCT text) WITHIN GROUP ( ORDER BY text DESC )
+type: String NULL
+
+=== listagg_distinct_within_group_argument ===
+description: DISTINCT WITHIN GROUP ORDER BY on the aggregated argument is accepted after the delimiter becomes a param.
+sql: listagg(DISTINCT text, ',') WITHIN GROUP (ORDER BY text)
+status: ok
+scalar: listagg(DISTINCT text, ',') WITHIN GROUP ( ORDER BY text )
+type: String NULL
+
+=== distinct_aggregate_order_by_mixed_keys_requires_argument ===
+description: Every DISTINCT aggregate ORDER BY key must be an argument, not only the first one.
+sql: listagg(DISTINCT text, ',') WITHIN GROUP (ORDER BY text, number)
+status: error
+code: 1065
+message: in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list
 
 === count_distinct_aggregate_order_by_reports_unsupported ===
-description: DISTINCT aggregate ORDER BY should be rejected before ordered aggregate function validation.
+description: ORDER BY is only allowed for WITHIN GROUP aggregates, with or without DISTINCT.
 sql: count(DISTINCT number ORDER BY delta)
 status: error
-code: 1005
-message: DISTINCT aggregate ORDER BY is not supported
+code: 1065
+message: only aggregate functions allowed in within group syntax
 
 === aggregate_parameter_must_be_constant ===
 description: Parameterized aggregate arguments should be constant before aggregate resolution.

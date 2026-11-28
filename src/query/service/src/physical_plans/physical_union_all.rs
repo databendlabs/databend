@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -33,6 +34,7 @@ use itertools::Itertools;
 
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::count_cte_consumers;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::UnionAllFormatter;
@@ -203,6 +205,15 @@ impl UnionAll {
     }
 
     fn build_recursive_cte_source(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        // The steps build their pipelines when they run, and only then do the materialized
+        // CTE consumers in them take their channels.
+        let mut consumers = HashMap::new();
+        count_cte_consumers(&self.left, &mut consumers);
+        count_cte_consumers(&self.right, &mut consumers);
+        builder
+            .ctx
+            .defer_materialized_cte_consumers(consumers.into_keys());
+
         let max_threads = builder.settings.get_max_threads()?;
         builder.main_pipeline.add_source(
             |output_port| {

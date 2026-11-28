@@ -244,6 +244,99 @@ fn test_bloom_filter_legacy_float_classes() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A split block has one index file per column group, possibly of different versions.
+/// `apply_all` must prove a disjunction false even when its columns' filters are in different
+/// files, which no file alone can.
+#[test]
+fn test_bloom_filter_apply_all_across_files() -> anyhow::Result<()> {
+    let func_ctx = FunctionContext::default();
+    let int = DataType::Number(NumberDataType::Int32);
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
+    ]));
+    let index_of = |name: &str, version: u64, values: &[i32]| -> anyhow::Result<BloomIndex> {
+        let field = schema.field_with_name(name)?;
+        let mut builder = Xor8Builder::create();
+        for value in values {
+            let scalar = Scalar::Number(NumberScalar::Int32(*value));
+            builder.add_digest(BloomIndex::calculate_scalar_digest(
+                &func_ctx, &scalar, &int,
+            )?);
+        }
+        let filter = FilterImpl::from_bytes(&builder.build()?.to_bytes()?)?.0;
+        let filter_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            &BloomIndex::build_filter_bloom_name(version, field)?,
+            TableDataType::Binary,
+        )]));
+        Ok(BloomIndex::from_filter_block(
+            func_ctx.clone(),
+            filter_schema,
+            vec![Arc::new(filter)],
+            version,
+        )?)
+    };
+    // `a` is in a legacy group whose file names filters by column name (v3), `b` in a group
+    // written later (v4, by column id).
+    let indexes = [index_of("a", 3, &[1, 2])?, index_of("b", 4, &[10, 20])?];
+
+    let eq = |name: &str, value: i32| -> anyhow::Result<Expr<String>> {
+        Ok(check_function(
+            None,
+            "eq",
+            &[],
+            &[
+                Expr::ColumnRef(ColumnRef {
+                    span: None,
+                    id: name.to_string(),
+                    data_type: int.clone(),
+                    display_name: name.to_string(),
+                }),
+                Expr::Constant(Constant {
+                    span: None,
+                    scalar: Scalar::Number(NumberScalar::Int32(value)),
+                    data_type: int.clone(),
+                }),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )?)
+    };
+    let eval = |indexes: &[BloomIndex], a: i32, b: i32| -> anyhow::Result<FilterEvalResult> {
+        let expr = check_function(
+            None,
+            "or",
+            &[],
+            &[eq("a", a)?, eq("b", b)?],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let eq_scalar_map = [a, b]
+            .into_iter()
+            .map(|value| {
+                let scalar = Scalar::Number(NumberScalar::Int32(value));
+                let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &int)?;
+                Ok((scalar, digest))
+            })
+            .collect::<anyhow::Result<HashMap<_, _>>>()?;
+        Ok(BloomIndex::apply_all(
+            indexes,
+            expr,
+            &eq_scalar_map,
+            &HashMap::new(),
+            &[],
+            &HashMap::new(),
+            schema.clone(),
+        )?)
+    };
+
+    assert_eq!(eval(&indexes, 3, 30)?, FilterEvalResult::MustFalse);
+    assert_eq!(eval(&indexes[..1], 3, 30)?, FilterEvalResult::Uncertain);
+    assert_eq!(eval(&indexes[1..], 3, 30)?, FilterEvalResult::Uncertain);
+    assert_eq!(eval(&indexes, 1, 30)?, FilterEvalResult::Uncertain);
+    assert_eq!(eval(&indexes, 3, 20)?, FilterEvalResult::Uncertain);
+    assert_eq!(eval(&[], 3, 30)?, FilterEvalResult::Uncertain);
+    Ok(())
+}
+
 #[test]
 fn test_bloom_filter_casts_string_literal_to_integer_column_type() {
     let column_type = DataType::Number(NumberDataType::Int32);

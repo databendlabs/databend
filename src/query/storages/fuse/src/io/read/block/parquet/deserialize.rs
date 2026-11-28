@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
@@ -26,14 +27,105 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::ArrowSchemaConverter;
+use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::basic::Compression as ParquetCompression;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
+
+/// The sorted Parquet leaves read from a block, and the positions of the dictionary hints
+/// dropped for chunks that cannot use dictionary output.
+type FieldLevelsKey = (Vec<usize>, Vec<usize>);
+
+const MAX_CACHED_FIELD_LEVEL_LAYOUTS: usize = 16;
+
+/// What reading Parquet column chunks of a table schema needs besides the chunks: the Arrow
+/// and Parquet forms of the schema, the Parquet leaf of every column id, and the fields to
+/// read the columns as.
+///
+/// All of it depends on the schema only, not on the block, so a reader builds it once and
+/// reads every block with it. Converting a wide schema per block cost more than decoding the
+/// columns of a small block.
+pub struct ParquetReadSchema {
+    arrow_schema: Schema,
+    parquet_schema: SchemaDescPtr,
+    column_id_to_dfs_id: HashMap<ColumnId, usize>,
+    /// Arrow fields the columns are read as if they differ from `arrow_schema`, see
+    /// [`dictionary_hint_fields`].
+    hint_fields: Option<Fields>,
+    /// When set, limit dictionary entries relative to the number of selected rows.
+    dictionary_ndv_ratio: Option<u64>,
+}
+
+impl ParquetReadSchema {
+    pub fn try_new(
+        original_schema: &TableSchema,
+        hint_fields: Option<Fields>,
+        dictionary_ndv_ratio: Option<u64>,
+    ) -> databend_common_exception::Result<Self> {
+        let arrow_schema = Schema::from(original_schema);
+        let parquet_schema = Arc::new(ArrowSchemaConverter::new().convert(&arrow_schema)?);
+        let column_id_to_dfs_id = original_schema
+            .to_leaf_column_ids()
+            .iter()
+            .enumerate()
+            .map(|(dfs_id, column_id)| (*column_id, dfs_id))
+            .collect();
+        Ok(Self {
+            arrow_schema,
+            parquet_schema,
+            column_id_to_dfs_id,
+            hint_fields,
+            dictionary_ndv_ratio,
+        })
+    }
+
+    fn field_levels(&self, key: &FieldLevelsKey) -> databend_common_exception::Result<FieldLevels> {
+        let base_fields = self
+            .hint_fields
+            .as_ref()
+            .unwrap_or(self.arrow_schema.fields());
+        let adjusted_fields = (!key.1.is_empty()).then(|| {
+            let mut fields = base_fields.to_vec();
+            for &index in &key.1 {
+                fields[index] = self.arrow_schema.fields()[index].clone();
+            }
+            Fields::from(fields)
+        });
+        Ok(parquet_to_arrow_field_levels(
+            &self.parquet_schema,
+            ProjectionMask::leaves(&self.parquet_schema, key.0.iter().copied()),
+            Some(adjusted_fields.as_ref().unwrap_or(base_fields)),
+        )?)
+    }
+}
+
+/// Field levels computed with one [`ParquetReadSchema`], by the leaves read and the dictionary
+/// hints dropped. A reading processor owns one per reader and passes it along with every block.
+/// Once the cache is full, it reuses existing layouts but does not retain new ones.
+pub struct FieldLevelsCache {
+    read_schema: Arc<ParquetReadSchema>,
+    levels: HashMap<FieldLevelsKey, FieldLevels>,
+}
+
+impl FieldLevelsCache {
+    pub fn new(read_schema: Arc<ParquetReadSchema>) -> Self {
+        Self {
+            read_schema,
+            levels: HashMap::new(),
+        }
+    }
+
+    /// Whether this cache holds field levels computed with `read_schema`.
+    fn is_for(&self, read_schema: &ParquetReadSchema) -> bool {
+        std::ptr::eq(Arc::as_ptr(&self.read_schema), read_schema)
+    }
+}
 
 /// Arrow fields of `original_schema` with the top-level string fields in `dictionary_columns`
 /// typed `Dictionary(UInt32, Utf8)`. Passed as the hint of [`column_chunks_to_record_batch`],
@@ -47,7 +139,8 @@ pub fn dictionary_hint_fields(
     for column_id in dictionary_columns {
         // The type check guards against a nested field sharing the column id of its leaf.
         let Some(index) = original_schema.fields().iter().position(|field| {
-            field.column_id() == column_id && *field.data_type() == TableDataType::String
+            field.column_id() == column_id
+                && field.data_type().remove_nullable() == TableDataType::String
         }) else {
             continue;
         };
@@ -69,51 +162,58 @@ pub fn dictionary_hint_fields(
 
 /// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
 ///
-/// `hint_fields` overrides the Arrow fields the columns are read as, see
-/// [`dictionary_hint_fields`]; by default they are the fields of `original_schema`. A dictionary
-/// hint only applies to column chunks that are dictionary encoded: the others are read as their
-/// regular type, as the reader would otherwise rebuild a dictionary row by row.
+/// `dictionary_hint` pairs the fields from [`dictionary_hint_fields`] with the maximum NDV
+/// percentage of the selected rows. Plain, mixed, and over-threshold chunks use the original
+/// Arrow type.
 pub fn column_chunks_to_record_batch(
     original_schema: &TableSchema,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
     selection: Option<RowSelection>,
-    hint_fields: Option<&Fields>,
+    dictionary_hint: Option<(Fields, u64)>,
 ) -> databend_common_exception::Result<RecordBatch> {
+    let (hint_fields, dictionary_ndv_ratio) = dictionary_hint.unzip();
+    let read_schema =
+        ParquetReadSchema::try_new(original_schema, hint_fields, dictionary_ndv_ratio)?;
     column_chunks_to_record_batch_with_codecs(
         original_schema,
+        &read_schema,
+        None,
         num_rows,
         column_chunks,
         *compression,
         |_| *compression,
         selection,
-        hint_fields,
     )
 }
 
-/// Like [`column_chunks_to_record_batch`], but each column chunk is decompressed with the
-/// codec `compression_of` returns for its leaf column id. `default_compression` describes the
-/// columns that have no chunk.
+/// Like [`column_chunks_to_record_batch`], but with the [`ParquetReadSchema`] of
+/// `original_schema` built by the caller, optionally a [`FieldLevelsCache`] of it, and each
+/// column chunk decompressed with the codec `compression_of` returns for its leaf column id.
+/// `default_compression` describes the columns that have no chunk.
+#[allow(clippy::too_many_arguments)]
 pub fn column_chunks_to_record_batch_with_codecs(
     original_schema: &TableSchema,
+    read_schema: &ParquetReadSchema,
+    field_levels: Option<&mut FieldLevelsCache>,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     default_compression: Compression,
     compression_of: impl Fn(ColumnId) -> Compression,
     selection: Option<RowSelection>,
-    hint_fields: Option<&Fields>,
 ) -> databend_common_exception::Result<RecordBatch> {
     // The reader uses batch_size to preallocate column buffers retained by the output.
     let batch_size = selection.as_ref().map_or(num_rows, RowSelection::row_count);
     let mut record_reader = column_chunks_record_reader(
         original_schema,
+        read_schema,
+        field_levels,
         num_rows,
         column_chunks,
         default_compression,
         compression_of,
         selection,
-        hint_fields,
         batch_size,
     )?;
     let record = match record_reader.next() {
@@ -131,34 +231,25 @@ pub fn column_chunks_to_record_batch_with_codecs(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn column_chunks_record_reader(
     original_schema: &TableSchema,
+    read_schema: &ParquetReadSchema,
+    field_levels: Option<&mut FieldLevelsCache>,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     default_compression: Compression,
     compression_of: impl Fn(ColumnId) -> Compression,
     selection: Option<RowSelection>,
-    hint_fields: Option<&Fields>,
     batch_size: usize,
 ) -> databend_common_exception::Result<ParquetRecordBatchReader> {
-    let arrow_schema = Schema::from(original_schema);
-    let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
-    let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
-
-    let column_id_to_dfs_id = original_schema
-        .to_leaf_column_ids()
-        .iter()
-        .enumerate()
-        .map(|(dfs_id, column_id)| (*column_id, dfs_id))
-        .collect::<HashMap<_, _>>();
     let mut projection_mask = Vec::with_capacity(column_chunks.len());
     let mut builder = RowGroupImplBuilder::new(
         num_rows,
-        &parquet_schema,
+        &read_schema.parquet_schema,
         ParquetCompression::from(default_compression),
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {
             DataItem::RawData(bytes) => {
-                let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
+                let dfs_id = read_schema.column_id_to_dfs_id[column_id];
                 projection_mask.push(dfs_id);
                 builder.add_column_chunk_with_compression(
                     dfs_id,
@@ -171,33 +262,58 @@ pub(super) fn column_chunks_record_reader(
     }
     projection_mask.sort_unstable();
 
-    let mut adjusted_fields: Option<Vec<FieldRef>> = None;
-    for (index, field) in hint_fields.iter().enumerate() {
-        let column_id = original_schema.fields()[index].column_id();
-        if matches!(field.data_type(), ArrowDataType::Dictionary(..))
-            && column_id_to_dfs_id
-                .get(&column_id)
-                // Whether a column chunk is dictionary encoded was decided when writing it, from
-                // its distinct values (dictionary disabled for high NDV, or the arrow-rs writer
-                // falling back to plain once the dictionary page is too large), and shows as a
-                // leading dictionary page. Its header tells whether reading as a dictionary pays.
-                .is_some_and(|dfs_id| !builder.starts_with_dictionary_page(*dfs_id))
-        {
-            adjusted_fields.get_or_insert_with(|| hint_fields.to_vec())[index] =
-                arrow_schema.fields()[index].clone();
+    // Drop the hint if the writer disabled dictionaries or fell back to plain pages after
+    // a dictionary page. Otherwise Arrow would rebuild a dictionary of plain values row by row.
+    let mut plain_hints = Vec::new();
+    if let Some(hint_fields) = &read_schema.hint_fields {
+        // Arrow retains the chunk's entire dictionary even for a sparse row selection.
+        let max_dictionary_len = read_schema.dictionary_ndv_ratio.map(|ratio| {
+            let rows = selection.as_ref().map_or(num_rows, RowSelection::row_count);
+            rows as u64 * ratio / 100
+        });
+        for (index, field) in hint_fields.iter().enumerate() {
+            let column_id = original_schema.fields()[index].column_id();
+            if matches!(field.data_type(), ArrowDataType::Dictionary(..))
+                && read_schema
+                    .column_id_to_dfs_id
+                    .get(&column_id)
+                    .is_some_and(|dfs_id| !builder.can_read_dictionary(*dfs_id, max_dictionary_len))
+            {
+                plain_hints.push(index);
+            }
         }
     }
-    let adjusted_fields = adjusted_fields.map(Fields::from);
-    let hint_fields = adjusted_fields.as_ref().unwrap_or(hint_fields);
 
     let row_group = Box::new(builder.build());
-    let field_levels = parquet_to_arrow_field_levels(
-        &parquet_schema,
-        ProjectionMask::leaves(&parquet_schema, projection_mask),
-        Some(hint_fields),
-    )?;
+    let key = (projection_mask, plain_hints);
+    let cache = field_levels.filter(|cache| {
+        debug_assert!(
+            cache.is_for(read_schema),
+            "field levels of another read schema"
+        );
+        cache.is_for(read_schema)
+    });
+    let computed;
+    let field_levels = match cache {
+        Some(cache) if cache.levels.len() < MAX_CACHED_FIELD_LEVEL_LAYOUTS => {
+            match cache.levels.entry(key) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => {
+                    let levels = read_schema.field_levels(entry.key())?;
+                    entry.insert(levels)
+                }
+            }
+        }
+        cache => match cache.and_then(|cache| cache.levels.get(&key)) {
+            Some(levels) => levels,
+            None => {
+                computed = read_schema.field_levels(&key)?;
+                &computed
+            }
+        },
+    };
     Ok(ParquetRecordBatchReader::try_new_with_row_groups(
-        &field_levels,
+        field_levels,
         row_group.as_ref(),
         batch_size,
         selection,
@@ -288,32 +404,106 @@ mod tests {
         Ok(())
     }
 
-    /// A dictionary hint keeps the dictionary of a dictionary encoded column chunk, and reads a
-    /// column chunk without a dictionary page as its regular type.
+    #[test]
+    fn test_dictionary_hint_uses_selected_rows() -> databend_common_exception::Result<()> {
+        let schema = TableSchema::new(vec![TableField::new(
+            "s",
+            TableDataType::String.wrap_nullable(),
+        )]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let values =
+            arrow_array::StringViewArray::from(vec![Some("a"), Some("b"), Some("a"), None]);
+        let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(values)])?;
+        let num_rows = batch.num_rows();
+        let mut bytes = Vec::new();
+        let properties = WriterProperties::builder()
+            .set_dictionary_enabled(true)
+            .build();
+        let mut writer = ArrowWriter::try_new(&mut bytes, arrow_schema, Some(properties))?;
+        writer.write(&batch)?;
+        let metadata = writer.close()?;
+        let (offset, len) = metadata.row_group(0).column(0).byte_range();
+        let chunk = Bytes::from(bytes).slice(offset as usize..(offset + len) as usize);
+        let column_id = schema.field(0).column_id();
+        let chunks = HashMap::from([(column_id, DataItem::RawData(Buffer::from(chunk)))]);
+        let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
+
+        // The same two-entry dictionary fits exactly at the threshold, but not above it.
+        for (rows, ratio, keep_dictionary) in [
+            (None, 50, true),
+            (Some(2), 100, true),
+            (Some(1), 100, false),
+            (Some(2), 50, false),
+            (Some(0), 100, false),
+        ] {
+            let selection = rows
+                .map(|n| RowSelection::from_consecutive_ranges(std::iter::once(0..n), num_rows));
+            let record = column_chunks_to_record_batch(
+                &schema,
+                num_rows,
+                &chunks,
+                &Compression::None,
+                selection,
+                Some((hint.clone(), ratio)),
+            )?;
+            assert_eq!(record.num_rows(), rows.unwrap_or(num_rows));
+            let output_type = record.column(0).data_type();
+            if keep_dictionary {
+                assert!(
+                    matches!(output_type, ArrowDataType::Dictionary(..)),
+                    "rows={rows:?}, ratio={ratio}: got {output_type:?}"
+                );
+            } else {
+                assert_eq!(
+                    output_type,
+                    &ArrowDataType::Utf8View,
+                    "rows={rows:?}, ratio={ratio}"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// A dictionary hint applies only to chunks encoded as dictionaries throughout, even when
+    /// one [`FieldLevelsCache`] serves dictionary, plain, and fallback chunks in succession.
     #[test]
     fn test_dictionary_hint_follows_column_chunk() -> databend_common_exception::Result<()> {
         let num_rows = 1000;
         let schema = TableSchema::new(vec![TableField::new("s", TableDataType::String)]);
         let arrow_schema = Arc::new(Schema::from(&schema));
-        let values = (0..num_rows)
-            .map(|i| format!("v{}", i % 3))
-            .collect::<Vec<_>>();
-        let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(
-            arrow_array::StringViewArray::from(values.clone()),
-        )])?;
         let column_id = schema.field(0).column_id();
         let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
+        let read_schema = Arc::new(ParquetReadSchema::try_new(&schema, Some(hint), None)?);
+        let mut field_levels = FieldLevelsCache::new(read_schema.clone());
 
-        for dictionary_enabled in [true, false] {
-            let properties = WriterProperties::builder()
+        for (dictionary_enabled, falls_back) in
+            [(true, false), (true, true), (false, false), (true, false)]
+        {
+            let distinct = if falls_back { 500 } else { 3 };
+            let values = (0..num_rows)
+                .map(|i| format!("value-{}", i % distinct))
+                .collect::<Vec<_>>();
+            let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(
+                arrow_array::StringViewArray::from(values.clone()),
+            )])?;
+            let mut properties = WriterProperties::builder()
                 .set_dictionary_enabled(dictionary_enabled)
-                .build();
+                .set_data_page_row_count_limit(100)
+                .set_write_batch_size(100);
+            if falls_back {
+                properties = properties.set_dictionary_page_size_limit(64);
+            }
             let mut bytes = Vec::new();
             let mut writer =
-                ArrowWriter::try_new(&mut bytes, arrow_schema.clone(), Some(properties))?;
+                ArrowWriter::try_new(&mut bytes, arrow_schema.clone(), Some(properties.build()))?;
             writer.write(&batch)?;
             let metadata = writer.close()?;
-            let (offset, length) = metadata.row_group(0).column(0).byte_range();
+            let column = metadata.row_group(0).column(0);
+            assert_eq!(
+                column.dictionary_page_offset().is_some(),
+                dictionary_enabled
+            );
+            let (offset, length) = column.byte_range();
             let bytes = Bytes::from(bytes);
             let column_chunks = HashMap::from([(
                 column_id,
@@ -322,19 +512,21 @@ mod tests {
                 )),
             )]);
 
-            let record = column_chunks_to_record_batch(
+            let record = column_chunks_to_record_batch_with_codecs(
                 &schema,
+                &read_schema,
+                Some(&mut field_levels),
                 num_rows,
                 &column_chunks,
-                &Compression::None,
+                Compression::None,
+                |_| Compression::None,
                 None,
-                Some(&hint),
             )?;
             let column = record.column(0);
             assert_eq!(
                 matches!(column.data_type(), ArrowDataType::Dictionary(..)),
-                dictionary_enabled,
-                "dictionary_enabled: {dictionary_enabled}"
+                dictionary_enabled && !falls_back,
+                "dictionary_enabled: {dictionary_enabled}, falls_back: {falls_back}"
             );
             let decoded = databend_common_expression::Column::from_arrow_rs(
                 column.clone(),

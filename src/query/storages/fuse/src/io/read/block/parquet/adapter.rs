@@ -29,20 +29,23 @@ use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::serialized_reader::SerializedPageReader;
-use parquet::schema::types::SchemaDescriptor;
+use parquet::schema::types::SchemaDescPtr;
+
+use super::page_header::all_pages_dictionary_encoded;
+use super::page_header::dictionary_len;
 
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
     column_chunks: HashMap<usize, Buffer>,
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
-    schema_descriptor: &'a SchemaDescriptor,
+    schema_descriptor: &'a SchemaDescPtr,
     compression: Compression,
 }
 
 impl<'a> RowGroupImplBuilder<'a> {
     pub fn new(
         num_rows: usize,
-        schema_descriptor: &'a SchemaDescriptor,
+        schema_descriptor: &'a SchemaDescPtr,
         compression: Compression,
     ) -> Self {
         Self {
@@ -78,23 +81,19 @@ impl<'a> RowGroupImplBuilder<'a> {
         self.column_chunks.insert(dfs_id, column_chunk);
     }
 
-    /// Whether the added column chunk starts with a dictionary page, i.e. it is dictionary
-    /// encoded. Reads only the first page header; `false` if it cannot be read.
-    pub fn starts_with_dictionary_page(&self, dfs_id: usize) -> bool {
-        let (Some(chunk), Some(meta)) = (
-            self.column_chunks.get(&dfs_id),
-            self.column_chunk_metadatas.get(&dfs_id),
-        ) else {
-            return false;
-        };
-        let reader = Arc::new(BufferReader(chunk.clone()));
-        SerializedPageReader::new(reader, meta, self.num_rows, None)
-            .and_then(|mut pages| pages.peek_next_page())
-            .is_ok_and(|page| page.is_some_and(|page| page.is_dict))
+    /// Check the encoding and optional dictionary size limit in one pass over the page headers.
+    pub fn can_read_dictionary(&self, dfs_id: usize, max_len: Option<u64>) -> bool {
+        self.column_chunks
+            .get(&dfs_id)
+            .is_some_and(|chunk| match max_len {
+                Some(0) => false,
+                Some(max) => dictionary_len(chunk).is_some_and(|len| len > 0 && len as u64 <= max),
+                None => all_pages_dictionary_encoded(chunk),
+            })
     }
 
     pub fn build(self) -> RowGroupImpl {
-        let schema_descriptor = Arc::new(self.schema_descriptor.clone());
+        let schema_descriptor = self.schema_descriptor.clone();
         let column_metadata = (0..schema_descriptor.num_columns())
             .map(|dfs_id| {
                 self.column_chunk_metadatas
@@ -189,12 +188,13 @@ mod tests {
     use parquet::basic::Compression;
     use parquet::basic::Repetition;
     use parquet::basic::Type as PhysicalType;
+    use parquet::schema::types::SchemaDescPtr;
     use parquet::schema::types::SchemaDescriptor;
     use parquet::schema::types::Type;
 
     use super::RowGroupImplBuilder;
 
-    fn test_schema() -> SchemaDescriptor {
+    fn test_schema() -> SchemaDescPtr {
         let fields = vec![
             Arc::new(
                 Type::primitive_type_builder("c0", PhysicalType::INT32)
@@ -219,7 +219,7 @@ mod tests {
             .with_fields(fields)
             .build()
             .unwrap();
-        SchemaDescriptor::new(Arc::new(schema))
+        Arc::new(SchemaDescriptor::new(Arc::new(schema)))
     }
 
     #[test]

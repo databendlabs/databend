@@ -922,13 +922,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("deduplicate_label", DefaultSettingValue {
-                    value: UserSettingValue::String("".to_owned()),
-                    desc: "Retry token for SQL writes that support deduplication.",
-                    mode: SettingMode::Write,
-                    scope: SettingScope::Session,
-                    range: None,
-                }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for the 'COPY INTO'.",
@@ -1198,7 +1191,7 @@ impl DefaultSettings {
                 }),
                 ("enable_encoded_columns", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Experimental. Fuse scans keep columns in compact encoded forms (frame of reference for integers, Date, Timestamp and Decimal; dictionary, reusing the Parquet dictionary for String) in memory and in the column array cache. Intended for use with the deserialized column cache (config `cache.table_data_deserialized_data_bytes` or `cache.table_data_deserialized_memory_ratio`): without it, every scan encodes the columns again and may be slower.",
+                    desc: "Experimental. Fuse scans keep columns in compact encoded forms (frame of reference for integers, Date, Timestamp and Decimal; dictionary, reusing the Parquet dictionary for String) in memory and in the column array cache. Intended for use with the deserialized column cache; without it, only the Parquet dictionaries of String columns are kept, as building the other encodings for a single use costs more than it saves.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1812,10 +1805,10 @@ impl DefaultSettings {
                 }),
                 ("queries_queue_retry_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5 * 60),
-                    desc: "The retry interval for query queue timeout. 0 if never retry.",
+                    desc: "Seconds that a query waits for a slot on one attempt, in a queue kept in meta-service such as a workload group queue, before it gives up its place and enters the queue again at the back. 0 means 365 days.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_experimental_new_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

@@ -73,7 +73,7 @@ alter table t cluster by(-k)
 statement ok
 insert into t values (NULL, 'n'), (2, 'duplicate'), (7, 'g')
 
-# Keep the existing spill path available to both task kinds.
+# FINAL must still work with forced spill enabled. Blockwise SortBlocks does not spill.
 statement ok
 set force_sort_data_spill = 1
 

@@ -28,6 +28,7 @@ mod arrow;
 mod block;
 mod block_thresholds;
 mod block_vec;
+mod cast_plan;
 mod common;
 mod constant_folder;
 mod conversion;
@@ -44,12 +45,14 @@ mod group_hash;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
+mod nullable_input;
 
 mod scalar_hash;
 mod schema;
 mod serde;
 mod sort;
 mod stream_partition;
+mod topk;
 mod types;
 
 mod like_pattern_escape;

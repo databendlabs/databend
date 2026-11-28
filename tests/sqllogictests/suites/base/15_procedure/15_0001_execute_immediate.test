@@ -271,7 +271,7 @@ $$;
 ----
 1
 
-query I
+query error `r.number` is ambiguous in a subquery
 EXECUTE IMMEDIATE $$
 BEGIN
     LET rs RESULTSET := SELECT * FROM numbers(3);
@@ -281,8 +281,49 @@ BEGIN
     END FOR;
 END;
 $$;
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET rs RESULTSET := SELECT * FROM numbers(3);
+    FOR r IN rs DO
+        LET v := r.number;
+        LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :v + 1);
+        RETURN y;
+    END FOR;
+END;
+$$;
 ----
 1
+
+query error `id` is ambiguous in a subquery
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET id := 1;
+    LET y := (SELECT number FROM numbers(3) WHERE number = id);
+    RETURN y;
+END;
+$$;
+
+query error `number` is ambiguous in a subquery
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET number := 2;
+    LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = number);
+    RETURN y;
+END;
+$$;
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET number := 2;
+    LET y := (SELECT t.number FROM numbers(3) AS t WHERE t.number = :number);
+    RETURN y;
+END;
+$$;
+----
+2
 
 query error `fallback` is not defined
 EXECUTE IMMEDIATE $$

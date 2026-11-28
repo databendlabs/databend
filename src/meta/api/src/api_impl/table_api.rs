@@ -149,7 +149,6 @@ use super::garbage_collection_api::HistoryTablesForGc;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
 use super::schema_api::VersionedTable;
-use super::schema_api::build_upsert_table_deduplicated_label;
 use super::schema_api::construct_drop_table_txn_operations;
 use super::schema_api::get_db_by_id_or_err;
 use super::schema_api::get_history_table_metas;
@@ -1581,7 +1580,7 @@ where
         }
     }
 
-    /// `tenant` scopes deduplication labels and MV source binding generations.
+    /// `tenant` scopes MV source binding generations.
     async fn update_multi_table_meta(
         &self,
         tenant: &Tenant,
@@ -1598,16 +1597,11 @@ where
         req: UpdateMultiTableMetaReq,
         txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
-        if !req.deduplicated_labels.is_empty() && !req.has_persistent_updates() {
-            return Err(AppError::DeduplicationLabelWithoutMetaUpdate.into());
-        }
-
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
             copied_files,
             update_stream_metas,
-            deduplicated_labels,
-            update_temp_tables: _,
+            ..
         } = req;
 
         let mut tbl_seqs = HashMap::new();
@@ -1835,13 +1829,6 @@ where
             txn.if_then.push(txn_put_pb(&stream_id, &new_stream_meta));
         }
 
-        for deduplicated_label in deduplicated_labels {
-            txn.if_then.push(build_upsert_table_deduplicated_label(
-                tenant,
-                deduplicated_label,
-            ));
-        }
-
         // Keep these after the table metadata gets: failure parsing relies on the first N
         // responses matching `update_table_metas`, followed by one response per LVT guard.
         for (_, lvt_ident, _) in &lvt_guards {
@@ -1853,9 +1840,7 @@ where
         let txn_response = txn_sender.send_txn(self, txn).await?;
 
         let else_branch_op_responses = match txn_response {
-            IdempotentKVTxnResponse::Success(_) => {
-                return Ok(Ok(UpdateTableMetaReply {}));
-            }
+            IdempotentKVTxnResponse::Success(_) => return Ok(Ok(UpdateTableMetaReply {})),
             IdempotentKVTxnResponse::AlreadyCommitted => {
                 info!(
                     "Transaction ID {} exists, the corresponding update_multi_table_meta transaction has been executed successfully",
