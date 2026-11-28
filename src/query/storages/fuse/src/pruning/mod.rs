@@ -22,6 +22,7 @@ mod partition_pruner;
 mod profile_guard;
 mod pruner_location;
 mod pruning_statistics;
+mod row_filter;
 mod segment_pruner;
 mod spatial_index_pruner;
 mod vector_index_pruner;

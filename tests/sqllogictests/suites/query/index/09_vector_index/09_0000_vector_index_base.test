@@ -567,6 +567,247 @@ SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties WHERE l2_distance
 ----
 7
 
+# Filters on other columns are evaluated per block before the HNSW search, so
+# the TopN comes from the rows that pass them: blocks they reject whole are
+# dropped, blocks they pass whole are searched as without filters, and the others
+# are searched for their passing rows only. From [0,0,0,0] the distance of a row
+# is its id; three blocks of four rows.
+statement ok
+CREATE TABLE t_filter(id Int NOT NULL, tag String NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=true)
+
+statement ok
+INSERT INTO t_filter VALUES (1,'a',[1,0,0,0]), (2,'b',[2,0,0,0]), (3,NULL,[3,0,0,0]), (4,'a',[4,0,0,0])
+
+statement ok
+INSERT INTO t_filter VALUES (5,'b',[5,0,0,0]), (6,'a',[6,0,0,0]), (7,NULL,[7,0,0,0]), (8,'b',[8,0,0,0])
+
+statement ok
+INSERT INTO t_filter VALUES (9,'a',[9,0,0,0]), (10,'b',[10,0,0,0]), (11,'a',[11,0,0,0]), (12,NULL,[12,0,0,0])
+
+# The first block fails the filter whole and the others pass it whole.
+query I
+SELECT id FROM t_filter WHERE id >= 5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+5
+6
+7
+
+# The first and last blocks pass it in part.
+query I
+SELECT id FROM t_filter WHERE id > 2 AND id < 11 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+3
+4
+5
+
+# A filter on a nullable column: NULL fails it.
+query I
+SELECT id FROM t_filter WHERE tag = 'a' ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+1
+4
+6
+
+query I
+SELECT id FROM t_filter WHERE tag IS NULL ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+3
+7
+12
+
+query I
+SELECT id FROM t_filter WHERE id IN (2, 8, 11, 12) ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+2
+8
+11
+
+query I
+SELECT id FROM t_filter WHERE id % 2 = 0 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+2
+4
+6
+
+# Fewer passing rows than the limit, and none.
+query I
+SELECT id FROM t_filter WHERE tag = 'b' AND id > 6 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 5
+----
+8
+10
+
+query I
+SELECT id FROM t_filter WHERE id >= 100 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+
+# Without refinement.
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_filter WHERE tag = 'b' ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+2
+5
+8
+
+# Most rows of the first block pass it; the others pass it whole.
+query I
+SELECT id FROM t_filter WHERE id >= 2 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+2
+3
+4
+
+# A filter on the score and a column together, descending order, and a volatile
+# filter (`id > rand()` passes every row) score every row.
+query I
+SELECT id FROM t_filter WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) > 1.5 AND id < 10 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+2
+3
+4
+
+query I
+SELECT id FROM t_filter WHERE id < 10 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 2
+----
+9
+8
+
+query I
+SETTINGS (random_function_seed = 1) SELECT count() FROM (SELECT id FROM t_filter WHERE id > rand() ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 5)
+----
+5
+
+# Every block passes the filter in part.
+query I
+SELECT id FROM t_filter WHERE id % 4 = 3 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 2
+----
+3
+7
+
+query I
+SELECT id FROM t_filter WHERE id % 4 <> 0 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 4
+----
+1
+2
+3
+5
+
+# An upper bound on the score with filters on other columns, joined by AND: HNSW
+# search of the rows the column filters pass, then the bound kept on the rows
+# found. When fewer rows than the limit pass, only they are output. Tags: a = 1 4
+# 6 9 11, b = 2 5 8 10; the distance of a row is its id.
+query I
+SELECT id FROM t_filter WHERE tag = 'a' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) < 7.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 10
+----
+1
+4
+6
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_filter WHERE tag = 'b' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) < 9 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+2
+5
+8
+
+query I
+SELECT id FROM t_filter WHERE id > 2 AND l2_distance(embedding,[0,0,0,0]::Vector(4)) <= 6 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 2
+----
+3
+4
+
+query I
+SELECT id FROM t_filter WHERE tag = 'a' AND 7.5 > l2_distance(embedding,[0,0,0,0]::Vector(4)) ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id DESC LIMIT 2
+----
+1
+4
+
+query I
+SELECT id FROM t_filter WHERE tag = 'a' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) < 0.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+
+# An upper bound on the score alone.
+query I
+SELECT id FROM t_filter WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) < 3.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 10
+----
+1
+2
+3
+
+query I
+SELECT id FROM t_filter WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) <= 4 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 2
+----
+1
+2
+
+# Other score filters (lower bounds, ranges) or descending order, with filters on
+# other columns: every row is scored and the filters run after reading.
+query I
+SELECT id FROM t_filter WHERE tag = 'a' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) > 1.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+4
+6
+9
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_filter WHERE tag = 'a' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) > 1.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+4
+6
+9
+
+query I
+SELECT id FROM t_filter WHERE id % 2 = 0 AND l2_distance(embedding,[0,0,0,0]::Vector(4)) >= 3 AND l2_distance(embedding,[0,0,0,0]::Vector(4)) <= 9 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 10
+----
+4
+6
+8
+
+query I
+SELECT id FROM t_filter WHERE id < 10 AND l2_distance(embedding,[0,0,0,0]::Vector(4)) < 7.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 2
+----
+7
+6
+
+query I
+SELECT id FROM t_filter WHERE id > 8 AND tag = 'a' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) > 8.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+9
+11
+
+query I
+SELECT id FROM t_filter WHERE tag = 'b' AND l2_distance(embedding,[0,0,0,0]::Vector(4)) > 10.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+
+query I
+SELECT id FROM t_filter WHERE tag = 'b' ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 2
+----
+10
+8
+
+# A conjunct on the score and another column together cannot be split: every
+# row is scored and the filter runs after reading.
+query I
+SELECT id FROM t_filter WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) < 3 OR id > 10 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+1
+2
+11
+
+query I
+SELECT id FROM t_filter WHERE tag IS NOT NULL AND (l2_distance(embedding,[0,0,0,0]::Vector(4)) < 3 OR id > 10) ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 3
+----
+1
+2
+11
+
+# A second sort key keeps the ties of the last row, within the passing rows.
+query I
+SELECT id FROM t_filter WHERE tag = 'a' ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id DESC LIMIT 2
+----
+1
+4
+
 statement ok
 use default
 

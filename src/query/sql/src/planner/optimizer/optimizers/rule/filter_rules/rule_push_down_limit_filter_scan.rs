@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use super::index_predicates::filter_evaluated_by_index_pruners;
 use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -23,12 +24,9 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
-use crate::plans::IndexPredicateChecker;
 use crate::plans::Limit;
 use crate::plans::RelOperator;
-use crate::plans::ScalarExpr;
 use crate::plans::Scan;
-use crate::plans::Visitor;
 
 /// Matches: Limit -> [EvalScalar ->] Filter -> Scan
 ///
@@ -92,7 +90,12 @@ impl Rule for RulePushDownLimitFilterScan {
         if (!has_inverted_index && !has_vector_index)
             || push_down_predicates.len() != filter.predicates.len()
             || limit.limit.is_none()
-            || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
+            || !filter_evaluated_by_index_pruners(
+                &filter,
+                has_inverted_index,
+                has_vector_index,
+                false,
+            )
             || scan.has_secure_predicates_not_applied_by_prewhere()
         {
             return Ok(());
@@ -123,25 +126,4 @@ impl Default for RulePushDownLimitFilterScan {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn filter_contains_only_index_predicates(
-    filter: &Filter,
-    has_inverted_index: bool,
-    has_vector_index: bool,
-) -> bool {
-    if !has_inverted_index && !has_vector_index {
-        return false;
-    }
-
-    filter
-        .predicates
-        .iter()
-        .all(|predicate| is_index_predicate(predicate, has_inverted_index, has_vector_index))
-}
-
-fn is_index_predicate(predicate: &ScalarExpr, allow_inverted: bool, allow_vector: bool) -> bool {
-    let mut checker = IndexPredicateChecker::new(allow_inverted, allow_vector);
-    let _ = checker.visit(predicate);
-    checker.valid && checker.has_index_column
 }

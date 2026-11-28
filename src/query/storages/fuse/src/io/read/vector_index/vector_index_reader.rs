@@ -20,6 +20,7 @@ use bytes::Bytes;
 use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::Fp16QueryScorer;
@@ -80,13 +81,15 @@ impl VectorIndexReader {
     }
 
     /// The `limit` nearest rows found by HNSW search, and the rows found at the
-    /// same distance as the farthest of them with `keep_ties`.
+    /// same distance as the farthest of them with `keep_ties`. With `filter` (one
+    /// bit per row of the block), only its rows.
     pub async fn prune(
         &self,
         limit: usize,
         keep_ties: bool,
         row_count: usize,
         location: &IndexFileLocation,
+        filter: Option<&Bitmap>,
     ) -> Result<Vec<ScoredPointOffset>> {
         if limit == 0 || row_count == 0 {
             return Ok(Vec::new());
@@ -97,19 +100,22 @@ impl VectorIndexReader {
             self.options.search_ef.map(|ef| ef.min(row_count)),
             &self.query_values,
             keep_ties,
+            filter,
         )
     }
 
-    /// SQ8 scores of every valid row.
+    /// SQ8 scores of the valid rows of `filter` (one bit per row of the block), or
+    /// of every valid row without one.
     pub async fn generate_scores(
         &self,
         row_count: usize,
         location: &IndexFileLocation,
+        filter: Option<&Bitmap>,
     ) -> Result<Vec<ScoredPointOffset>> {
         let index = self.loader.load(row_count, location).await?;
         index
             .index()
-            .generate_scores(row_count as u32, &self.query_values)
+            .generate_scores(row_count as u32, &self.query_values, filter)
     }
 
     /// FP16 scores of every valid row, for paths that output the scores of all rows
@@ -291,10 +297,10 @@ mod tests {
         let is_null = |idx: u32| idx.is_multiple_of(10);
 
         // NULL rows are neither searched nor scored.
-        let found = index.prune(10, false, ROWS, &location).await?;
+        let found = index.prune(10, false, ROWS, &location, None).await?;
         assert_eq!(found.len(), 10);
         assert!(found.iter().all(|score| !is_null(score.idx)));
-        let scores = index.generate_scores(ROWS, &location).await?;
+        let scores = index.generate_scores(ROWS, &location, None).await?;
         assert_eq!(scores.len(), 90);
         assert!(scores.iter().all(|score| !is_null(score.idx)));
         // A full read scores every valid row like page reads do.
@@ -305,6 +311,15 @@ mod tests {
             let full = all.iter().find(|full| full.idx == score.idx).unwrap();
             assert_eq!(full.score, score.score);
         }
+
+        // With a filter, the valid rows of the filter only: rows 0, 5, 10, ...
+        // pass it, of which 0, 10, ... are NULL.
+        let fifth: Bitmap = (0..ROWS).map(|row| row % 5 == 0).collect();
+        let sq8 = index.generate_scores(ROWS, &location, Some(&fifth)).await?;
+        assert_eq!(
+            sq8.iter().map(|score| score.idx).collect::<Vec<_>>(),
+            (5..ROWS as u32).step_by(10).collect::<Vec<_>>()
+        );
 
         // FP16 scores, sorted by row: L2 distance to [1.0; DIM] is
         // sqrt(DIM) * (1 - r * 0.01), up to FP16 rounding.

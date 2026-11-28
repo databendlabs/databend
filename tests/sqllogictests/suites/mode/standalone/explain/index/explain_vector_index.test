@@ -138,6 +138,37 @@ RowFetch
                 ├── push downs: [filters: [CAST(t._vector_score (#2) AS Float64) > 0.1], limit: 3]
                 └── estimated rows: 16.00
 
+# A filter on another column is pushed down with the TopN: the vector index
+# pruner evaluates it per block before the search, after range pruning drops the
+# segments it rejects whole. The filter runs again after reading, so the scan
+# reads `id` and there is no RowFetch.
+query T
+EXPLAIN SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t WHERE id > 8 ORDER BY similarity ASC LIMIT 5;
+----
+TopN(Final)
+├── output columns: [t.id (#0), t._vector_score (#2)]
+├── sort keys: [_vector_score ASC NULLS LAST]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 5.00
+└── TopN(Partial)
+    ├── output columns: [t.id (#0), t._vector_score (#2)]
+    ├── sort keys: [_vector_score ASC NULLS LAST]
+    ├── limit: 5
+    ├── offset: 0
+    ├── estimated rows: 5.00
+    └── TableScan
+        ├── table: default.test_vector_index_db.t
+        ├── scan id: 0
+        ├── output columns: [id (#0), _vector_score (#2)]
+        ├── read rows: 8
+        ├── read size: <slt:ignore>
+        ├── partitions total: 4
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_true(t.id (#0) > 8)], limit: 5]
+        └── estimated rows: <slt:ignore>
+
 statement ok
 CREATE TABLE IF NOT EXISTS t2(id Int, embedding1 Vector(4), embedding2 Vector(4), VECTOR INDEX idx1 (embedding1) distance='l1,l2', VECTOR INDEX idx2 (embedding2) distance='cosine') Engine = Fuse;
 
