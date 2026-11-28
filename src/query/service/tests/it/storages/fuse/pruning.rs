@@ -44,6 +44,7 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -284,6 +285,29 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         filters: Some(parse_to_filters(ctx.clone(), table.clone(), "b = 6")?),
         ..Default::default()
     });
+    // A query on its own executor (legacy) prunes on the global runtime too, so it
+    // does not spawn and join pruning threads of its own.
+    let legacy_ctx = fixture.new_query_ctx().await?;
+    legacy_ctx
+        .get_settings()
+        .set_setting("use_legacy_query_executor".to_string(), "1".to_string())?;
+    let legacy_ctx: Arc<dyn TableContext> = legacy_ctx;
+    let pruner = FusePruner::create(
+        &legacy_ctx,
+        fuse_table.get_operator(),
+        table.get_table_info().schema(),
+        &bloom_filter,
+        None,
+        fuse_table.bloom_index_cols(),
+        vec![],
+        HashSet::new(),
+        None,
+    )?;
+    assert!(Arc::ptr_eq(
+        &pruner.pruning_ctx.pruning_runtime()?,
+        &GlobalPruningRuntime::try_instance().unwrap()
+    ));
+
     let ctx = fixture.new_query_ctx().await?;
     let blocks = apply_block_pruning(
         snapshot.clone(),

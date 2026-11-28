@@ -234,9 +234,9 @@ impl GlobalServices {
 
         if config.query.common.enable_queries_executor {
             GlobalQueriesExecutor::init()?;
-            // The queries of the global executor prune on a global runtime too.
-            GlobalPruningRuntime::init(num_cpus::get())?;
         }
+        // Queries prune on a global runtime, so they do not spawn and join pruning threads.
+        GlobalPruningRuntime::init(num_cpus::get())?;
 
         Self::init_workload_mgr(config).await?;
 
