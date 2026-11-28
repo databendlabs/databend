@@ -28,9 +28,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::Value;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -206,24 +207,20 @@ impl Processor for MutationSource {
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
                     let func_ctx = self.ctx.get_function_context()?;
-                    let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
-
-                    let predicates = evaluator
-                        .run(filter)
+                    let mut executor = FilterExecutor::new(
+                        filter.clone(),
+                        func_ctx,
+                        rows,
+                        None,
+                        &BUILTIN_FUNCTIONS,
+                        false,
+                    );
+                    let bitmap: Bitmap = executor
+                        .select_to_bitmap(&data_block)
                         .map_err(|e| e.add_message("eval filter failed:"))?
-                        .try_downcast::<BooleanType>()
-                        .unwrap();
-
-                    let affect_rows = match &predicates {
-                        Value::Scalar(v) => {
-                            if *v {
-                                rows
-                            } else {
-                                0
-                            }
-                        }
-                        Value::Column(bitmap) => bitmap.len() - bitmap.null_count(),
-                    };
+                        .into();
+                    let affect_rows = bitmap.len() - bitmap.null_count();
+                    let predicates = Value::<BooleanType>::Column(bitmap);
 
                     if affect_rows != 0 {
                         self.update_mutation_status(affect_rows);

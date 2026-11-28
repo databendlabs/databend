@@ -1,3 +1,5 @@
+# run-with-settings: enable_selector_executor=0
+
 # AND filter short circuit
 statement ok
 drop table if exists t;
@@ -279,9 +281,6 @@ statement ok
 INSERT INTO encoded_like SELECT number, url, IF(number % 8 IN (2, 4), NULL, url) FROM (SELECT number, ['xxx/a', 'yyy/b', 'xxx/a', 'xxx/c', '', 'xxx_100%', 'yyy/b', 'xxx/c'][number % 8 + 1]::STRING AS url FROM numbers(8000));
 
 statement ok
-SET enable_selector_executor = 1;
-
-statement ok
 SET enable_encoded_columns = 0;
 
 statement ok
@@ -343,9 +342,6 @@ SELECT count(*) FROM (SELECT k, url FROM encoded_like_expected EXCEPT SELECT k, 
 
 statement ok
 UNSET enable_encoded_columns;
-
-statement ok
-UNSET enable_selector_executor;
 
 statement ok
 DROP TABLE encoded_like_expected;

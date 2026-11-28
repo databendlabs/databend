@@ -1,4 +1,5 @@
 # run-with-settings: partial_aggregate_mode=bypass
+# run-with-settings: enable_selector_executor=0
 
 statement ok
 use default

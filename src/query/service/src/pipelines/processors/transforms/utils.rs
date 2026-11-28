@@ -15,10 +15,9 @@
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
@@ -54,10 +53,14 @@ pub fn filter_block(
     let predicate = cast_expr_to_non_null_boolean(filter)?;
     assert_eq!(predicate.data_type(), &DataType::Boolean);
 
-    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let predicate = evaluator
-        .run(&predicate)?
-        .try_downcast::<BooleanType>()
-        .unwrap();
-    block.filter_boolean_value(&predicate)
+    let num_rows = block.num_rows();
+    FilterExecutor::new(
+        predicate,
+        func_ctx.clone(),
+        num_rows,
+        None,
+        &BUILTIN_FUNCTIONS,
+        true,
+    )
+    .filter(block)
 }

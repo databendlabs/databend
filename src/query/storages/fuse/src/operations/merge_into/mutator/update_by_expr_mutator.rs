@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
@@ -30,7 +29,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
-use super::utils::expr2prdicate;
+use super::utils::eval_predicate;
 use super::utils::get_and;
 use super::utils::get_not;
 use super::utils::get_or;
@@ -91,8 +90,7 @@ impl UpdateByExprMutator {
         expr: Expr,
         has_filter: bool,
     ) -> Result<DataBlock> {
-        let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut predicates = expr2prdicate(&evaluator, &expr)?;
+        let mut predicates = eval_predicate(&data_block, &expr, &self.func_ctx)?;
 
         let mut data_block = data_block.clone();
         let (last_filter, origin_block) = if has_filter {
