@@ -91,15 +91,14 @@ use databend_common_catalog::plan::VirtualPredicateRef;
 use databend_storages_common_cache::CachePolicy;
 
 /// Where the batch pruning paths (`FusePruner::pruning`, bloom / inverted /
-/// vector index block pruning, recluster) of a query run. It follows the
-/// pipeline executor of the query, see `ExecutorSettings`.
+/// vector index block pruning, recluster) of a query run.
 enum PruningRuntime {
-    /// The query runs on the global queries executor, and prunes on the global
-    /// pruning runtime.
+    /// The process-wide pruning runtime, set up with the global services.
     Global(Arc<Runtime>),
-    /// The query has an executor of its own, and a pruning runtime of its own,
-    /// both of `max_threads` threads. The runtime is created on first use: the
-    /// pipeline based pruning without index pruners never touches it.
+    /// A runtime of `max_threads` threads for this query, where the global
+    /// services are not set up or the query may use fewer threads than the
+    /// global runtime has. It is created on first use: the pipeline based
+    /// pruning without index pruners never touches it.
     Query {
         threads: usize,
         runtime: Mutex<Option<Arc<Runtime>>>,
@@ -108,15 +107,18 @@ enum PruningRuntime {
 
 impl PruningRuntime {
     fn create(ctx: &Arc<dyn TableContext>) -> Result<Self> {
-        let settings = ctx.get_settings();
-        // The global pruning runtime exists where the global queries executor does.
-        if !settings.get_use_legacy_query_executor()?
-            && let Some(runtime) = GlobalPruningRuntime::try_instance()
+        let threads = ctx.get_settings().get_max_threads()? as usize;
+        // On the global runtime only the I/O limit (`pruning_semaphore`) bounds the
+        // pruning tasks of a query, and they also search indexes on the CPU. A query
+        // limited to fewer threads, e.g. by a workload group, keeps its own runtime
+        // so that this work stays within `max_threads`.
+        if let Some(runtime) = GlobalPruningRuntime::try_instance()
+            && threads >= runtime.inner().metrics().num_workers()
         {
             return Ok(PruningRuntime::Global(runtime));
         }
         Ok(PruningRuntime::Query {
-            threads: settings.get_max_threads()? as usize,
+            threads,
             runtime: Mutex::new(None),
         })
     }

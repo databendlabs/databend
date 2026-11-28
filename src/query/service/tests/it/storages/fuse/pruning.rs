@@ -284,6 +284,45 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         filters: Some(parse_to_filters(ctx.clone(), table.clone(), "b = 6")?),
         ..Default::default()
     });
+    // A query on its own executor (legacy) prunes on the global runtime too, so it
+    // does not spawn and join pruning threads of its own; one limited to fewer
+    // threads than the global runtime has keeps its own, to stay within them.
+    let global = GlobalPruningRuntime::try_instance().unwrap();
+    let workers = global.inner().metrics().num_workers();
+    for (threads, on_global) in [(workers, true), (1, workers == 1)] {
+        // A query context takes the session's settings each time it reads them.
+        let settings = fixture.default_session().get_settings();
+        let (legacy, max_threads) = (
+            settings.get_use_legacy_query_executor()?,
+            settings.get_max_threads()?,
+        );
+        settings.set_setting("use_legacy_query_executor".to_string(), "1".to_string())?;
+        settings.set_setting("max_threads".to_string(), threads.to_string())?;
+        let legacy_ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+        let pruner = FusePruner::create(
+            &legacy_ctx,
+            fuse_table.get_operator(),
+            table.get_table_info().schema(),
+            &bloom_filter,
+            None,
+            fuse_table.bloom_index_cols(),
+            vec![],
+            HashSet::new(),
+            None,
+        )?;
+        let runtime = pruner.pruning_ctx.pruning_runtime()?;
+        assert_eq!(
+            Arc::ptr_eq(&runtime, &global),
+            on_global,
+            "{threads} threads"
+        );
+        settings.set_setting(
+            "use_legacy_query_executor".to_string(),
+            u8::from(legacy).to_string(),
+        )?;
+        settings.set_setting("max_threads".to_string(), max_threads.to_string())?;
+    }
+
     let ctx = fixture.new_query_ctx().await?;
     let blocks = apply_block_pruning(
         snapshot.clone(),
