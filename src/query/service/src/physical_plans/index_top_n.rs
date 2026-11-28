@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use databend_common_base::base::Progress;
@@ -39,9 +40,7 @@ use super::EvalScalar;
 use super::Filter;
 use super::FinalTopNPlan;
 use super::PartialTopNPlan;
-use super::PhysicalPlan;
 use super::PhysicalPlanCast;
-use super::RowFetch;
 use super::TableScan;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextProgress;
@@ -86,20 +85,10 @@ pub(super) fn try_build(plan: &FinalTopNPlan, builder: &mut PipelineBuilder) -> 
     Ok(true)
 }
 
-pub(crate) struct LazyIndexTopK {
-    pub candidates_per_block: usize,
-    pub blocks: usize,
-}
-
-/// Size of a complete covering index Top-K, optionally followed by a local row
-/// fetch. Eager scored partitions are handled by `IndexTopNSource` instead.
-pub(crate) fn lazy_index_top_k(root: &PhysicalPlan) -> Option<LazyIndexTopK> {
-    let root = match RowFetch::from_physical_plan(root) {
-        Some(fetch) if fetch.enable_block_id_repartition => return None,
-        Some(fetch) => &fetch.input,
-        None => root,
-    };
-    let input = covering_input(FinalTopNPlan::from_physical_plan(root)?)?;
+/// Only small, lazy FTS/vector merges benefit from a single lane in the search
+/// benchmark. Eager scored partitions already take the `IndexTopNSource` path.
+pub(super) fn max_threads_hint(plan: &FinalTopNPlan) -> Option<NonZeroU64> {
+    let input = covering_input(plan)?;
     let source = &input.scan.source;
     let push = source.push_downs.as_ref()?;
     if source.parts.partitions_type() != PartInfoType::LazyLevel
@@ -107,10 +96,7 @@ pub(crate) fn lazy_index_top_k(root: &PhysicalPlan) -> Option<LazyIndexTopK> {
     {
         return None;
     }
-    Some(LazyIndexTopK {
-        candidates_per_block: push.limit?,
-        blocks: scan_block_bound(source)?,
-    })
+    (push.limit? <= 100 && (2..=4).contains(&scan_block_bound(source)?)).then_some(NonZeroU64::MIN)
 }
 
 struct CoveringInput<'a> {

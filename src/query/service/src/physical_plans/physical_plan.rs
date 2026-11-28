@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -76,6 +77,12 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     fn get_meta(&self) -> &PhysicalPlanMeta;
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta;
+
+    /// A thread cap for executing the whole plan rooted here. Do not search the
+    /// children by default: a bounded input says nothing about a join or union.
+    fn max_threads_hint(&self) -> Option<NonZeroU64> {
+        None
+    }
 
     // For methods with default implementations, the default implementation is usually sufficient.
     fn get_id(&self) -> u32 {

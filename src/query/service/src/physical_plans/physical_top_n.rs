@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -202,6 +203,10 @@ impl IPhysicalPlan for PartialTopNPlan {
 
 #[typetag::serde]
 impl IPhysicalPlan for FinalTopNPlan {
+    fn max_threads_hint(&self) -> Option<NonZeroU64> {
+        super::index_top_n::max_threads_hint(self)
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

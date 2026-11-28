@@ -18,7 +18,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 
-use crate::interpreters::ExecutionScope;
 use crate::interpreters::common::log_query_finished;
 use crate::interpreters::common::log_query_lineage;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
@@ -46,8 +45,8 @@ pub struct QueryFinishHooks {
     pub collect_profiles: bool,
     /// Run post-query cleanup hooks (CTE temp tables, spill files, disk temp dirs).
     pub run_hooks: bool,
-    /// Only statement execution owns query settings and start/finish reporting.
-    pub scope: ExecutionScope,
+    /// Emit the query-finish log, metrics, and profile JSON.
+    pub log_finished: bool,
 }
 
 impl QueryFinishHooks {
@@ -56,7 +55,7 @@ impl QueryFinishHooks {
         Self {
             collect_profiles: true,
             run_hooks: true,
-            scope: ExecutionScope::Statement,
+            log_finished: true,
         }
     }
 
@@ -67,7 +66,7 @@ impl QueryFinishHooks {
         Self {
             collect_profiles: true,
             run_hooks: false,
-            scope: ExecutionScope::Nested,
+            log_finished: false,
         }
     }
 
@@ -79,7 +78,7 @@ impl QueryFinishHooks {
         Self {
             collect_profiles: true,
             run_hooks: true,
-            scope: ExecutionScope::Nested,
+            log_finished: false,
         }
     }
 
@@ -102,7 +101,7 @@ impl QueryFinishHooks {
             } else {
                 Ok(())
             };
-            if self.scope == ExecutionScope::Statement {
+            if self.log_finished {
                 log_query_finished(&ctx, info.res.clone().err());
                 if info.res.is_ok() {
                     log_query_lineage(&ctx);

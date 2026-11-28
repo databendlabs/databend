@@ -50,7 +50,6 @@ use serde_json;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use crate::interpreters::ExecutionScope;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFinishHooks;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
@@ -102,15 +101,37 @@ impl Interpreter for ExplainInterpreter {
         false
     }
 
-    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
-        self.execute2_in_scope(ExecutionScope::Nested)
+    fn prepare_statement(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ignore_result,
+            ..
+        } = &self.plan
+        else {
+            return self.execute2();
+        };
+        match self.kind {
+            ExplainKind::Pipeline => Box::pin(async {
+                let blocks = self.explain_pipeline(|i| i.prepare_statement()).await?;
+                PipelineBuildResult::from_blocks(blocks)
+            }),
+            ExplainKind::AnalyzePlan | ExplainKind::Graphical => Box::pin(async move {
+                let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true)
+                    .build(s_expr.planned()?.expr(), bind_context.column_set())
+                    .await?;
+                apply_pipeline_width(&self.ctx, &plan)?;
+                PipelineBuildResult::from_blocks(
+                    self.analyze_plan(plan, metadata, *ignore_result).await?,
+                )
+            }),
+            _ => self.execute2(),
+        }
     }
 
     #[async_backtrace::framed]
-    fn execute2_in_scope(
-        &self,
-        scope: ExecutionScope,
-    ) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let options = FormatOptions {
                 verbose: self.config.verbose,
@@ -241,7 +262,6 @@ impl Interpreter for ExplainInterpreter {
                         ..
                     } => {
                         self.explain_analyze(
-                            scope,
                             s_expr.planned()?.expr(),
                             metadata,
                             bind_context.column_set(),
@@ -255,7 +275,6 @@ impl Interpreter for ExplainInterpreter {
                         let mutation_build_info =
                             build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
                         self.explain_analyze(
-                            ExecutionScope::Nested,
                             s_expr.planned()?.child(0)?,
                             &plan.metadata,
                             *plan.required_columns.clone(),
@@ -269,42 +288,7 @@ impl Interpreter for ExplainInterpreter {
                     ))?,
                 },
 
-                ExplainKind::Pipeline => {
-                    // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
-                    // don't take real actions. for now we fix #13657 like below.
-                    let previous_query_lineage = self.ctx.get_query_lineage();
-                    let mut pipeline = match &self.plan {
-                        Plan::Query { .. } | Plan::DataMutation { .. } => {
-                            let result = async {
-                                let interpreter =
-                                    InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
-                                interpreter.execute2_in_scope(scope).await
-                            }
-                            .await;
-                            self.ctx.attach_query_lineage(previous_query_lineage);
-                            result?
-                        }
-                        _ => {
-                            self.ctx.attach_query_lineage(previous_query_lineage);
-                            PipelineBuildResult::create()
-                        }
-                    };
-
-                    // The explain pipeline does not require executing on_init and on_finished.
-                    let _ = pipeline.main_pipeline.take_on_init();
-                    let _ = pipeline.main_pipeline.take_on_finished();
-
-                    self.ctx
-                        .get_exchange_manager()
-                        .on_finished_query(&self.ctx.get_id(), None);
-
-                    for pipeline in &mut pipeline.sources_pipelines {
-                        let _ = pipeline.take_on_init();
-                        let _ = pipeline.take_on_finished();
-                    }
-
-                    Self::format_pipeline(&pipeline)
-                }
+                ExplainKind::Pipeline => self.explain_pipeline(|i| i.execute2()).await?,
 
                 ExplainKind::Fragments => match &self.plan {
                     Plan::Query {
@@ -451,6 +435,38 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    async fn explain_pipeline(
+        &self,
+        prepare: fn(
+            &dyn Interpreter,
+        ) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>>,
+    ) -> Result<Vec<DataBlock>> {
+        let mut pipeline = match &self.plan {
+            Plan::Query { .. } | Plan::DataMutation { .. } => {
+                let previous = self.ctx.get_query_lineage();
+                let result = async {
+                    let interpreter = InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
+                    prepare(interpreter.as_ref()).await
+                }
+                .await;
+                self.ctx.attach_query_lineage(previous);
+                result?
+            }
+            _ => PipelineBuildResult::create(),
+        };
+        // EXPLAIN PIPELINE displays the processors without running their hooks.
+        let _ = pipeline.main_pipeline.take_on_init();
+        let _ = pipeline.main_pipeline.take_on_finished();
+        self.ctx
+            .get_exchange_manager()
+            .on_finished_query(&self.ctx.get_id(), None);
+        for source in &mut pipeline.sources_pipelines {
+            let _ = source.take_on_init();
+            let _ = source.take_on_finished();
+        }
+        Ok(Self::format_pipeline(&pipeline))
+    }
+
     fn format_pipeline(build_res: &PipelineBuildResult) -> Vec<DataBlock> {
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
@@ -551,7 +567,6 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
-        scope: ExecutionScope,
         s_expr: &PExpr,
         metadata: &MetadataRef,
         required: ColumnSet,
@@ -562,8 +577,16 @@ impl ExplainInterpreter {
         if let Some(build_info) = mutation_build_info {
             builder.set_mutation_build_info(build_info);
         }
-        let mut plan = builder.build(s_expr, required).await?;
-        apply_pipeline_width(scope, &self.ctx, &plan)?;
+        let plan = builder.build(s_expr, required).await?;
+        self.analyze_plan(plan, metadata, ignore_result).await
+    }
+
+    async fn analyze_plan(
+        &self,
+        mut plan: PhysicalPlan,
+        metadata: &MetadataRef,
+        ignore_result: bool,
+    ) -> Result<Vec<DataBlock>> {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data

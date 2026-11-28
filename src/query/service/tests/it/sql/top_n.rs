@@ -334,6 +334,12 @@ async fn test_auto_pipeline_width_for_index_search() -> Result<()> {
     let parent = fixture.new_query_ctx().await?;
     let nested = ServiceQueryExecutor::new(QueryContext::create_from(&parent));
     nested.execute_query_with_sql_string(&fts).await?;
+    nested
+        .execute_query_with_sql_string(&format!("EXPLAIN PIPELINE {fts}"))
+        .await?;
+    nested
+        .execute_query_with_sql_string(&format!("EXPLAIN ANALYZE {fts}"))
+        .await?;
     assert!(
         !parent
             .get_shared_settings()
@@ -347,6 +353,30 @@ async fn test_auto_pipeline_width_for_index_search() -> Result<()> {
     .await?;
     assert!(outer.matches("TransformPartialTopN").count() > 1, "{outer}");
     assert_eq!(parent.get_settings().get_max_threads()?, 4);
+
+    let analyzed = fixture.new_query_ctx().await?;
+    execute_rows(analyzed.clone(), &format!("EXPLAIN ANALYZE {fts}")).await?;
+    assert_eq!(analyzed.get_settings().get_max_threads()?, 1);
+
+    // A search inside a branch cannot narrow a UNION ALL with unrelated work.
+    let union = fixture.new_query_ctx().await?;
+    execute_rows(
+        union.clone(),
+        &format!(
+            "SELECT * FROM ({fts}) AS hits UNION ALL SELECT to_float32(number) FROM numbers(32)"
+        ),
+    )
+    .await?;
+    assert_eq!(union.get_settings().get_max_threads()?, 4);
+
+    // A small result is not a bound on the amount of work in the plan.
+    let ordinary = fixture.new_query_ctx().await?;
+    execute_rows(
+        ordinary.clone(),
+        &format!("SELECT id FROM {table} WHERE id=1 LIMIT 1"),
+    )
+    .await?;
+    assert_eq!(ordinary.get_settings().get_max_threads()?, 4);
 
     // The session keeps its width.
     assert_eq!(

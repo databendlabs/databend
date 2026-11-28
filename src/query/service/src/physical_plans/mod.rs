@@ -70,7 +70,6 @@ mod runtime_filter;
 mod runtime_scan_filter;
 
 pub use databend_common_sql::executor::physical_plans::window::*;
-pub(crate) use index_top_n::lazy_index_top_k;
 pub use physical_add_stream_column::AddStreamColumn;
 pub use physical_aggregate_expand::AggregateExpand;
 pub use physical_aggregate_final::AggregateFinal;

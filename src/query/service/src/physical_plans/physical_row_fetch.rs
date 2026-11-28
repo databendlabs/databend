@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use databend_common_catalog::cache_policy::CachePolicy;
@@ -67,6 +68,13 @@ pub struct RowFetch {
 
 #[typetag::serde]
 impl IPhysicalPlan for RowFetch {
+    fn max_threads_hint(&self) -> Option<NonZeroU64> {
+        if self.enable_block_id_repartition {
+            return None;
+        }
+        self.input.max_threads_hint()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
