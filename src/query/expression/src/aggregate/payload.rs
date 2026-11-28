@@ -97,6 +97,71 @@ impl RowCursor {
     };
 }
 
+/// Where `Payload::move_rows_into` writes the next rows of a destination: the free rows of its
+/// writable page.
+struct MoveCursor {
+    /// The first row of the page, and the states of its first row.
+    base: *mut u8,
+    states: *mut u8,
+    /// The index of the page in its payload, the rows it held before, and the next row and
+    /// the end of its rows.
+    page: usize,
+    start: usize,
+    row: usize,
+    end: usize,
+}
+
+impl MoveCursor {
+    const EMPTY: MoveCursor = MoveCursor {
+        base: std::ptr::null_mut(),
+        states: std::ptr::null_mut(),
+        page: usize::MAX,
+        start: 0,
+        row: 0,
+        end: 0,
+    };
+
+    /// The free rows of the writable page of `dest`, none if it has no page or a full one.
+    fn open(dest: &mut Payload) -> MoveCursor {
+        match dest.current_write_page.checked_sub(1) {
+            Some(page) if dest.pages[page].rows < dest.row_per_page => Self::at(dest, page),
+            _ => Self::EMPTY,
+        }
+    }
+
+    /// The rows of the next page of `dest`, once its cursor was committed.
+    fn open_next(dest: &mut Payload) -> MoveCursor {
+        let (_, page) = dest.writable_page();
+        Self::at(dest, page)
+    }
+
+    fn at(dest: &mut Payload, page: usize) -> MoveCursor {
+        let offset = dest.row_layout.states.offset;
+        let data = &mut dest.pages[page];
+        let base = data.data.as_mut_ptr();
+        MoveCursor {
+            base,
+            states: unsafe { base.add(offset) },
+            page,
+            start: data.rows,
+            row: data.rows,
+            end: dest.row_per_page,
+        }
+    }
+
+    /// Count the rows written in the page, with their states, which moved with them.
+    fn commit(&self, dest: &mut Payload) {
+        if self.page == usize::MAX {
+            return;
+        }
+        let agg_len = dest.aggrs.len();
+        let page = &mut dest.pages[self.page];
+        page.rows = self.row;
+        page.initialized_states = self.row * agg_len;
+        dest.total_rows += self.row - self.start;
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum GroupRows<'a> {
     Columns(ProjectedBlock<'a>),
@@ -296,6 +361,124 @@ impl Payload {
 
     pub(super) fn data_ptr(&self, page: &Page, row: usize) -> RowPtr {
         page.row_ptr(row, self.tuple_size)
+    }
+
+    /// Move every row, with its states, to `dests[(hash & mask) >> shift]`, payloads of the same
+    /// group types and aggregates. The group values at `arena_offsets`, whose bytes are in an
+    /// arena, are copied into the arena of their destination; the other rows of this payload's
+    /// arena are not needed after. This payload is left holding rows whose states it does not
+    /// own.
+    pub(super) fn move_rows_into(
+        &mut self,
+        dests: &mut [Payload],
+        mask: u64,
+        shift: u64,
+        arena_offsets: &[usize],
+    ) {
+        debug_assert!(dests.iter().all(|d| d.tuple_size == self.tuple_size));
+        // The states change owner: give them up first, so that a panic below leaks them rather
+        // than dropping them twice.
+        self.row_layout.states_layout = None;
+        let tuple_size = self.tuple_size;
+        let hash_offset = self.row_layout.hash_offset;
+        let src_states = self.row_layout.states;
+        let state_size = src_states.size;
+        // The page each destination writes to, kept across the rows: a row is written at its
+        // address and its states at theirs, both from the row's number in the page.
+        let mut cursors = dests.iter_mut().map(MoveCursor::open).collect::<Vec<_>>();
+        for page in self.pages.iter() {
+            let base = page.base();
+            let states_base = unsafe { base.add(src_states.offset) };
+            for row in 0..page.rows {
+                let src = unsafe { base.add(row * tuple_size) };
+                let hash = unsafe { std::ptr::read_unaligned(src.add(hash_offset).cast::<u64>()) };
+                let bucket = ((hash & mask) >> shift) as usize;
+                let cursor = &mut cursors[bucket];
+                if cursor.row == cursor.end {
+                    let dest = &mut dests[bucket];
+                    cursor.commit(dest);
+                    *cursor = MoveCursor::open_next(dest);
+                }
+                // SAFETY: the cursor is at a free row of a page of the destination, of the same
+                // row and state sizes as this payload.
+                unsafe {
+                    let dst = cursor.base.add(cursor.row * tuple_size);
+                    copy_small(src, dst, tuple_size);
+                    copy_small(
+                        states_base.add(row * state_size),
+                        cursor.states.add(cursor.row * state_size),
+                        state_size,
+                    );
+                    if !arena_offsets.is_empty() {
+                        let mut dst = RowMut::new(dst);
+                        let src = RowPtr::new(src);
+                        let arena = &dests[bucket].arena;
+                        for &offset in arena_offsets {
+                            dst.write_bytes(offset, arena.alloc_slice_copy(src.read_bytes(offset)));
+                        }
+                    }
+                }
+                cursor.row += 1;
+            }
+        }
+        for (cursor, dest) in cursors.iter().zip(dests.iter_mut()) {
+            cursor.commit(dest);
+        }
+    }
+
+    /// Move `rows`, rows of this payload, with their states, to the end of `dest`, a payload of
+    /// the same group types and aggregates, copying their group values at `arena_offsets` into
+    /// the arena of `dest`; then drop `dropped`, the states of the other rows. This payload is left
+    /// owning no states.
+    pub(super) fn move_rows_to(
+        &mut self,
+        rows: &[RowPtr],
+        dropped: &[StateAddr],
+        dest: &mut Payload,
+        arena_offsets: &[usize],
+    ) {
+        debug_assert_eq!(dest.tuple_size, self.tuple_size);
+        // The states change owner: give them up first, so that a panic below leaks them rather
+        // than dropping them twice.
+        let states_layout = self.row_layout.states_layout.take();
+        let tuple_size = self.tuple_size;
+        let states = self.row_layout.states;
+        let mut cursor = MoveCursor::open(dest);
+        for row in rows {
+            if cursor.row == cursor.end {
+                cursor.commit(dest);
+                cursor = MoveCursor::open_next(dest);
+            }
+            // SAFETY: `row` is a row of this payload, and the cursor is at a free row of a page
+            // of `dest`, of the same row and state sizes.
+            unsafe {
+                let dst = cursor.base.add(cursor.row * tuple_size);
+                copy_small(row.as_ptr(), dst, tuple_size);
+                copy_small(
+                    states.ptr(row.as_ptr()),
+                    cursor.states.add(cursor.row * states.size),
+                    states.size,
+                );
+                let mut dst = RowMut::new(dst);
+                for &offset in arena_offsets {
+                    dst.write_bytes(offset, dest.arena.alloc_slice_copy(row.read_bytes(offset)));
+                }
+            }
+            cursor.row += 1;
+        }
+        cursor.commit(dest);
+        let Some(states_layout) = states_layout else {
+            return;
+        };
+        for (aggr, loc) in self.aggrs.iter().zip(states_layout.states_loc.iter()) {
+            if aggr.state().need_manual_drop() {
+                for addr in dropped {
+                    // SAFETY: the states of the rows not moved were initialized, and are
+                    // dropped once, here.
+                    unsafe { aggr.drop_state(AggrState::new(*addr, loc)) };
+                }
+            }
+        }
     }
 
     /// Calls `f` with the group hash of each row.
@@ -573,7 +756,7 @@ impl Payload {
         payloads
     }
 
-    fn empty_like(&self) -> Payload {
+    pub(super) fn empty_like(&self) -> Payload {
         let mut payload = Payload::new(
             self.arena.clone(),
             self.group_types.clone(),
@@ -737,6 +920,21 @@ impl Payload {
             )
             .collect();
         DataBlock::new(entries, 0)
+    }
+}
+
+/// Copy `len` bytes, with fixed-size moves for the sizes of common rows and states.
+#[inline(always)]
+unsafe fn copy_small(src: *const u8, dst: *mut u8, len: usize) {
+    unsafe {
+        match len {
+            0 => {}
+            8 => std::ptr::copy_nonoverlapping(src, dst, 8),
+            16 => std::ptr::copy_nonoverlapping(src, dst, 16),
+            24 => std::ptr::copy_nonoverlapping(src, dst, 24),
+            32 => std::ptr::copy_nonoverlapping(src, dst, 32),
+            _ => std::ptr::copy_nonoverlapping(src, dst, len),
+        }
     }
 }
 

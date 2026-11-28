@@ -25,6 +25,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::StagedGroups;
 use databend_common_expression::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::get_states_layout;
@@ -620,5 +621,134 @@ fn test_payload_flush_all_with_reused_state() {
         if m < (1 << radix_bits) {
             assert!(empty_payloads > 0);
         }
+    }
+}
+
+/// Raw rows staged by bucket, with arguments of numbers, decimals, dates and nullable values, give
+/// the groups of a hash table, also with states that need a drop, whether every row is a group of
+/// its own or rows repeat a group, in 16 buckets or in one.
+#[test]
+fn test_staged_groups_match_hash_table() {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DecimalColumn;
+
+    let price_size = DecimalSize::new_unchecked(15, 2);
+    let count = AGGR_REGISTRY
+        .resolve(RawAggregateCall {
+            name: "count",
+            params: &[],
+            args_type: &[],
+            distinct: false,
+            order_by: &[],
+        })
+        .unwrap();
+    let aggrs = vec![
+        count,
+        resolve_agg("sum", Int16Type::data_type()),
+        resolve_agg("avg", Int16Type::data_type()),
+        resolve_agg("uniq", Int16Type::data_type()),
+        resolve_agg("max", Float64Type::data_type()),
+        resolve_agg("sum", DataType::Decimal(price_size)),
+        resolve_agg("min", DataType::Date),
+        resolve_agg("count", Int32Type::data_type().wrap_nullable()),
+        resolve_agg("sum", Int32Type::data_type().wrap_nullable()),
+    ];
+    let group_types = vec![Int64Type::data_type(), Int32Type::data_type()];
+    // The first half groups of their own, the second half groups of 6 or 7 rows.
+    let n = 200_000usize;
+    let a = (0..n)
+        .map(|i| match i < n / 2 {
+            true => i as i64 * 7 - 300_000,
+            false => (i % 5_000) as i64,
+        })
+        .collect_vec();
+    let b = (0..n).map(|i| (i % 3) as i32 - 1).collect_vec();
+    let x = (0..n).map(|i| (i % 17) as i16 - 8).collect_vec();
+    let y = (0..n).map(|i| (i % 1_000) as i16).collect_vec();
+    let z = (0..n).map(|i| (i % 101) as f64 / 4.0).collect_vec();
+    let price = (0..n).map(|i| (i % 977) as i64 * 25 + 100).collect_vec();
+    let day = (0..n).map(|i| (i % 365) as i32 + 19_000).collect_vec();
+    // NULL in one row of 7.
+    let nullable = |start: usize, end: usize| -> BlockEntry {
+        Int32Type::from_data((start..end).map(|i| (i % 50) as i32).collect_vec())
+            .wrap_nullable(Some((start..end).map(|i| i % 7 != 3).collect()))
+            .into()
+    };
+    let blocks = (0..n)
+        .step_by(16_384)
+        .map(|start| {
+            let end = (start + 16_384).min(n);
+            let groups: Vec<BlockEntry> = vec![
+                Int64Type::from_data(a[start..end].to_vec()).into(),
+                Int32Type::from_data(b[start..end].to_vec()).into(),
+            ];
+            let args = vec![
+                vec![],
+                vec![Int16Type::from_data(x[start..end].to_vec()).into()],
+                vec![Int16Type::from_data(y[start..end].to_vec()).into()],
+                vec![Int16Type::from_data(x[start..end].to_vec()).into()],
+                vec![Float64Type::from_data(z[start..end].to_vec()).into()],
+                vec![
+                    Column::Decimal(DecimalColumn::Decimal64(
+                        price[start..end].to_vec().into(),
+                        price_size,
+                    ))
+                    .into(),
+                ],
+                vec![Column::Date(day[start..end].to_vec().into()).into()],
+                vec![nullable(start, end)],
+                vec![nullable(start, end)],
+            ];
+            (groups, args, end - start)
+        })
+        .collect_vec();
+
+    let mut table = AggregateHashTable::new(
+        group_types.clone(),
+        aggrs.clone(),
+        HashTableConfig::default(),
+        Arc::new(Bump::new()),
+    );
+    let mut flush_state = PayloadFlushState::default();
+    for (groups, args, rows) in &blocks {
+        let params: Vec<ProjectedBlock> = args.iter().map(|v| v.into()).collect();
+        table
+            .add_raw_groups(&mut flush_state, groups.into(), &params, *rows)
+            .unwrap();
+    }
+    let groups = table.payload.len();
+    let mut expected = vec![];
+    for payload in table.into_payloads() {
+        flush_state.clear();
+        while let Some(block) = payload.merge_result(&mut flush_state).unwrap() {
+            expected.push(block);
+        }
+    }
+    let expected = DataBlock::concat(&expected).unwrap();
+
+    // 16 buckets, or one of all the rows.
+    for bits in [4, 0] {
+        let mut staged = StagedGroups::new(group_types.clone(), aggrs.clone(), 0, bits);
+        let mut flush_state = PayloadFlushState::default();
+        for (groups, args, rows) in &blocks {
+            let params: Vec<ProjectedBlock> = args.iter().map(|v| v.into()).collect();
+            staged
+                .add_rows(
+                    &mut flush_state,
+                    groups.into(),
+                    &params,
+                    (&[]).into(),
+                    *rows,
+                )
+                .unwrap();
+        }
+        let mut output = staged.into_output(false);
+        let mut blocks = vec![];
+        while let Some((_, block)) = output.next_block(&mut flush_state).unwrap() {
+            blocks.push(block);
+        }
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_eq!(got.num_rows(), groups, "bits {bits}");
+        assert_block_value_sort_eq(&expected, &got);
     }
 }

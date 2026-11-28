@@ -786,6 +786,37 @@ impl AggregateHashTable {
     pub fn hash_index_resize_count(&self) -> usize {
         self.hash_index_resize_count
     }
+
+    /// Bytes of the rows and of the index, without the arenas.
+    pub fn table_bytes(&self) -> usize {
+        self.payload.memory_size() + HashIndex::allocated_bytes_for(self.hash_index.capacity())
+    }
+
+    /// Aggregate the rows of `group_columns`, of group hashes `hashes`: raw rows with `params`,
+    /// or else serialized states, `agg_states`, as `add_groups` does.
+    pub(super) fn add_hashed_groups(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
+        hashes: &[u64],
+        row_count: usize,
+    ) -> Result<()> {
+        let mut start = 0;
+        Self::for_each_batch(
+            group_columns,
+            params,
+            agg_states,
+            row_count,
+            |group_columns, params, agg_states, rows| {
+                state.group_hashes[..rows].copy_from_slice(&hashes[start..start + rows]);
+                start += rows;
+                self.probe_and_create(state, GroupRows::Columns(group_columns), rows, None);
+                self.accumulate_states(state, params, agg_states, rows)
+            },
+        )
+    }
 }
 
 #[cfg(test)]

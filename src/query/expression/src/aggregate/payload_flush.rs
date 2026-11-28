@@ -227,7 +227,10 @@ impl Payload {
         DataBlock::concat(&blocks)
     }
 
-    fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
+    pub(super) fn aggregate_flush(
+        &self,
+        state: &mut PayloadFlushState,
+    ) -> Result<Option<DataBlock>> {
         if !self.flush(state) {
             return Ok(None);
         }
@@ -270,6 +273,52 @@ impl Payload {
             flush_state.group_columns.push(col.into());
         }
         true
+    }
+
+    /// The block of `rows`, at most `BATCH_SIZE` rows of this payload: their aggregate results
+    /// then their group columns, as `merge_result` gives them, or with `serialize` their
+    /// serialized states then their group columns, as `aggregate_flush_all` does.
+    pub(super) fn flush_rows(
+        &self,
+        rows: &[RowPtr],
+        flush_state: &mut PayloadFlushState,
+        serialize: bool,
+    ) -> Result<DataBlock> {
+        let n = rows.len();
+        debug_assert!(n <= BATCH_SIZE);
+        flush_state.row_count = n;
+        flush_state.addresses[..n].copy_from_slice(rows);
+        if !self.aggrs.is_empty() {
+            for (place, row) in flush_state.state_places[..n].iter_mut().zip(rows) {
+                *place = row.state_addr(&self.row_layout);
+            }
+        }
+        let mut entries = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        if serialize {
+            if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
+                let mut builders = states_layout.serialize_builders(n);
+                for ((loc, func), builder) in states_layout
+                    .states_loc
+                    .iter()
+                    .zip(self.aggrs.iter())
+                    .zip(builders.iter_mut())
+                {
+                    let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+                    func.serialize(
+                        AggregateStateSet::new(&flush_state.state_places[..n], loc),
+                        builders,
+                    )?;
+                }
+                entries.extend(builders.into_iter().map(|builder| builder.build().into()));
+            }
+        } else {
+            super::payload::merge_flushed_states(&self.row_layout, &self.aggrs, flush_state)?;
+            entries.extend(flush_state.take_aggregate_results());
+        }
+        for col_index in 0..self.group_types.len() {
+            entries.push(self.flush_column(col_index, rows).into());
+        }
+        Ok(DataBlock::new(entries, n))
     }
 
     /// Scans the next rows like `flush`, without building their group columns.

@@ -33,6 +33,8 @@ use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::StagedGroups;
+use databend_common_expression::StagedOutput;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
@@ -59,6 +61,12 @@ const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 /// The bits of the group hash that partition a hash table; each spill depth takes the next
 /// `SPILL_BUCKET_BITS` of them.
 const PARTITION_HASH_BITS: u64 = 48;
+/// The bits of the group hash the staged groups are bucketed by, the spill bucket bits first, see
+/// `StagedGroups`.
+const STAGED_BUCKET_BITS: u64 = 6;
+/// The bytes of rows and index the hash table grows to before the groups are staged: a table up to
+/// this size stays in the caches, beyond it each insert waits on memory.
+const STAGE_TABLE_BYTES: usize = 4 << 20;
 
 /// An input block.
 enum FinalInput {
@@ -77,8 +85,16 @@ pub struct FinalAggregateTask {
     tx: Sender<FinalAggregateTask>,
 }
 
+/// The groups still to output, a block per `process`.
+enum PendingGroups {
+    /// The payloads of a hash table.
+    Payloads(VecDeque<Payload>),
+    /// Staged groups, aggregated a bucket at a time.
+    Staged(StagedOutput),
+}
+
 struct PendingOutput {
-    payloads: VecDeque<Payload>,
+    groups: PendingGroups,
     stream: BlockConcatStream,
 }
 
@@ -104,6 +120,9 @@ pub struct TransformFinalAggregate {
     // processors and most of them may never receive rows, so an eagerly allocated
     // hash table (and its hash index) per processor is pure overhead.
     hashtable: Option<AggregateHashTable>,
+    /// The groups, once the hash table outgrew the caches: see `stage_if_large`. At most one of
+    /// `hashtable` and `staged` holds groups.
+    staged: Option<StagedGroups>,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
     statistics: AggregationStatistics,
@@ -159,6 +178,7 @@ impl TransformFinalAggregate {
             spilled_occurred: false,
             pressure_outputs: 0,
             hashtable: None,
+            staged: None,
             params,
             flush_state,
             statistics: AggregationStatistics::new("FinalAggregate"),
@@ -195,7 +215,41 @@ impl TransformFinalAggregate {
     /// table is created by `hashtable_mut` when data arrives.
     fn reset_hashtable(&mut self, partition_depth: usize) {
         self.hashtable = None;
+        self.staged = None;
         self.current_partition_depth = partition_depth;
+    }
+
+    /// Whether anything was aggregated since the last reset.
+    fn has_groups(&self) -> bool {
+        self.hashtable.is_some() || self.staged.is_some()
+    }
+
+    /// Stage the groups once the hash table outgrows the caches: from then on every input is
+    /// kept by bucket of its group hash and aggregated a bucket at a time at the end, see
+    /// `StagedGroups`. The buckets start at the bits of the current spill depth, so that staged
+    /// groups spill by bucket. A table whose groups may repeat in the output is reset under
+    /// memory pressure instead, and keeps aggregating on arrival.
+    fn stage_if_large(&mut self) -> Result<()> {
+        let start_bit = self.current_partition_depth as u64 * SPILL_BUCKET_BITS;
+        if self.params.allow_duplicate_groups
+            || !StagedGroups::fits(start_bit, STAGED_BUCKET_BITS)
+            || self
+                .hashtable
+                .as_ref()
+                .is_none_or(|ht| ht.table_bytes() <= STAGE_TABLE_BYTES)
+        {
+            return Ok(());
+        }
+        let hashtable = self.hashtable.take().unwrap();
+        let mut staged = StagedGroups::new(
+            self.params.group_data_types.clone(),
+            self.params.aggregate_functions.clone(),
+            start_bit,
+            STAGED_BUCKET_BITS,
+        );
+        staged.add_table(hashtable, &mut self.flush_state)?;
+        self.staged = Some(staged);
+        Ok(())
     }
 
     // Takes the fields separately so callers can still borrow `flush_state`.
@@ -241,11 +295,6 @@ impl TransformFinalAggregate {
         self.statistics.record_block(rows, block.memory_size());
 
         if rows != 0 {
-            let ht = Self::hashtable_mut(
-                &mut self.hashtable,
-                &self.params,
-                self.current_partition_depth,
-            );
             let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
             let params = self
                 .params
@@ -253,7 +302,23 @@ impl TransformFinalAggregate {
                 .iter()
                 .map(|args| ProjectedBlock::project(args, &block))
                 .collect::<Vec<_>>();
-            ht.add_raw_groups(&mut self.flush_state, group_columns, &params, rows)?;
+            if let Some(staged) = self.staged.as_mut() {
+                staged.add_rows(
+                    &mut self.flush_state,
+                    group_columns,
+                    &params,
+                    (&[]).into(),
+                    rows,
+                )?;
+            } else {
+                let ht = Self::hashtable_mut(
+                    &mut self.hashtable,
+                    &self.params,
+                    self.current_partition_depth,
+                );
+                ht.add_raw_groups(&mut self.flush_state, group_columns, &params, rows)?;
+                self.stage_if_large()?;
+            }
         }
         self.check_spill(need_check_spill)
     }
@@ -261,24 +326,23 @@ impl TransformFinalAggregate {
     /// Merge the serialized states straight into the hash table: a serialized block holds the
     /// states, then the group keys.
     fn merge_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
-        let ht = Self::hashtable_mut(
-            &mut self.hashtable,
-            &self.params,
-            self.current_partition_depth,
-        );
         let block = &payload.data_block;
         let num_states = self.params.num_states();
         let states = (0..num_states).collect::<Vec<_>>();
         let groups =
             (num_states..num_states + self.params.group_data_types.len()).collect::<Vec<_>>();
-        ht.add_serialized_groups(
-            &mut self.flush_state,
-            ProjectedBlock::project(&groups, block),
-            ProjectedBlock::project(&states, block),
-            block.num_rows(),
-        )?;
-
-        Ok(())
+        let groups = ProjectedBlock::project(&groups, block);
+        let states = ProjectedBlock::project(&states, block);
+        if let Some(staged) = self.staged.as_mut() {
+            return staged.add_rows(&mut self.flush_state, groups, &[], states, block.num_rows());
+        }
+        let ht = Self::hashtable_mut(
+            &mut self.hashtable,
+            &self.params,
+            self.current_partition_depth,
+        );
+        ht.add_serialized_groups(&mut self.flush_state, groups, states, block.num_rows())?;
+        self.stage_if_large()
     }
 
     fn handle_aggregate_payload(
@@ -291,12 +355,17 @@ impl TransformFinalAggregate {
         self.statistics.record_block(rows, bytes);
 
         if rows != 0 {
-            let ht = Self::hashtable_mut(
-                &mut self.hashtable,
-                &self.params,
-                self.current_partition_depth,
-            );
-            ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+            if let Some(staged) = self.staged.as_mut() {
+                staged.add_payload(payload.payload, &mut self.flush_state)?;
+            } else {
+                let ht = Self::hashtable_mut(
+                    &mut self.hashtable,
+                    &self.params,
+                    self.current_partition_depth,
+                );
+                ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+                self.stage_if_large()?;
+            }
         }
 
         self.check_spill(need_check_spill)
@@ -307,7 +376,7 @@ impl TransformFinalAggregate {
             // The consumer merges repeated groups, so output the groups aggregated so far rather
             // than spilling them and merging them back at the end. Checked whatever the spill
             // level: this is what bounds the memory of the table.
-            if self.hashtable.is_some() && self.settings.check_spill() {
+            if self.has_groups() && self.settings.check_spill() {
                 let (rows, _) = self.output_hashtable(Some(self.output_stream()))?;
                 self.pressure_outputs += 1;
                 // The pressure may not come from this table: then the table is reset on
@@ -363,6 +432,17 @@ impl TransformFinalAggregate {
                 check_interrupt()?;
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.spiller.spill(bucket, data_block)?;
+            }
+        }
+        if let Some(staged) = self.staged.take() {
+            // Each bucket is aggregated, and its groups spilled to its spill bucket: the first
+            // bits of a staged bucket.
+            let mut output = staged.into_output(true);
+            let shift = output.bucket_bits() - SPILL_BUCKET_BITS;
+            while let Some((bucket, block)) = output.next_block(&mut self.flush_state)? {
+                check_interrupt()?;
+                self.spiller
+                    .spill(bucket >> shift, block.consume_convert_to_full())?;
             }
         }
         self.reset_hashtable(self.current_partition_depth);
@@ -435,38 +515,30 @@ impl TransformFinalAggregate {
         &mut self,
         mut output_stream: Option<BlockConcatStream>,
     ) -> Result<(usize, usize)> {
-        // No hash table means nothing was aggregated, so there is nothing to output.
-        let Some(hashtable) = self.hashtable.take() else {
+        // Nothing to output if nothing was aggregated.
+        let Some((mut groups, output_rows, hash_index_resizes)) = self.take_groups() else {
             return Ok((0, 0));
         };
-        let output_rows = hashtable.payload.len();
-        let hash_index_resizes = hashtable.hash_index_resize_count();
-        self.flush_state.clear();
 
         // With a top N above, only the first rows of each table are needed: the groups of
         // different tables are distinct.
         let mut top_n_blocks = Vec::new();
-        // Consuming the hash table drops its index before result materialization. Each
-        // payload owns its arena, so finishing one partition also releases its states.
-        for payload in hashtable.into_payloads() {
-            loop {
-                check_interrupt()?;
-                let Some(block) = payload.merge_result(&mut self.flush_state)? else {
-                    self.flush_state.clear();
-                    break;
-                };
-                if let Some((order_by, limit)) = &self.params.top_n {
-                    top_n_blocks.push(block);
-                    if top_n_blocks.len() >= TOP_N_PRUNE_BLOCKS {
-                        top_n_blocks = vec![sort_blocks(&top_n_blocks, order_by, *limit)?];
-                    }
-                } else if let Some(output_stream) = output_stream.as_mut() {
-                    if let Some(block) = output_stream.push(block) {
-                        self.output_data.push_back(block);
-                    }
-                } else {
+        loop {
+            check_interrupt()?;
+            let Some(block) = Self::next_group_block(&mut groups, &mut self.flush_state)? else {
+                break;
+            };
+            if let Some((order_by, limit)) = &self.params.top_n {
+                top_n_blocks.push(block);
+                if top_n_blocks.len() >= TOP_N_PRUNE_BLOCKS {
+                    top_n_blocks = vec![sort_blocks(&top_n_blocks, order_by, *limit)?];
+                }
+            } else if let Some(output_stream) = output_stream.as_mut() {
+                if let Some(block) = output_stream.push(block) {
                     self.output_data.push_back(block);
                 }
+            } else {
+                self.output_data.push_back(block);
             }
         }
         if let Some((order_by, limit)) = &self.params.top_n
@@ -485,32 +557,66 @@ impl TransformFinalAggregate {
         if self.params.top_n.is_some() {
             return self.output_hashtable(Some(stream));
         }
-        // No hash table means nothing was aggregated, so there is nothing to output.
-        let Some(hashtable) = self.hashtable.take() else {
+        // Nothing to output if nothing was aggregated.
+        let Some((groups, output_rows, hash_index_resizes)) = self.take_groups() else {
             return Ok((0, 0));
         };
+        self.pending_output = Some(PendingOutput { groups, stream });
+        Ok((output_rows, hash_index_resizes))
+    }
+
+    /// The groups aggregated since the last reset, to output: the payloads of the hash table, its
+    /// index dropped, or the staged groups. With the rows taken and the resizes of the index:
+    /// staged groups are counted by their rows, and have no index to resize.
+    fn take_groups(&mut self) -> Option<(PendingGroups, usize, usize)> {
+        self.flush_state.clear();
+        if let Some(staged) = self.staged.take() {
+            let rows = staged.len();
+            return Some((PendingGroups::Staged(staged.into_output(false)), rows, 0));
+        }
+        let hashtable = self.hashtable.take()?;
         let output_rows = hashtable.payload.len();
         let hash_index_resizes = hashtable.hash_index_resize_count();
-        self.flush_state.clear();
         // Consuming the hash table drops its index before result materialization.
-        self.pending_output = Some(PendingOutput {
-            payloads: hashtable.into_payloads().into(),
-            stream,
-        });
-        Ok((output_rows, hash_index_resizes))
+        Some((
+            PendingGroups::Payloads(hashtable.into_payloads().into()),
+            output_rows,
+            hash_index_resizes,
+        ))
+    }
+
+    /// The next block of results of `groups`, `None` once all were output.
+    fn next_group_block(
+        groups: &mut PendingGroups,
+        flush_state: &mut PayloadFlushState,
+    ) -> Result<Option<DataBlock>> {
+        match groups {
+            PendingGroups::Payloads(payloads) => {
+                while let Some(payload) = payloads.front() {
+                    if let Some(block) = payload.merge_result(flush_state)? {
+                        return Ok(Some(block));
+                    }
+                    // Each payload owns its arena, so dropping it releases its states.
+                    payloads.pop_front();
+                    flush_state.clear();
+                }
+                Ok(None)
+            }
+            PendingGroups::Staged(output) => {
+                Ok(output.next_block(flush_state)?.map(|(_, block)| block))
+            }
+        }
     }
 
     fn output_next_block(&mut self) -> Result<()> {
         let Some(pending) = self.pending_output.as_mut() else {
             return Ok(());
         };
-        while let Some(payload) = pending.payloads.front() {
+        loop {
             check_interrupt()?;
-            let Some(block) = payload.merge_result(&mut self.flush_state)? else {
-                // Each payload owns its arena, so dropping it releases its states.
-                pending.payloads.pop_front();
-                self.flush_state.clear();
-                continue;
+            let Some(block) = Self::next_group_block(&mut pending.groups, &mut self.flush_state)?
+            else {
+                break;
             };
             if let Some(block) = pending.stream.push(block) {
                 self.output_data.push_back(block);
@@ -723,6 +829,7 @@ mod tests {
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchema;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::UInt64Type;
@@ -923,6 +1030,94 @@ mod tests {
         assert!(!final_aggregate.spilled_occurred);
         assert!(final_aggregate.hashtable.is_none());
         assert_eq!(final_aggregate.pressure_outputs, 2);
+        drop(tx);
+        Ok(())
+    }
+
+    // A table that outgrows the caches is staged by bucket: every group is still output once,
+    // also when it came again after the groups were staged, and the output stays a block per
+    // process.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_final_aggregate_stages_large_tables() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let (tx, rx) = async_channel::unbounded();
+        let params = create_params()?;
+        let upstream = OutputPort::create();
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let downstream = InputPort::create();
+        // The ports are not yet used by a processor or executor.
+        unsafe {
+            connect(&input, &upstream);
+            connect(&downstream, &output);
+        }
+        input.set_need_data();
+
+        let mut processor = TransformFinalAggregate::try_create(
+            input,
+            output,
+            params,
+            0,
+            ctx,
+            tx.clone(),
+            rx,
+            Arc::new(AtomicU64::new(1)),
+        )?;
+        let groups = 400_000u64;
+        let mut output_keys = Vec::new();
+        let mut staged = false;
+        // Each block holds every group, in another order.
+        for round in 0..3u64 {
+            let keys = (0..groups)
+                .map(|i| (i * 7919 + round * 104_729) % groups)
+                .collect::<Vec<_>>();
+            downstream.set_need_data();
+            upstream.push_data(Ok(DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(keys),
+            ])));
+            assert!(matches!(processor.event()?, Event::Sync));
+            processor.process()?;
+            // Nothing is output before the input finishes.
+            assert!(matches!(processor.event()?, Event::NeedData));
+            staged |= processor
+                .as_any()
+                .downcast_mut::<TransformFinalAggregate>()
+                .unwrap()
+                .staged
+                .is_some();
+        }
+        assert!(staged, "a table of {groups} groups outgrows the caches");
+        upstream.finish();
+
+        loop {
+            downstream.set_need_data();
+            match processor.event()? {
+                Event::Sync => {
+                    processor.process()?;
+                    let final_aggregate = processor
+                        .as_any()
+                        .downcast_mut::<TransformFinalAggregate>()
+                        .unwrap();
+                    assert!(final_aggregate.output_data.len() <= 1);
+                }
+                Event::NeedConsume => {
+                    let block = downstream.pull_data().unwrap()?;
+                    let column = block.get_by_offset(0).to_column();
+                    output_keys.extend(
+                        UInt64Type::try_downcast_column(&column)
+                            .unwrap()
+                            .iter()
+                            .copied(),
+                    );
+                }
+                // All output: waiting on the task channel.
+                Event::Async => break,
+                event => panic!("unexpected event {event:?}"),
+            }
+        }
+        output_keys.sort_unstable();
+        assert_eq!(output_keys, (0..groups).collect::<Vec<_>>());
         drop(tx);
         Ok(())
     }

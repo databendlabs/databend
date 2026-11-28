@@ -26,6 +26,7 @@ mod payload_flush;
 mod payload_row;
 mod probe_state;
 mod row_ptr;
+mod staged_groups;
 
 pub use aggregate_function::AggregateCall;
 pub use aggregate_function_state::*;
@@ -39,6 +40,8 @@ pub use payload_flush::*;
 pub use probe_state::ProbeState;
 use probe_state::*;
 use row_ptr::*;
+pub use staged_groups::StagedGroups;
+pub use staged_groups::StagedOutput;
 
 use crate::aggregate::hash_index::HashIndex;
 
