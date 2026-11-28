@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::Action;
 use arrow_flight::ActionType;
@@ -35,6 +37,7 @@ use databend_common_exception::ErrorCode;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
+use log::info;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
 use tonic::Request;
@@ -47,6 +50,8 @@ use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
+use crate::servers::flight::v1::network::runtime_load::LoadSnapshot;
+use crate::servers::flight::v1::network::wire_format::flight_data_size;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -166,23 +171,42 @@ impl FlightService for DatabendQueryFlightService {
         // A response per request in flight.
         let (tx, rx) = async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
 
+        // This handler runs on the runtime polling the HTTP/2 connection.
+        let load = LoadSnapshot::capture(Some(tokio::runtime::Handle::current()));
         GlobalIORuntime::instance().spawn(async move {
-            while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
+            let mut stats = ReceiveStats::new(load);
+            let mut end = "closed by sender";
+            loop {
+                let waiting = Instant::now();
+                let Some(result) = stream.next().await else {
                     break;
                 };
+                let routing = Instant::now();
+                stats.wait_frame += routing - waiting;
+                let Ok(flight_data) = result else {
+                    end = "stream error";
+                    break;
+                };
+                stats.frames += 1;
+                stats.bytes += flight_data_size(&flight_data) as u64;
 
                 if router.route_frame(flight_data).await.is_err() {
-                    // Receiver closed
+                    end = "receiver closed";
                     break;
                 }
+                let ponging = Instant::now();
+                stats.route += ponging - routing;
 
                 // Send pong (empty response signals readiness for next ping)
                 if tx.send(Ok(FlightData::default())).await.is_err() {
+                    end = "response stream closed";
                     break;
                 }
+                stats.pong += ponging.elapsed();
             }
             // Dropping the router releases this connection's channel senders.
+            drop(router);
+            stats.log(&params, end);
         });
 
         Ok(RawResponse::new(Box::pin(rx)))
@@ -224,5 +248,57 @@ impl FlightService for DatabendQueryFlightService {
     #[async_backtrace::framed]
     async fn list_actions(&self, _: Request<Empty>) -> Response<Self::ListActionsStream> {
         Ok(RawResponse::new(Box::pin(stream::empty())))
+    }
+}
+
+/// Where the receiving task of one do_exchange connection spent its time.
+struct ReceiveStats {
+    started: Instant,
+    load: LoadSnapshot,
+    frames: u64,
+    bytes: u64,
+    /// Waiting for the next frame: the network, HTTP/2, and the sender.
+    wait_frame: Duration,
+    /// Routing frames to the receive queues, including waits for receive quota.
+    route: Duration,
+    /// Handing pongs to the response stream.
+    pong: Duration,
+}
+
+impl ReceiveStats {
+    fn new(load: LoadSnapshot) -> Self {
+        ReceiveStats {
+            started: Instant::now(),
+            load,
+            frames: 0,
+            bytes: 0,
+            wait_frame: Duration::ZERO,
+            route: Duration::ZERO,
+            pong: Duration::ZERO,
+        }
+    }
+
+    fn log(&self, params: &crate::servers::flight::DoExchangeParams, end: &str) {
+        let elapsed = self.started.elapsed();
+        let rate = match elapsed.as_secs_f64() {
+            secs if secs > 0.0 => self.bytes as f64 / secs / 1e6,
+            _ => 0.0,
+        };
+        info!(
+            "[EXCHANGE-RECV] query {} exchange {} from {} #{}: {}, bytes={} frames={} elapsed={:?} rate={:.1}MB/s wait_frame={:?} route={:?} pong={:?} {}",
+            params.query_id,
+            params.exchange_id,
+            params.source_node_id,
+            params.lane,
+            end,
+            self.bytes,
+            self.frames,
+            elapsed,
+            rate,
+            self.wait_frame,
+            self.route,
+            self.pong,
+            self.load.elapsed(),
+        );
     }
 }

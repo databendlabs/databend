@@ -1308,6 +1308,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),
                 }),
+                ("exchange_connections_per_node", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Overrides the number of connections a broadcast or hash shuffle exchange opens to each node; 0 lets Databend choose, which is currently one.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=64)),
+                }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Deprecated: aggregating index refresh is disabled",

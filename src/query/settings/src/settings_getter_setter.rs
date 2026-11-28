@@ -1152,6 +1152,11 @@ impl Settings {
         Ok(self.try_get_u64("exchange_recv_queue_bytes")? as usize)
     }
 
+    /// 0 lets Databend choose the number of connections.
+    pub fn get_exchange_connections_per_node(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_connections_per_node")? as usize)
+    }
+
     pub fn get_network_policy(&self) -> Result<String> {
         self.try_get_string("network_policy")
     }

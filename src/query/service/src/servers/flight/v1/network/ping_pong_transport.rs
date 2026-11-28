@@ -24,6 +24,7 @@ use async_channel::Sender;
 use async_channel::TrySendError;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::Runtime;
+use databend_common_grpc::SocketProbe;
 use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
@@ -31,6 +32,9 @@ use futures::stream::BoxStream;
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tonic::Status;
+use tonic::transport::Channel;
+
+use super::wire_format::flight_data_size;
 
 pub const REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE: &str =
     "Aborted query, because the remote flight channel is closed.";
@@ -61,13 +65,53 @@ pub trait PingPongCallback: Send + Sync + 'static {
     fn on_closed(&self);
 }
 
+/// How the connection of a transport was set up, kept for its statistics.
+pub struct ConnectionTrace {
+    /// Index of the connection among the connections of the exchange to the same node.
+    pub lane: usize,
+    /// Creating the channel: name resolution, TCP connect, TLS and HTTP/2 handshakes.
+    pub channel_time: Duration,
+    /// Opening the do_exchange stream, a round trip to the server.
+    pub open_time: Duration,
+    pub probe: SocketProbe,
+    /// Keeps the connection open until its statistics are read.
+    pub channel: Channel,
+    /// The runtime polling the connection, the one it was created on.
+    pub runtime: tokio::runtime::Handle,
+}
+
+/// Requests sent on a connection and their responses.
+#[derive(Default)]
+struct SendLog {
+    /// Send times of the requests in flight; responses arrive in request order.
+    send_times: VecDeque<Instant>,
+    frames: u64,
+    bytes: u64,
+    rtt_total: Duration,
+    rtt_max: Duration,
+    first_send: Option<Instant>,
+    last_response: Option<Instant>,
+}
+
+/// Snapshot of the requests a connection sent, see [`PingPongTransportInner::send_stats`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SendStats {
+    /// Frames answered by a response.
+    pub frames: u64,
+    /// Bytes of the frames sent.
+    pub bytes: u64,
+    pub rtt_total: Duration,
+    pub rtt_max: Duration,
+    /// From the first send to the latest response.
+    pub active: Duration,
+}
+
 pub struct PingPongTransportInner {
     /// Requests awaiting their responses, at most `max_in_flight`.
     in_flight: AtomicUsize,
     /// The request channel's capacity, so a held slot always fits in it.
     max_in_flight: usize,
-    /// Send times of the requests in flight; responses arrive in request order.
-    send_times: Mutex<VecDeque<Instant>>,
+    send_log: Mutex<SendLog>,
     send_tx: Sender<FlightData>,
     local_node_id: String,
     remote_node_id: String,
@@ -83,6 +127,7 @@ pub struct PingPongTransport {
     pub num_threads: usize,
     inner: Arc<PingPongTransportInner>,
     response_stream: Mutex<Option<BoxStream<'static, Result<FlightData, Status>>>>,
+    trace: Option<ConnectionTrace>,
 }
 
 impl Drop for PingPongTransport {
@@ -101,11 +146,32 @@ impl std::ops::Deref for PingPongTransport {
 
 impl PingPongTransportInner {
     pub fn get_rtt(&self) -> Duration {
-        self.send_times
-            .lock()
-            .pop_front()
-            .map(|t| t.elapsed())
-            .unwrap_or_default()
+        let mut log = self.send_log.lock();
+        let Some(sent) = log.send_times.pop_front() else {
+            return Duration::default();
+        };
+        let now = Instant::now();
+        let rtt = now.saturating_duration_since(sent);
+        log.frames += 1;
+        log.rtt_total += rtt;
+        log.rtt_max = log.rtt_max.max(rtt);
+        log.last_response = Some(now);
+        rtt
+    }
+
+    pub fn send_stats(&self) -> SendStats {
+        let log = self.send_log.lock();
+        let active = match (log.first_send, log.last_response) {
+            (Some(first), Some(last)) => last.saturating_duration_since(first),
+            _ => Duration::default(),
+        };
+        SendStats {
+            frames: log.frames,
+            bytes: log.bytes,
+            rtt_total: log.rtt_total,
+            rtt_max: log.rtt_max,
+            active,
+        }
     }
     /// Try to send data through the exchange.
     ///
@@ -135,20 +201,24 @@ impl PingPongTransportInner {
     /// Each queued request holds a slot and the queue holds one request per slot,
     /// so a full request queue while holding a slot is a protocol invariant violation.
     pub(crate) fn send_frame(&self, data: FlightData) -> Result<(), Status> {
+        let size = flight_data_size(&data) as u64;
         // The lock orders the send time with the request, as responses follow requests.
-        let mut send_times = self.send_times.lock();
+        let mut log = self.send_log.lock();
         match self.send_tx.try_send(data) {
             Ok(_) => {
-                send_times.push_back(Instant::now());
+                let now = Instant::now();
+                log.send_times.push_back(now);
+                log.first_send.get_or_insert(now);
+                log.bytes += size;
                 Ok(())
             }
             Err(TrySendError::Closed(_)) => {
-                drop(send_times);
+                drop(log);
                 self.release_send_slot();
                 Err(Status::aborted(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE))
             }
             Err(TrySendError::Full(_)) => {
-                drop(send_times);
+                drop(log);
                 self.release_send_slot();
                 Err(Status::internal(
                     "Flight request queue is full while holding the send slot",
@@ -175,7 +245,7 @@ impl PingPongTransport {
         let inner = Arc::new(PingPongTransportInner {
             in_flight: AtomicUsize::new(0),
             max_in_flight: send_tx.capacity().unwrap_or(1).max(1),
-            send_times: Mutex::new(VecDeque::new()),
+            send_log: Mutex::new(SendLog::default()),
             send_tx,
             local_node_id: local_node_id.into(),
             remote_node_id: remote_node_id.into(),
@@ -186,7 +256,17 @@ impl PingPongTransport {
             inner,
             num_threads,
             response_stream: Mutex::new(Some(Box::pin(stream))),
+            trace: None,
         }
+    }
+
+    pub fn with_trace(mut self, trace: ConnectionTrace) -> Self {
+        self.trace = Some(trace);
+        self
+    }
+
+    pub fn trace(&self) -> Option<&ConnectionTrace> {
+        self.trace.as_ref()
     }
 
     pub fn local_node_id(&self) -> &str {
@@ -444,5 +524,36 @@ mod tests {
         join_result
             .expect("receiver task should finish after the response stream closes")
             .expect("receiver task should not panic");
+    }
+
+    #[tokio::test]
+    async fn test_ping_pong_send_stats() {
+        let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
+        assert_eq!(exchange.send_stats().frames, 0);
+
+        assert!(
+            exchange
+                .try_send_frame(make_flight_data(10))
+                .unwrap()
+                .is_none()
+        );
+        let _ = send_rx.recv().await.unwrap();
+        let stats = exchange.send_stats();
+        assert_eq!(stats.bytes, 10);
+        // A frame is counted once answered.
+        assert_eq!(stats.frames, 0);
+
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let rtt = exchange.get_rtt();
+        assert!(rtt >= Duration::from_millis(5));
+        let stats = exchange.send_stats();
+        assert_eq!(stats.frames, 1);
+        assert_eq!(stats.rtt_total, rtt);
+        assert_eq!(stats.rtt_max, rtt);
+        assert!(stats.active >= rtt);
+
+        // A response without a request in flight is not counted.
+        assert_eq!(exchange.get_rtt(), Duration::ZERO);
+        assert_eq!(exchange.send_stats().frames, 1);
     }
 }

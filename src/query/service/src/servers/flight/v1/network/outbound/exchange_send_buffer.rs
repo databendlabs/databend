@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::fmt::Write;
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -24,6 +26,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::info;
 use parking_lot::Mutex;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -36,6 +39,7 @@ use super::super::ping_pong_transport::PingPongCallback;
 use super::super::ping_pong_transport::PingPongResponse;
 use super::super::ping_pong_transport::PingPongTransport;
 use super::super::ping_pong_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use super::super::runtime_load::LoadSnapshot;
 use super::super::wire_format::flight_data_size;
 use super::super::wire_format::merge_flight_data_batch;
 use crate::servers::flight::FlightOperation;
@@ -85,13 +89,25 @@ struct PendingSendItem {
     permit: OwnedSemaphorePermit,
 }
 
-/// Pending encoded items for one destination node, protected by its state lock.
+/// Pending encoded items for one connection, protected by its state lock.
 #[derive(Default)]
 struct PendingSendQueue {
     items: VecDeque<PendingSendItem>,
+    /// Size of `items`, which picks the least loaded connection to a node.
+    bytes: usize,
 }
 
 impl PendingSendQueue {
+    fn push(&mut self, item: PendingSendItem) {
+        self.bytes += flight_data_size(&item.data);
+        self.items.push_back(item);
+    }
+
+    fn clear(&mut self) {
+        self.items.clear();
+        self.bytes = 0;
+    }
+
     /// Take one batch and transfer its permits to the in-flight frame.
     /// An oversized first item must make progress, but is never batched with others.
     fn pop_batch(
@@ -109,6 +125,7 @@ impl PendingSendQueue {
             }
             let PendingSendItem { data, permit } = self.items.pop_front().unwrap();
             total += size;
+            self.bytes = self.bytes.saturating_sub(size);
             items.push(data);
             permits.push(permit);
             if total >= max_batch_bytes {
@@ -134,6 +151,8 @@ struct RemoteInstanceState {
     in_flight_bytes: usize,
     /// Since when queued data waits for room in flight.
     held_back_since: Option<Instant>,
+    /// Time queued data waited for room in flight, for the exchange summary.
+    held_back_total: Duration,
     /// First terminal error; checked under the same lock before every enqueue.
     last_error: Option<ErrorCode>,
 }
@@ -163,7 +182,9 @@ impl RemoteInstanceState {
 
         let (flight, permits) = self.pending.pop_batch(max_batch_bytes)?;
         if let Some(since) = self.held_back_since.take() {
-            profile.record_held_back(since.elapsed());
+            let held_back = since.elapsed();
+            self.held_back_total += held_back;
+            profile.record_held_back(held_back);
         }
         self.in_flight_bytes += permits.iter().map(|p| p.num_permits()).sum::<usize>();
         self.in_flight.push_back(permits);
@@ -189,14 +210,14 @@ impl RemoteInstanceState {
             self.last_error = Some(error);
         }
 
-        self.pending.items.clear();
+        self.pending.clear();
         self.in_flight.clear();
         self.in_flight_bytes = 0;
         self.held_back_since = None;
     }
 }
 
-/// Per-destination remote instance.
+/// One connection to a destination node, which may have several.
 /// Each RemoteInstance has its own lock for fine-grained concurrency.
 struct RemoteInstance {
     state: Mutex<RemoteInstanceState>,
@@ -212,6 +233,7 @@ impl RemoteInstance {
                 in_flight: VecDeque::new(),
                 in_flight_bytes: 0,
                 held_back_since: None,
+                held_back_total: Duration::ZERO,
                 last_error: None,
             }),
         }
@@ -251,8 +273,73 @@ struct ExchangeSendBufferState {
     max_in_flight_bytes: usize,
     profile: SendProfile,
 
-    /// Pre-allocated remote instances, indexed by destination index
+    /// Pre-allocated remote instances, one per connection, indexed by connection index.
     remotes: Vec<RemoteInstance>,
+    /// The connections of each destination node, indexed by destination index.
+    destinations: Vec<Range<usize>>,
+    /// Names the exchange in its summary log; no summary without it.
+    summary_label: Option<String>,
+    /// Process load when the exchange started, for its summary.
+    load: Option<LoadSnapshot>,
+}
+
+impl Drop for ExchangeSendBufferState {
+    /// Runs once every connection has finished and the buffer was released.
+    /// The transports hold their channels, so the sockets are still open.
+    fn drop(&mut self) {
+        let Some(label) = &self.summary_label else {
+            return;
+        };
+
+        let mut summary = String::new();
+        for remote in &self.remotes {
+            let stats = remote.exchange.send_stats();
+            let held_back = remote.state.lock().held_back_total;
+            let rate = match stats.active.as_secs_f64() {
+                secs if secs > 0.0 => stats.bytes as f64 / secs / 1e6,
+                _ => 0.0,
+            };
+            let rtt_avg = match stats.frames {
+                0 => Duration::ZERO,
+                frames => stats.rtt_total / frames as u32,
+            };
+            let _ = write!(summary, "; to {}", remote.exchange.remote_node_id());
+            if let Some(trace) = remote.exchange.trace() {
+                let _ = write!(
+                    summary,
+                    " #{}: channel={:?} tcp_connect={:?} tcp_connects={} open={:?}",
+                    trace.lane,
+                    trace.channel_time,
+                    trace.probe.last_connect_time(),
+                    trace.probe.connects(),
+                    trace.open_time,
+                );
+            }
+            let _ = write!(
+                summary,
+                " bytes={} frames={} active={:?} rate={:.1}MB/s rtt_avg={:?} rtt_max={:?} held_back={:?}",
+                stats.bytes, stats.frames, stats.active, rate, rtt_avg, stats.rtt_max, held_back,
+            );
+            if let Some(info) = remote.exchange.trace().and_then(|t| t.probe.tcp_info()) {
+                let _ = write!(summary, " tcp: {}", info);
+            }
+        }
+
+        let load = match &self.load {
+            Some(load) => load.elapsed().to_string(),
+            None => String::new(),
+        };
+        info!(
+            "[EXCHANGE-SEND] {}: {} nodes, {} connections, frame_bytes={} max_in_flight_bytes={} per connection, {}{}",
+            label,
+            self.destinations.len(),
+            self.remotes.len(),
+            self.config.max_batch_bytes,
+            self.max_in_flight_bytes,
+            load,
+            summary,
+        );
+    }
 }
 
 impl ExchangeSendBufferState {
@@ -326,8 +413,9 @@ impl ExchangeSendBufferState {
     }
 }
 
-/// Callback for handling PingPong responses.
+/// Callback for handling PingPong responses of one connection.
 struct SendBufferCallback {
+    /// Connection index.
     dest_idx: usize,
     buffer: Arc<ExchangeSendBufferState>,
 }
@@ -387,6 +475,33 @@ impl ExchangeSendBuffer {
         config: ExchangeSendBufferConfig,
         runtime: &Runtime,
     ) -> Result<Self> {
+        let destinations = exchanges.into_iter().map(|e| vec![e]).collect();
+        Self::create_with_connections(destinations, config, runtime, None)
+    }
+
+    /// Create a buffer whose destination nodes have one or more connections each.
+    /// Items for a node go to its connection with the fewest bytes queued and in
+    /// flight. `summary_label` names the exchange in the summary logged when all
+    /// connections have finished.
+    pub fn create_with_connections(
+        destinations: Vec<Vec<PingPongTransport>>,
+        config: ExchangeSendBufferConfig,
+        runtime: &Runtime,
+        summary_label: Option<String>,
+    ) -> Result<Self> {
+        let mut ranges = Vec::with_capacity(destinations.len());
+        let mut exchanges = Vec::new();
+        for connections in destinations {
+            if connections.is_empty() {
+                return Err(ErrorCode::Internal(
+                    "Exchange destination node without connections",
+                ));
+            }
+            let start = exchanges.len();
+            exchanges.extend(connections);
+            ranges.push(start..exchanges.len());
+        }
+
         let max_permits = config.max_queued_bytes.clamp(1, u32::MAX as usize);
         let semaphore = Arc::new(Semaphore::new(max_permits));
         let config = ExchangeSendBufferConfig {
@@ -395,6 +510,12 @@ impl ExchangeSendBuffer {
         };
         let max_in_flight_bytes = config.max_batch_bytes * MAX_FRAMES_IN_FLIGHT;
 
+        let load = summary_label.as_ref().map(|_| {
+            let runtime = exchanges
+                .iter()
+                .find_map(|e| e.trace().map(|t| t.runtime.clone()));
+            LoadSnapshot::capture(runtime)
+        });
         let remotes = exchanges.into_iter().map(RemoteInstance::new).collect();
 
         let shared_state = Arc::new(ExchangeSendBufferState {
@@ -402,6 +523,9 @@ impl ExchangeSendBuffer {
             max_in_flight_bytes,
             profile: SendProfile::default(),
             remotes,
+            destinations: ranges,
+            summary_label,
+            load,
         });
         for (dest_idx, remote) in shared_state.remotes.iter().enumerate() {
             let _ = remote.exchange.start(
@@ -427,11 +551,8 @@ impl ExchangeSendBuffer {
     /// for a network response. Each item holds queue quota proportional to its
     /// size until the frame carrying it is answered.
     pub async fn enqueue_items(&self, dest_idx: usize, items: Vec<FlightData>) -> Result<()> {
-        let remote = &self.state.remotes[dest_idx];
-
-        if let Some(error) = remote.state.lock().last_error.clone() {
-            return Err(error);
-        }
+        let connection_idx = self.pick_connection(dest_idx)?;
+        let remote = &self.state.remotes[connection_idx];
 
         // Called by the sending processors, unlike the network callbacks.
         self.state.profile.capture();
@@ -444,7 +565,7 @@ impl ExchangeSendBuffer {
                 Ok(permit) => permit,
                 Err(_) => {
                     // Queue is full: send what is queued before waiting for quota.
-                    self.try_flush(dest_idx);
+                    self.try_flush(connection_idx);
                     let start = Instant::now();
                     let permit = self
                         .semaphore
@@ -466,30 +587,66 @@ impl ExchangeSendBuffer {
                 return Err(error);
             }
 
-            state
-                .pending
-                .items
-                .push_back(PendingSendItem { data, permit });
+            state.pending.push(PendingSendItem { data, permit });
         }
 
-        self.try_flush(dest_idx);
+        self.try_flush(connection_idx);
 
-        match remote.state.lock().last_error.clone() {
+        // Another connection of the node may have failed while this call waited
+        // for quota; the node's data is lost with it, so report its error too.
+        match self.destination_error(dest_idx) {
             Some(error) => Err(error),
             None => Ok(()),
         }
     }
 
-    /// Send queued data through the destination's free slots. Data left queued is
-    /// sent by response callbacks.
-    fn try_flush(&self, dest_idx: usize) {
-        self.state.flush_remote(dest_idx, false);
+    /// The error of the first closed connection of destination `dest_idx`.
+    fn destination_error(&self, dest_idx: usize) -> Option<ErrorCode> {
+        self.state.destinations[dest_idx]
+            .clone()
+            .find_map(|idx| self.state.remotes[idx].state.lock().last_error.clone())
     }
 
+    /// The connection of destination `dest_idx` with the fewest bytes queued and
+    /// in flight, or the error of a closed one: a node's connections share its
+    /// fate, as data for the node may be on any of them.
+    fn pick_connection(&self, dest_idx: usize) -> Result<usize> {
+        let connections = self.state.destinations[dest_idx].clone();
+        if connections.len() == 1 {
+            return match self.state.remotes[connections.start]
+                .state
+                .lock()
+                .last_error
+                .clone()
+            {
+                Some(error) => Err(error),
+                None => Ok(connections.start),
+            };
+        }
+
+        let mut best = (usize::MAX, connections.start);
+        for idx in connections {
+            let state = self.state.remotes[idx].state.lock();
+            if let Some(error) = state.last_error.clone() {
+                return Err(error);
+            }
+            let load = state.pending.bytes + state.in_flight_bytes;
+            if load < best.0 {
+                best = (load, idx);
+            }
+        }
+        Ok(best.1)
+    }
+
+    /// Send queued data through the connection's free slots. Data left queued is
+    /// sent by response callbacks.
+    fn try_flush(&self, connection_idx: usize) {
+        self.state.flush_remote(connection_idx, false);
+    }
+
+    /// Whether destination `dest_idx` is closed: any of its connections is.
     pub fn is_closed(&self, dest_idx: usize) -> bool {
-        let remote = &self.state.remotes[dest_idx];
-        let state = remote.state.lock();
-        state.last_error.is_some()
+        self.destination_error(dest_idx).is_some()
     }
 }
 
@@ -1445,5 +1602,151 @@ mod tests {
         );
         assert_eq!(load(ProfileStatisticsName::ExchangeSendQueueWaitTime), 0);
         assert!(load(ProfileStatisticsName::ExchangeHeldBackTime) >= wait.as_nanos() as usize);
+    }
+
+    /// A node with two connections: the second carries data while the first
+    /// has all its slots in flight, and both share the node's fate.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_node_connections_share_load_and_fate() {
+        let rt = test_runtime();
+        let (first, first_rx, first_pong) = create_mock_exchange(1);
+        let (second, second_rx, _second_pong) = create_mock_exchange(1);
+        let buffer = ExchangeSendBuffer::create_with_connections(
+            vec![vec![first, second]],
+            ExchangeSendBufferConfig::default(),
+            &rt,
+            None,
+        )
+        .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            buffer
+                .enqueue_items(0, vec![make_flight_data(10)])
+                .await
+                .unwrap();
+            assert_eq!(first_rx.recv().await.unwrap().data_body.len(), 10);
+
+            // The first connection has bytes in flight, the second has none.
+            buffer
+                .enqueue_items(0, vec![make_flight_data(20)])
+                .await
+                .unwrap();
+            assert_eq!(second_rx.recv().await.unwrap().data_body.len(), 20);
+            assert!(!buffer.is_closed(0));
+
+            // A connection closed by its peer closes the node.
+            drop(first_pong);
+            while !buffer.is_closed(0) {
+                tokio::task::yield_now().await;
+            }
+            let error = buffer
+                .enqueue_items(0, vec![make_flight_data(30)])
+                .await
+                .unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE)
+            );
+        })
+        .await
+        .expect("frames must go out on the idle connection");
+    }
+
+    /// Destination indexes address nodes, not connections.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_destinations_map_to_their_connections() {
+        let rt = test_runtime();
+        let (a0, a0_rx, _a0_pong) = create_mock_exchange(1);
+        let (a1, _a1_rx, _a1_pong) = create_mock_exchange(1);
+        let (b0, b0_rx, _b0_pong) = create_mock_exchange(1);
+        let buffer = ExchangeSendBuffer::create_with_connections(
+            vec![vec![a0, a1], vec![b0]],
+            ExchangeSendBufferConfig::default(),
+            &rt,
+            None,
+        )
+        .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            buffer
+                .enqueue_items(1, vec![make_flight_data(7)])
+                .await
+                .unwrap();
+            assert_eq!(b0_rx.recv().await.unwrap().data_body.len(), 7);
+            buffer
+                .enqueue_items(0, vec![make_flight_data(5)])
+                .await
+                .unwrap();
+            assert_eq!(a0_rx.recv().await.unwrap().data_body.len(), 5);
+        })
+        .await
+        .expect("each destination must use its own connections");
+
+        assert!(
+            ExchangeSendBuffer::create_with_connections(
+                vec![vec![]],
+                ExchangeSendBufferConfig::default(),
+                &rt,
+                None,
+            )
+            .is_err()
+        );
+    }
+
+    /// An enqueue waiting for quota on one connection reports the failure of
+    /// another connection of the same node that happened meanwhile.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_enqueue_reports_sibling_failure_during_quota_wait() {
+        let rt = test_runtime();
+        let (first, first_rx, first_pong) = create_mock_exchange(1);
+        let (second, second_rx, second_pong) = create_mock_exchange(1);
+        let buffer = Arc::new(
+            ExchangeSendBuffer::create_with_connections(
+                vec![vec![first, second]],
+                ExchangeSendBufferConfig {
+                    max_queued_bytes: 4,
+                    max_batch_bytes: 1,
+                },
+                &rt,
+                None,
+            )
+            .unwrap(),
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            // Fill the quota: one frame in flight on each connection.
+            buffer
+                .enqueue_items(0, vec![make_flight_data(2)])
+                .await
+                .unwrap();
+            buffer
+                .enqueue_items(0, vec![make_flight_data(1)])
+                .await
+                .unwrap();
+            assert_eq!(first_rx.recv().await.unwrap().data_body.len(), 2);
+            assert_eq!(second_rx.recv().await.unwrap().data_body.len(), 1);
+
+            // Picks the second connection, the less loaded one, and waits for quota.
+            let waiting = {
+                let buffer = buffer.clone();
+                databend_common_base::runtime::spawn(async move {
+                    buffer.enqueue_items(0, vec![make_flight_data(3)]).await
+                })
+            };
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            // The first connection fails, which releases its quota.
+            drop(first_pong);
+            let error = waiting.await.unwrap().unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE)
+            );
+            drop(second_pong);
+        })
+        .await
+        .expect("the waiting enqueue must finish");
     }
 }

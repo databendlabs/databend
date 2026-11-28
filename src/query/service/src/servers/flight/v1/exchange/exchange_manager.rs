@@ -36,11 +36,13 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_grpc::SocketProbe;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::basic_callback;
 use databend_common_settings::FlightKeepAliveParams;
 use fastrace::prelude::*;
+use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -48,6 +50,7 @@ use petgraph::Direction;
 use petgraph::prelude::EdgeRef;
 use tokio::sync::oneshot;
 use tonic::Status;
+use tonic::transport::Channel;
 
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
@@ -82,6 +85,7 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::ConnectionTrace;
 use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
 use crate::servers::flight::v1::network::PingPongTransport;
 use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
@@ -108,8 +112,20 @@ enum QueryExchange {
     PingPong {
         exchange_id: String,
         target_id: String,
+        lane: usize,
         exchange: PingPongTransport,
     },
+}
+
+/// A data connection created for a do_exchange stream.
+struct ExchangeConnection {
+    client: FlightClient,
+    channel: Channel,
+    probe: SocketProbe,
+    /// Creating the channel: name resolution, TCP connect, TLS and HTTP/2 handshakes.
+    channel_time: Duration,
+    /// tonic spawns the tasks polling the connection on the creating runtime.
+    runtime: tokio::runtime::Handle,
 }
 
 async fn create_flight_client(
@@ -117,31 +133,25 @@ async fn create_flight_client(
     address: String,
     use_current_rt: bool,
     keep_alive: FlightKeepAliveParams,
-) -> Result<FlightClient> {
+) -> Result<ExchangeConnection> {
     let config = GlobalConfig::instance();
     let local_node_id = config.query.node_id.clone();
     let keep_alive_config = build_keep_alive_config(keep_alive);
     let task = async move {
-        let channel = match config.tls_query_cli_enabled() {
-            true => {
-                ConnectionFactory::create_rpc_channel(
-                    address.to_owned(),
-                    None,
-                    Some(config.query.to_grpc_tls_config()),
-                    keep_alive_config,
-                )
-                .await
-            }
-            false => {
-                ConnectionFactory::create_rpc_channel(
-                    address.to_owned(),
-                    None,
-                    None,
-                    keep_alive_config,
-                )
-                .await
-            }
-        }
+        let started = Instant::now();
+        let probe = SocketProbe::default();
+        let tls_config = match config.tls_query_cli_enabled() {
+            true => Some(config.query.to_grpc_tls_config()),
+            false => None,
+        };
+        let channel = ConnectionFactory::create_probed_rpc_channel(
+            address.to_owned(),
+            None,
+            tls_config,
+            keep_alive_config,
+            probe.clone(),
+        )
+        .await
         .map_err(|error| {
             add_flight_error_context(
                 ErrorCode::from(error),
@@ -151,11 +161,17 @@ async fn create_flight_client(
             )
         })?;
 
-        Ok(FlightClient::new(
-            FlightServiceClient::new(channel),
-            local_node_id,
-            remote_node_id,
-        ))
+        Ok(ExchangeConnection {
+            client: FlightClient::new(
+                FlightServiceClient::new(channel.clone()),
+                local_node_id,
+                remote_node_id,
+            ),
+            channel,
+            probe,
+            channel_time: started.elapsed(),
+            runtime: tokio::runtime::Handle::current(),
+        })
     };
     if use_current_rt {
         task.await
@@ -164,6 +180,61 @@ async fn create_flight_client(
             .spawn(task)
             .await
             .expect("create client future must be joined successfully")
+    }
+}
+
+/// Kinds of the connections a node opens while setting up a query.
+#[derive(Clone, Copy)]
+enum SetupConnectionKind {
+    Exchange,
+    Fragment,
+    Statistics,
+}
+
+/// Connections a node opened while setting up a query, for its setup summary.
+#[derive(Default)]
+struct ConnectionSetupStats {
+    exchange: usize,
+    fragment: usize,
+    statistics: usize,
+    failed: usize,
+    /// The slowest TCP connect, name resolution included.
+    max_tcp_connect: Duration,
+    /// The slowest channel creation, TLS and HTTP/2 handshakes included.
+    max_channel: Duration,
+    /// The slowest connection, from its start to its open stream.
+    max_total: Duration,
+}
+
+impl ConnectionSetupStats {
+    fn record(
+        &mut self,
+        kind: SetupConnectionKind,
+        ok: bool,
+        tcp_connect: Duration,
+        channel: Duration,
+        total: Duration,
+    ) {
+        match kind {
+            SetupConnectionKind::Exchange => self.exchange += 1,
+            SetupConnectionKind::Fragment => self.fragment += 1,
+            SetupConnectionKind::Statistics => self.statistics += 1,
+        }
+        if !ok {
+            self.failed += 1;
+        }
+        self.max_tcp_connect = self.max_tcp_connect.max(tcp_connect);
+        self.max_channel = self.max_channel.max(channel);
+        self.max_total = self.max_total.max(total);
+    }
+}
+
+/// The number of connections of an exchange to each node.
+/// `override_value` is `exchange_connections_per_node`; 0 lets Databend choose.
+fn exchange_connections_per_node(override_value: usize) -> usize {
+    match override_value {
+        0 => 1,
+        n => n,
     }
 }
 
@@ -308,6 +379,11 @@ impl DataExchangeManager {
         };
         let keep_alive = settings.get_flight_keep_alive_params()?;
         let recv_queue_bytes = settings.get_exchange_recv_queue_bytes()?;
+        // Every node reads the same query settings, so senders and receivers agree.
+        let connections_per_node =
+            exchange_connections_per_node(settings.get_exchange_connections_per_node()?);
+        let setup_started = Instant::now();
+        let setup_stats = Arc::new(Mutex::new(ConnectionSetupStats::default()));
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
@@ -337,34 +413,73 @@ impl DataExchangeManager {
                     let keep_alive_params = keep_alive;
                     match edge {
                         Edge::Fragment(channel) => {
+                            let setup_stats = setup_stats.clone();
                             flight_exchanges.push(Box::pin(async move {
-                                let mut flight_client = Self::create_client(
-                                    &source_id,
-                                    &address,
-                                    with_cur_rt,
-                                    keep_alive_params,
-                                )
-                                .await?;
+                                let started = Instant::now();
+                                let result = async {
+                                    let mut flight_client = Self::create_client(
+                                        &source_id,
+                                        &address,
+                                        with_cur_rt,
+                                        keep_alive_params,
+                                    )
+                                    .await?;
+                                    let channel_time = started.elapsed();
+                                    let exchange =
+                                        flight_client.do_get(&query_id, &channel).await?;
+                                    Ok::<_, ErrorCode>((channel_time, exchange))
+                                }
+                                .await;
+                                let channel_time = match &result {
+                                    Ok((channel_time, _)) => *channel_time,
+                                    Err(_) => started.elapsed(),
+                                };
+                                setup_stats.lock().record(
+                                    SetupConnectionKind::Fragment,
+                                    result.is_ok(),
+                                    Duration::ZERO,
+                                    channel_time,
+                                    started.elapsed(),
+                                );
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
                                     channel: channel.clone(),
-                                    exchange: flight_client.do_get(&query_id, &channel).await?,
+                                    exchange: result?.1,
                                 })
                             }));
                         }
                         Edge::Statistics => {
+                            let setup_stats = setup_stats.clone();
                             flight_exchanges.push(Box::pin(async move {
-                                let mut flight_client = Self::create_client(
-                                    &source_id,
-                                    &address,
-                                    with_cur_rt,
-                                    keep_alive_params,
-                                )
-                                .await?;
+                                let started = Instant::now();
+                                let result = async {
+                                    let mut flight_client = Self::create_client(
+                                        &source_id,
+                                        &address,
+                                        with_cur_rt,
+                                        keep_alive_params,
+                                    )
+                                    .await?;
+                                    let channel_time = started.elapsed();
+                                    let exchange = flight_client
+                                        .request_server_exchange(&query_id, &target.id)
+                                        .await?;
+                                    Ok::<_, ErrorCode>((channel_time, exchange))
+                                }
+                                .await;
+                                let channel_time = match &result {
+                                    Ok((channel_time, _)) => *channel_time,
+                                    Err(_) => started.elapsed(),
+                                };
+                                setup_stats.lock().record(
+                                    SetupConnectionKind::Statistics,
+                                    result.is_ok(),
+                                    Duration::ZERO,
+                                    channel_time,
+                                    started.elapsed(),
+                                );
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Statistics {
                                     source: source_id,
-                                    exchange: flight_client
-                                        .request_server_exchange(&query_id, &target.id)
-                                        .await?,
+                                    exchange: result?.1,
                                 })
                             }));
                         }
@@ -403,51 +518,115 @@ impl DataExchangeManager {
                             .edges_directed(target_index, Direction::Incoming)
                             .filter(|x| matches!(x.weight(), Edge::ExchangeFragment { exchange_id: id, .. } if id == &exchange_id))
                             .count();
-                        let max_bytes_per_connection =
-                            recv_queue_bytes_per_connection(recv_queue_bytes, num_senders);
+                        // Every connection of every sending node gets an even share.
+                        let max_bytes_per_connection = recv_queue_bytes_per_connection(
+                            recv_queue_bytes,
+                            num_senders * connections_per_node,
+                        );
 
-                        flight_exchanges.push(Box::pin(async move {
-                            let (send_tx, response_stream) = {
-                                let mut flight_client = create_flight_client(
-                                    target_id.clone(),
-                                    address,
-                                    with_cur_rt,
-                                    keep_alive_params,
-                                )
-                                .await?;
+                        for lane in 0..connections_per_node {
+                            let target_id = target_id.clone();
+                            let local_node_id = local_node_id.clone();
+                            let query_id = query_id.clone();
+                            let address = address.clone();
+                            let exchange_id = exchange_id.clone();
+                            let setup_stats = setup_stats.clone();
 
-                                let (send_tx, send_rx) =
-                                    async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
-                                let response_stream = flight_client
-                                    .do_exchange(send_rx, DoExchangeParams {
-                                        query_id,
-                                        num_threads,
-                                        exchange_id: exchange_id.clone(),
-                                        max_bytes_per_connection,
-                                    })
-                                    .await?;
-                                Ok::<_, ErrorCode>((send_tx, response_stream))
-                            }?;
+                            flight_exchanges.push(Box::pin(async move {
+                                let started = Instant::now();
+                                let mut channel_time = Duration::ZERO;
+                                let mut tcp_connect = Duration::ZERO;
+                                let result =
+                                    async {
+                                        let mut connection = create_flight_client(
+                                            target_id.clone(),
+                                            address,
+                                            with_cur_rt,
+                                            keep_alive_params,
+                                        )
+                                        .await?;
+                                        channel_time = connection.channel_time;
+                                        tcp_connect = connection.probe.last_connect_time();
 
-                            Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
-                                target_id: target_id.clone(),
-                                exchange_id,
-                                exchange: PingPongTransport::from_stream(
-                                    num_threads,
-                                    send_tx,
-                                    response_stream,
-                                    local_node_id,
-                                    target_id.clone(),
-                                ),
-                            })
-                        }));
+                                        let (send_tx, send_rx) =
+                                            async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
+                                        let opening = Instant::now();
+                                        let response_stream = connection
+                                            .client
+                                            .do_exchange(send_rx, DoExchangeParams {
+                                                query_id,
+                                                num_threads,
+                                                exchange_id: exchange_id.clone(),
+                                                max_bytes_per_connection,
+                                                source_node_id: local_node_id.clone(),
+                                                lane,
+                                            })
+                                            .await?;
+                                        let open_time = opening.elapsed();
+
+                                        Ok::<_, ErrorCode>(
+                                            PingPongTransport::from_stream(
+                                                num_threads,
+                                                send_tx,
+                                                response_stream,
+                                                local_node_id,
+                                                target_id.clone(),
+                                            )
+                                            .with_trace(ConnectionTrace {
+                                                lane,
+                                                channel_time: connection.channel_time,
+                                                open_time,
+                                                probe: connection.probe,
+                                                channel: connection.channel,
+                                                runtime: connection.runtime,
+                                            }),
+                                        )
+                                    }
+                                    .await;
+                                setup_stats.lock().record(
+                                    SetupConnectionKind::Exchange,
+                                    result.is_ok(),
+                                    tcp_connect,
+                                    channel_time,
+                                    started.elapsed(),
+                                );
+
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
+                                    target_id,
+                                    exchange_id,
+                                    lane,
+                                    exchange: result?,
+                                })
+                            }));
+                        }
                     }
                 }
 
-                let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
+                let flight_exchanges = futures::future::try_join_all(flight_exchanges).await;
+                {
+                    let stats = setup_stats.lock();
+                    let total = stats.exchange + stats.fragment + stats.statistics;
+                    if total > 0 {
+                        info!(
+                            "[EXCHANGE-SETUP] query {}: {} connections ({} exchange, {} fragment, {} statistics), {} failed, {} per node and exchange, in {:?}; slowest tcp_connect={:?} channel={:?} total={:?}",
+                            env.query_id,
+                            total,
+                            stats.exchange,
+                            stats.fragment,
+                            stats.statistics,
+                            stats.failed,
+                            connections_per_node,
+                            setup_started.elapsed(),
+                            stats.max_tcp_connect,
+                            stats.max_channel,
+                            stats.max_total,
+                        );
+                    }
+                }
+                let flight_exchanges = flight_exchanges?;
 
                 let mut ping_pong_transports =
-                    HashMap::<String, HashMap<String, PingPongTransport>>::new();
+                    HashMap::<String, HashMap<String, Vec<(usize, PingPongTransport)>>>::new();
 
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
@@ -466,18 +645,31 @@ impl DataExchangeManager {
                             exchange_id,
                             exchange,
                             target_id,
+                            lane,
                         } => {
-                            match ping_pong_transports.entry(exchange_id) {
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().insert(target_id, exchange);
-                                }
-                                Entry::Vacant(v) => {
-                                    v.insert(HashMap::from([(target_id, exchange)]));
-                                }
-                            };
+                            let lanes = ping_pong_transports
+                                .entry(exchange_id)
+                                .or_default()
+                                .entry(target_id)
+                                .or_default();
+                            lanes.push((lane, exchange));
                         }
                     };
                 }
+
+                let ping_pong_transports = ping_pong_transports
+                    .into_iter()
+                    .map(|(exchange_id, targets)| {
+                        let targets = targets
+                            .into_iter()
+                            .map(|(target_id, mut lanes)| {
+                                lanes.sort_by_key(|(lane, _)| *lane);
+                                (target_id, lanes.into_iter().map(|(_, t)| t).collect())
+                            })
+                            .collect();
+                        (exchange_id, targets)
+                    })
+                    .collect();
 
                 let mut query_info = Self::create_info(ctx)?;
 
@@ -806,7 +998,7 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<HashMap<String, PingPongTransport>> {
+    ) -> Result<HashMap<String, Vec<PingPongTransport>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -1063,7 +1255,8 @@ pub(crate) struct QueryCoordinator {
     /// Initial endpoints keep queues open while remote connections and local pipelines
     /// bind their producers. `None` after construction prevents late registration.
     building_receive_channels: Option<HashMap<String, Arc<ExchangeReceiveChannels>>>,
-    ping_pong_transports: HashMap<String, HashMap<String, PingPongTransport>>,
+    /// The connections of each exchange to each target node, in lane order.
+    ping_pong_transports: HashMap<String, HashMap<String, Vec<PingPongTransport>>>,
 }
 
 impl QueryCoordinator {
@@ -1158,7 +1351,7 @@ impl QueryCoordinator {
 
     pub fn register_ping_pong_transports(
         &mut self,
-        exchanges: HashMap<String, HashMap<String, PingPongTransport>>,
+        exchanges: HashMap<String, HashMap<String, Vec<PingPongTransport>>>,
     ) {
         for (channel, pps) in exchanges {
             match self.ping_pong_transports.entry(channel) {
@@ -1594,5 +1787,35 @@ mod tests {
             assert!(receiver.try_recv().is_ok());
             assert!(matches!(receiver.try_recv(), Err(TryRecvError::Closed)));
         });
+    }
+
+    #[test]
+    fn test_exchange_connections_per_node() {
+        // 0 lets Databend choose; a positive value overrides it.
+        assert_eq!(exchange_connections_per_node(0), 1);
+        assert_eq!(exchange_connections_per_node(1), 1);
+        assert_eq!(exchange_connections_per_node(4), 4);
+    }
+
+    #[test]
+    fn test_connection_setup_stats() {
+        let mut stats = ConnectionSetupStats::default();
+        let ms = Duration::from_millis;
+        stats.record(SetupConnectionKind::Exchange, true, ms(1), ms(3), ms(5));
+        stats.record(SetupConnectionKind::Exchange, false, ms(2), ms(2), ms(2));
+        stats.record(SetupConnectionKind::Fragment, true, ms(0), ms(4), ms(4));
+        stats.record(SetupConnectionKind::Statistics, true, ms(0), ms(1), ms(1));
+        assert_eq!(
+            (
+                stats.exchange,
+                stats.fragment,
+                stats.statistics,
+                stats.failed
+            ),
+            (2, 1, 1, 1)
+        );
+        assert_eq!(stats.max_tcp_connect, ms(2));
+        assert_eq!(stats.max_channel, ms(4));
+        assert_eq!(stats.max_total, ms(5));
     }
 }

@@ -23,5 +23,8 @@ pub use dns_resolver::DNSResolver;
 pub use dns_resolver::DNSService;
 pub use dns_resolver::GrpcConnectionError;
 pub use dns_resolver::TcpKeepAliveConfig;
+pub use socket_probe::SocketProbe;
+pub use socket_probe::TcpInfo;
 mod client_conf;
 mod dns_resolver;
+mod socket_probe;

@@ -14,7 +14,9 @@ anyerror = { workspace = true }
 hickory-resolver = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+libc = { workspace = true }
 log = { workspace = true }
+parking_lot = { workspace = true }
 semver = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
