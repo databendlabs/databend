@@ -43,6 +43,9 @@ impl ParquetDataSource {
 
 pub enum BlockSource {
     Parquet(ParquetDataSource),
+    /// A block read granule group by granule group in the deserializer, as the granule ranges
+    /// of each group, each group within `max_block_size` rows.
+    Granule(Vec<Vec<std::ops::Range<usize>>>),
     /// Original row offsets. Scores stay in the partition's index metadata.
     IndexRows(RoaringTreemap),
 }

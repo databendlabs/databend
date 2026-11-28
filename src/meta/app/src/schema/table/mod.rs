@@ -290,10 +290,6 @@ pub enum TableIndexType {
     Ngram = 1,
     Vector = 2,
     Spatial = 3,
-    /// Granule-level Bloom index written by newer releases.
-    ///
-    /// This release only decodes the variant so table metadata that carries it
-    /// remains readable; creating or refreshing such an index is rejected.
     Bloom = 4,
 }
 

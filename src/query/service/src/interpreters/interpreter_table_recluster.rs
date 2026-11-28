@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_catalog::plan::Filters;
@@ -200,9 +201,25 @@ impl Interpreter for ReclusterTableInterpreter {
                 }
 
                 rounds += 1;
+                let round_start = Instant::now();
                 let res = self
                     .execute_recluster(&mut push_downs, &mut linear_final_carry)
                     .await;
+                let round_outcome = match &res {
+                    Ok(outcome) => format!("{outcome:?}"),
+                    Err(e) => format!("error({})", e.code()),
+                };
+                info!(
+                    event = "recluster.round",
+                    table = self.plan.table.as_str(),
+                    is_final,
+                    round = rounds,
+                    committed_rounds,
+                    outcome = round_outcome.as_str(),
+                    round_elapsed :? = round_start.elapsed(),
+                    elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
+                    "Recluster round finished"
+                );
 
                 match res {
                     Ok(outcome) => {

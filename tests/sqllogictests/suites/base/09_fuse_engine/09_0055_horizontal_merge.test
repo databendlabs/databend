@@ -5,6 +5,7 @@ create or replace database db_horizontal_multiway_merge
 statement ok
 use db_horizontal_multiway_merge
 
+# Force this branch's horizontal executor; the standalone main PR omits this SET.
 statement ok
 set enable_recluster_multiway_merge = 1
 

@@ -51,10 +51,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_storages_common_io::ChunkedRangeReader;
-use databend_storages_common_io::MergeRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
-use databend_storages_common_io::RangeReader;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -80,6 +77,8 @@ use parquet::file::reader::Length;
 use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescriptor;
 
+use crate::io::create_file_range_reader;
+
 const DEFAULT_MAX_PREFETCH: usize = 2;
 const ROW_WINDOW_ALIGNMENT: u128 = 1024 * 1024;
 
@@ -92,7 +91,7 @@ pub struct FuseLowLevelBlockReadOptions {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    merge_settings: Option<ReadSettings>,
+    merge_settings: Option<databend_storages_common_io::ReadSettings>,
     window_rows: Option<usize>,
 }
 
@@ -140,7 +139,7 @@ impl FuseLowLevelBlockReadOptions {
         self
     }
 
-    pub fn with_merge_io(mut self, settings: ReadSettings) -> Self {
+    pub fn with_merge_io(mut self, settings: databend_storages_common_io::ReadSettings) -> Self {
         self.merge_settings = Some(settings);
         self
     }
@@ -205,7 +204,7 @@ pub struct FuseLowLevelBlockReader {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    merge_settings: Option<ReadSettings>,
+    merge_settings: Option<databend_storages_common_io::ReadSettings>,
     window_rows: Option<usize>,
 }
 
@@ -1408,13 +1407,26 @@ impl ChunkReader for ForwardChunkReader {
     }
 
     fn get_bytes(&self, start: u64, length: usize) -> ParquetResult<bytes::Bytes> {
-        self.check_position(start)?;
-        let mut read = ForwardRead {
-            state: self.state.clone(),
-        };
-        let mut data = vec![0; length];
-        read.read_exact(&mut data)?;
-        Ok(data.into())
+        let mut state = self.state.lock();
+        if start != state.position {
+            return Err(ParquetError::General(format!(
+                "forward Parquet reader requested offset {start}, current offset is {}",
+                state.position
+            )));
+        }
+        let remaining = state.len.saturating_sub(state.position);
+        if u64::try_from(length).is_ok_and(|length| length <= remaining) {
+            // A page payload inside one window is a slice of that window; only a
+            // payload spanning windows is copied, once, into one allocation.
+            let buffer = state.input.read_buffer(length)?;
+            state.position += buffer.len() as u64;
+            if buffer.len() == length {
+                return Ok(buffer.to_bytes());
+            }
+        }
+        Err(ParquetError::EOF(format!(
+            "forward Parquet reader requested {length} bytes at offset {start}, only {remaining} remain"
+        )))
     }
 }
 
@@ -1471,35 +1483,36 @@ impl ParquetLeafRowGroupAdapter {
         )?;
         #[cfg(test)]
         let window_size = reader.window_size.unwrap_or(window_size);
-        let chain: Box<dyn RangeReader> = if let Some(settings) = &reader.merge_settings {
-            // Storage range and consumer windows are independent. Merge bounded
-            // adjacent windows before handing them to a continuous stream tail.
-            let mut windows = Vec::new();
-            let mut start = range.start;
-            while start < range.end {
-                let end = start.saturating_add(window_size as u64).min(range.end);
-                windows.push(start..end);
-                start = end;
-            }
-            let tail = OperatorRangeReader::new_streaming(
-                reader.operator.clone(),
-                path.to_string(),
-                range.clone(),
-                reader.max_prefetch.saturating_add(1),
-            )?;
-            Box::new(MergeRangeReader::new(
-                tail,
-                &windows,
-                settings,
-                reader.max_prefetch.saturating_add(1),
-            )?)
-        } else {
-            Box::new(OperatorRangeReader::new(
-                reader.operator.clone(),
-                path.to_string(),
-                reader.max_prefetch.saturating_add(1),
-            ))
-        };
+        let chain: Box<dyn databend_storages_common_io::RangeReader> =
+            if let Some(settings) = &reader.merge_settings {
+                // Storage range and consumer windows are independent. Merge bounded
+                // adjacent windows before handing them to a continuous stream tail.
+                let mut windows = Vec::new();
+                let mut start = range.start;
+                while start < range.end {
+                    let end = start.saturating_add(window_size as u64).min(range.end);
+                    windows.push(start..end);
+                    start = end;
+                }
+                let tail = OperatorRangeReader::new_streaming(
+                    reader.operator.clone(),
+                    path.to_string(),
+                    range.clone(),
+                    reader.max_prefetch.saturating_add(1),
+                )?;
+                Box::new(databend_storages_common_io::MergeRangeReader::new(
+                    tail,
+                    &windows,
+                    settings,
+                    reader.max_prefetch.saturating_add(1),
+                )?)
+            } else {
+                create_file_range_reader(
+                    reader.operator.clone(),
+                    path.to_string(),
+                    reader.max_prefetch,
+                )?
+            };
         let input =
             ChunkedRangeReader::with_range(chain, range, window_size as u64, reader.max_prefetch)?;
         let Ok(num_values) = i64::try_from(num_values) else {
@@ -1581,7 +1594,6 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_base::runtime::GlobalIORuntime;
-    use databend_common_column::buffer::Buffer;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
@@ -1596,7 +1608,6 @@ mod tests {
     use databend_storages_common_table_meta::meta::BlockMeta;
     use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
     use databend_storages_common_table_meta::meta::ColumnMeta;
-    use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::table::TableCompression;
     use opendal::services::Memory;
     use parquet::format::DataPageHeader;
@@ -1644,7 +1655,8 @@ mod tests {
                 })),
             ),
         ]));
-        let offsets: Buffer<u64> = vec![0_u64, 2, 2, 3, 5, 6].into();
+        let offsets: databend_common_column::buffer::Buffer<u64> =
+            vec![0_u64, 2, 2, 3, 5, 6].into();
         let columns = vec![
             Int32Type::from_data(vec![10, 20, 30, 40, 50]),
             StringType::from_opt_data(vec![Some("a"), None, Some("ccc"), Some("d"), None]),
@@ -1819,20 +1831,23 @@ mod tests {
         crate::test_utils::init_test_globals().unwrap();
         let operator = Operator::new(Memory::default()).unwrap().finish();
         let (schema, columns) = test_data();
-        let meta = write_columns(
+        let mut meta = write_columns(
             operator.clone(),
             schema.clone(),
             "minimum-read.parquet",
             &columns,
         );
-        let options = read_options(operator, schema, meta)
-            .with_window_rows(2)
-            .with_merge_io(ReadSettings {
-                max_gap_size: 48,
-                max_range_size: 64,
-                parquet_fast_read_bytes: 0,
-            });
-        let block = FuseLowLevelBlockReader::create(options).unwrap();
+        meta.granule_index = None;
+        let block = FuseLowLevelBlockReader::create(
+            read_options(operator, schema, meta)
+                .with_window_rows(2)
+                .with_merge_io(databend_storages_common_io::ReadSettings {
+                    max_gap_size: 48,
+                    max_range_size: 64,
+                    parquet_fast_read_bytes: 0,
+                }),
+        )
+        .unwrap();
         let mut column = block.read_column(0).unwrap();
         assert!(column.read_min_rows(0).is_err());
         let first = column.read_rows(1).unwrap();
@@ -1934,7 +1949,7 @@ mod tests {
             ]);
         block_meta.location.0 = "split.parquet".to_string();
         block_meta.row_count = 2;
-        block_meta.compression = Compression::None;
+        block_meta.compression = databend_storages_common_table_meta::meta::Compression::None;
         let column_id = schema.to_leaf_column_ids()[0];
         let ColumnMeta::Parquet(mut column_meta) =
             block_meta.col_metas.get(&column_id).unwrap().clone();
@@ -2022,7 +2037,7 @@ mod tests {
             std::slice::from_ref(&expected),
         );
         meta.location.0 = "independent-pages.parquet".to_string();
-        meta.compression = Compression::None;
+        meta.compression = databend_storages_common_table_meta::meta::Compression::None;
         for (index, column_id) in schema.to_leaf_column_ids().into_iter().enumerate() {
             let ColumnMeta::Parquet(mut column_meta) =
                 meta.col_metas.get(&column_id).unwrap().clone();
@@ -2105,7 +2120,8 @@ mod tests {
                 ],
             })),
         )]));
-        let offsets: Buffer<u64> = vec![0_u64, 2, 4, 6, 8, 10].into();
+        let offsets: databend_common_column::buffer::Buffer<u64> =
+            vec![0_u64, 2, 4, 6, 8, 10].into();
         let expected = Column::Array(Box::new(ArrayColumn::<AnyType>::new(
             Column::Tuple(vec![
                 Int32Type::from_data((0..10).collect::<Vec<_>>()),
@@ -2216,7 +2232,7 @@ mod tests {
             std::slice::from_ref(&expected),
         );
         meta.location.0 = "independent-repeated-pages.parquet".to_string();
-        meta.compression = Compression::None;
+        meta.compression = databend_storages_common_table_meta::meta::Compression::None;
         for (index, column_id) in schema.to_leaf_column_ids().into_iter().enumerate() {
             let ColumnMeta::Parquet(mut column_meta) =
                 meta.col_metas.get(&column_id).unwrap().clone();

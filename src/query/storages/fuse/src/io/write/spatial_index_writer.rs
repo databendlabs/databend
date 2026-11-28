@@ -86,49 +86,7 @@ pub struct SpatialIndexBuilder {
     spatial_stats: HashMap<ColumnId, SpatialStatsBuilder>,
 }
 
-pub(crate) struct SpatialIndexWriteSpec {
-    builder: SpatialIndexBuilder,
-}
-
-impl BlockIndexSpec for SpatialIndexWriteSpec {
-    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
-        Ok(Box::new(SpatialIndexBlockWriter {
-            builder: self.builder.clone(),
-            location: context.meta_locations.block_spatial_index_location(),
-        }))
-    }
-}
-
-struct SpatialIndexBlockWriter {
-    builder: SpatialIndexBuilder,
-    location: Location,
-}
-
-impl BlockIndexWriter for SpatialIndexBlockWriter {
-    fn write(&mut self, block: &DataBlock) -> Result<()> {
-        self.builder.add_block(block)
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
-        let result = self.builder.finalize(&self.location)?;
-        Ok(PendingBlockIndexOutput {
-            spatial: Some(PendingSpatialIndex {
-                file: result.index_state.map(|index_state| PendingIndexFile {
-                    location: index_state.location,
-                    data: index_state.data,
-                }),
-                statistics: result.spatial_stats,
-            }),
-            ..Default::default()
-        })
-    }
-}
-
 impl SpatialIndexBuilder {
-    pub(crate) fn into_write_spec(self) -> SpatialIndexWriteSpec {
-        SpatialIndexWriteSpec { builder: self }
-    }
-
     pub fn try_create(
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
@@ -211,6 +169,10 @@ impl SpatialIndexBuilder {
             stats_only_offsets,
             spatial_stats: HashMap::new(),
         })
+    }
+
+    pub(crate) fn into_write_spec(self) -> SpatialIndexWriteSpec {
+        SpatialIndexWriteSpec { builder: self }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -412,6 +374,44 @@ impl SpatialIndexBuilder {
             location: location.clone(),
             size,
             data,
+        })
+    }
+}
+
+pub(crate) struct SpatialIndexWriteSpec {
+    builder: SpatialIndexBuilder,
+}
+
+impl BlockIndexSpec for SpatialIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(SpatialIndexWriter {
+            builder: self.builder.clone(),
+            location: context.meta_locations.block_spatial_index_location(),
+        }))
+    }
+}
+
+struct SpatialIndexWriter {
+    builder: SpatialIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for SpatialIndexWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let result = self.builder.finalize(&self.location)?;
+        Ok(PendingBlockIndexOutput {
+            spatial: Some(PendingSpatialIndex {
+                file: result.index_state.map(|state| PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: result.spatial_stats,
+            }),
+            ..Default::default()
         })
     }
 }

@@ -46,10 +46,12 @@ use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::io::SegmentsIO;
 use crate::operations::recluster::CandidateScore;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
+use crate::operations::recluster::ReclusterSelectionStats;
 use crate::operations::recluster::ReclusterTaskBudget;
 use crate::operations::recluster::VECTOR_LEVEL_MIXED;
 use crate::operations::recluster::VECTOR_LEVEL_NEW;
@@ -171,7 +173,7 @@ fn select_batched_task_candidates(
                 .copied()
                 .chain(indices.iter().map(|&idx| &window.tasks[idx]))
                 .filter(|task| !task.is_repack_only())
-                .map(|task| (task.score.selected_total_bytes, task.kind)),
+                .map(|task| (task.score.selected_total_bytes, task.task_kind)),
         );
         if placement.is_none() {
             continue;
@@ -378,7 +380,7 @@ impl FuseTable {
                 .filter(|window| {
                     let within_budget = mutator.task_budget.is_none_or(|budget| {
                         budget.assign(window.tasks.iter().filter(|task| !task.is_repack_only())
-                            .map(|task| (task.score.selected_total_bytes, task.kind))).is_some()
+                            .map(|task| (task.score.selected_total_bytes, task.task_kind))).is_some()
                     });
                     let valid = within_budget
                         && window.segments.iter().all(|(location, _)| {
@@ -598,6 +600,19 @@ impl FuseTable {
                 // probe target prioritizes deep candidates, but does not reserve shared
                 // execution slots. Placement below checks the full shared resources.
                 let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
+                let mut depth_candidates = 0usize;
+                let mut repack_candidates = 0usize;
+                let mut selection_stats = ReclusterSelectionStats::default();
+                for window in &pending_windows {
+                    selection_stats += window.selection_stats;
+                    for task in &window.tasks {
+                        match task.kind {
+                            ReclusterCandidateKind::Depth => depth_candidates += 1,
+                            ReclusterCandidateKind::Repack => repack_candidates += 1,
+                        }
+                    }
+                }
+
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
@@ -619,6 +634,37 @@ impl FuseTable {
                         select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks)
                     }
                 };
+                let mut selected_count = 0;
+                let mut selected_blocks = 0;
+                for (window_idx, indices) in selected_task_indices.iter().enumerate() {
+                    selected_count += indices.len();
+                    for &task_idx in indices {
+                        selected_blocks +=
+                            pending_windows[window_idx].tasks[task_idx].selected_block_count();
+                    }
+                }
+
+                info!(
+                    "recluster: candidate selection summary scanned_blocks={} eligible_blocks={} depth_candidates={} repack_candidates={} selected_tasks={} selected_blocks={} max_tasks={} skipped_negative_level_blocks={} skipped_terminal_level_blocks={} skipped_terminal_level_bytes={}",
+                    selection_stats.scanned_blocks,
+                    selection_stats.eligible_blocks,
+                    depth_candidates,
+                    repack_candidates,
+                    selected_count,
+                    selected_blocks,
+                    mutator.max_tasks,
+                    selection_stats.skipped_negative_level_blocks,
+                    selection_stats.skipped_terminal_level_blocks,
+                    selection_stats.skipped_terminal_level_bytes,
+                );
+                debug!(
+                    "recluster: candidate level distribution level_0={} level_1_3={} level_4_8={} level_9_31={} level_ge_32={}",
+                    selection_stats.level_0,
+                    selection_stats.level_1_3,
+                    selection_stats.level_4_8,
+                    selection_stats.level_9_31,
+                    selection_stats.level_ge_32,
+                );
 
                 let mut selected = Vec::new();
                 let mut remaining_windows = Vec::with_capacity(pending_windows.len());
@@ -636,7 +682,8 @@ impl FuseTable {
                                 window_idx,
                                 task_idx,
                                 base_level = task.base_level,
-                                task_kind :? = task.kind,
+                                candidate_kind :? = task.kind,
+                                task_kind :? = task.task_kind,
                                 repack_only = task.is_repack_only(),
                                 max_depth = task.score.max_depth,
                                 avg_depth = task.score.average_depth,
@@ -746,9 +793,12 @@ impl FuseTable {
             schema.clone(),
             push_down,
             None,
+            None,
+            vec![],
             BloomIndexColumns::None,
             vec![],
             HashSet::new(),
+            std::collections::BTreeMap::new(),
             max_concurrency,
             None,
         )?;
@@ -864,7 +914,8 @@ mod tests {
                 .collect(),
             base_level: 0,
             input_level_stats: Vec::new(),
-            kind: ReclusterTaskKind::SortBlocks,
+            kind: ReclusterCandidateKind::Depth,
+            task_kind: ReclusterTaskKind::SortBlocks,
         }
     }
 
@@ -874,6 +925,7 @@ mod tests {
                 .map(|index| ((format!("{}-{}", prefix, index), 0), None))
                 .collect(),
             tasks: vec![candidate(0..segment_count)],
+            selection_stats: ReclusterSelectionStats::default(),
             atomic_tasks: false,
         }
     }
@@ -980,10 +1032,10 @@ mod tests {
         joint.tasks = vec![candidate([0]), candidate([1])];
         joint.atomic_tasks = true;
         for task in &mut joint.tasks {
-            task.kind = ReclusterTaskKind::MergeBlocks;
+            task.task_kind = ReclusterTaskKind::MergeBlocks;
         }
         let mut other = window("other", 1);
-        other.tasks[0].kind = ReclusterTaskKind::MergeBlocks;
+        other.tasks[0].task_kind = ReclusterTaskKind::MergeBlocks;
         let windows = vec![joint, other];
         let ranked = vec![
             (0, 0, score(3), false),
@@ -1017,7 +1069,7 @@ mod tests {
             joint.tasks = (0..task_count)
                 .map(|index| {
                     let mut task = candidate([index]);
-                    task.kind = ReclusterTaskKind::MergeBlocks;
+                    task.task_kind = ReclusterTaskKind::MergeBlocks;
                     task.score.selected_total_bytes = 25;
                     task
                 })

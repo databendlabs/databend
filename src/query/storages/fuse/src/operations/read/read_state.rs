@@ -275,6 +275,27 @@ impl BlockScanStats {
     }
 }
 
+/// The rows of a block that one read covers: the whole block, or the `len` rows from `start`
+/// of a sparse-granule-index narrowed read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BlockRows {
+    pub start: usize,
+    pub len: usize,
+}
+
+impl BlockRows {
+    pub fn whole(part: &FuseBlockPartInfo) -> Self {
+        BlockRows {
+            start: 0,
+            len: part.nums_rows,
+        }
+    }
+
+    fn is_whole(&self, part: &FuseBlockPartInfo) -> bool {
+        self.start == 0 && self.len == part.nums_rows
+    }
+}
+
 /// Result of [`ReadState::deserialize_and_filter`]: the block after prewhere
 /// and runtime filters, the selection still to be applied by the caller, and
 /// the scan statistics measured before any row was filtered out.
@@ -620,42 +641,71 @@ impl ReadState {
         condition: Option<&CachedCondition>,
         io_skipped: bool,
     ) -> Result<ReadStateOutput> {
+        self.deserialize_and_filter_rows(
+            columns_chunks,
+            part,
+            BlockRows::whole(part),
+            no_output_columns,
+            condition,
+            io_skipped,
+        )
+    }
+
+    /// Like [`Self::deserialize_and_filter`], but for the `rows` of the block that
+    /// `columns_chunks` hold: sparse-granule-index narrowed reads fetch partial chunks that
+    /// cover fewer rows than `part.nums_rows`.
+    ///
+    /// The returned selection and scan statistics describe these rows, not the whole block.
+    /// A narrowed read neither uses nor records the condition cache, whose entries hold the
+    /// rows of the whole block.
+    pub fn deserialize_and_filter_rows(
+        &mut self,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+        block_rows: BlockRows,
+        no_output_columns: bool,
+        condition: Option<&CachedCondition>,
+        io_skipped: bool,
+    ) -> Result<ReadStateOutput> {
+        let whole = block_rows.is_whole(part);
+        debug_assert!(whole || (condition.is_none() && !io_skipped));
         // The condition cache entry of the block, looked up before it was read: the rows where
         // the filter can select rows, or exactly the rows it selects. Without an entry of the
         // filter, its result is recorded, and without an entry of its leading conjunct either,
         // that of the conjunct.
-        let condition = condition.filter(|_| self.condition_key.is_some());
+        let condition = condition.filter(|_| whole && self.condition_key.is_some());
         let record = self
             .condition_key
-            .filter(|_| !matches!(condition, Some(CachedCondition::Whole(_))));
-        let record_leading = self.leading_key.filter(|_| condition.is_none());
+            .filter(|_| whole && !matches!(condition, Some(CachedCondition::Whole(_))));
+        let record_leading = self.leading_key.filter(|_| whole && condition.is_none());
         let exact = condition.is_some_and(CachedCondition::is_exact);
         let cached_rows = condition
-            .and_then(|condition| condition_cache::rows_of(condition.condition(), part.nums_rows));
+            .and_then(|condition| condition_cache::rows_of(condition.condition(), block_rows.len));
         if io_skipped {
             // Nothing is output: the block is read only for the rows it selects.
             debug_assert!(exact && no_output_columns);
-            let rows = and_selection(cached_rows, selected_rows(part));
+            let rows = and_selection(cached_rows, selected_rows(part, block_rows));
             let num_rows = rows
                 .as_ref()
-                .map_or(part.nums_rows, |rows| rows.len() - rows.null_count());
+                .map_or(block_rows.len, |rows| rows.len() - rows.null_count());
             return Ok(ReadStateOutput {
                 block: DataBlock::empty_with_rows(num_rows),
                 bitmap_selection: rows,
                 scan_stats: BlockScanStats {
-                    rows: part.nums_rows,
+                    rows: block_rows.len,
                     bytes: 0,
                 },
             });
         }
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
-        if no_output_columns
+        if whole
+            && no_output_columns
             && self.early.is_none()
             && condition.is_none()
             && self.filters_deterministic
             && self.runtime_filters.is_empty()
             && self.remain_column_ids.is_empty()
-            && part.nums_rows > MIN_BATCH_ROWS
+            && block_rows.len > MIN_BATCH_ROWS
             && self.pre_reader.can_parquet_batches(&pre_columns_chunks)
         {
             let mut batches = self.pre_reader.parquet_batches(
@@ -666,8 +716,8 @@ impl ReadState {
                 &mut self.pre_field_levels,
             )?;
             let mut bytes = 0;
-            let mut bits = MutableBitmap::with_capacity(part.nums_rows);
-            let mut leading_bits = MutableBitmap::with_capacity(part.nums_rows);
+            let mut bits = MutableBitmap::with_capacity(block_rows.len);
+            let mut leading_bits = MutableBitmap::with_capacity(block_rows.len);
             while let Some(batch) = batches.next_block(part) {
                 let batch = batch?;
                 bytes += block_logical_bytes(&batch);
@@ -688,19 +738,19 @@ impl ReadState {
                 condition_cache::insert(key, part, &leading_bits.into());
             }
             // Apply the pruner's selection in original block coordinates.
-            let bitmap = and_selection(Some(bitmap), selected_rows(part)).unwrap();
+            let bitmap = and_selection(Some(bitmap), selected_rows(part, block_rows)).unwrap();
             return Ok(ReadStateOutput {
                 block: DataBlock::empty_with_rows(bitmap.len() - bitmap.null_count()),
                 bitmap_selection: Some(bitmap),
                 scan_stats: BlockScanStats {
-                    rows: part.nums_rows,
+                    rows: block_rows.len,
                     bytes,
                 },
             });
         }
 
         let mut scan_stats = BlockScanStats {
-            rows: part.nums_rows,
+            rows: block_rows.len,
             bytes: 0,
         };
         // The rows the later prewhere stage decodes and filters: those the early stage selects,
@@ -716,6 +766,7 @@ impl ReadState {
                     early,
                     &self.func_ctx,
                     part,
+                    block_rows,
                     &columns_chunks,
                     cached_rows.as_ref(),
                     exact,
@@ -727,13 +778,13 @@ impl ReadState {
         };
         // Without the pruner's selection, the early selection holds the rows the early
         // conjuncts select, so the filter's rows can be recorded.
-        let unpruned = selected_rows(part).is_none();
+        let unpruned = selected_rows(part, block_rows).is_none();
         if let (Some(key), Some(selection), true) = (record_leading, &candidates, unpruned)
             && self.early.is_some()
         {
             condition_cache::insert(key, part, selection);
         }
-        let num_rows = candidates.as_ref().map_or(part.nums_rows, |selection| {
+        let num_rows = candidates.as_ref().map_or(block_rows.len, |selection| {
             selection.len() - selection.null_count()
         });
         if let Some(selection) = &candidates
@@ -759,6 +810,7 @@ impl ReadState {
         let mut preread_block = deserialize_selected(
             &self.pre_reader,
             part,
+            block_rows.len,
             pre_columns_chunks,
             candidates.as_ref(),
             self.prewhere_selectivity_threshold,
@@ -812,7 +864,7 @@ impl ReadState {
         let mut bitmap_selection = and_selection(filter_bitmap, runtime_filter_bitmap);
         // The early stage applied the pruner's selection.
         if self.early.is_none()
-            && let Some(rows) = selected_rows(part)
+            && let Some(rows) = selected_rows(part, block_rows)
         {
             let rows = match &candidates {
                 Some(candidates) => compress_selection(candidates, &rows),
@@ -844,6 +896,7 @@ impl ReadState {
         let remain_block = deserialize_selected(
             &self.remain_reader,
             part,
+            block_rows.len,
             remain_columns_chunks,
             bitmap_selection.as_ref(),
             self.prewhere_selectivity_threshold,
@@ -896,7 +949,7 @@ impl ReadState {
             return Ok(None);
         }
 
-        let index_selection = selected_rows(part);
+        let index_selection = selected_rows(part, BlockRows::whole(part));
 
         let (stage, bytes) = match &self.plan {
             ReadPlan::Empty => return Ok(None),
@@ -1224,6 +1277,7 @@ fn filter_early_stage(
     early: &mut EarlyStage,
     func_ctx: &FunctionContext,
     part: &FuseBlockPartInfo,
+    block_rows: BlockRows,
     columns_chunks: &HashMap<ColumnId, DataItem>,
     candidates: Option<&Bitmap>,
     exact: bool,
@@ -1231,8 +1285,9 @@ fn filter_early_stage(
     let chunks = ReadState::filter_column_chunks(columns_chunks, &early.column_ids)?;
     if let Some(candidates) = candidates {
         let raw_bytes = raw_bytes_of_chunks(&chunks);
-        let block = early.reader.deserialize_part(
+        let block = early.reader.deserialize_part_with_num_rows(
             part,
+            block_rows.len,
             chunks,
             Some(&RowSelection::from(candidates)),
             Some(&mut early.field_levels),
@@ -1240,7 +1295,7 @@ fn filter_early_stage(
         let bytes = estimate_block_bytes(
             block.memory_size(),
             block.num_rows(),
-            part.nums_rows,
+            block_rows.len,
             raw_bytes,
         );
         let bitmap: Bitmap = if exact {
@@ -1257,7 +1312,7 @@ fn filter_early_stage(
         };
         let bitmap = and_selection(
             Some(bitmap),
-            selected_rows(part).map(|rows| compress_selection(candidates, &rows)),
+            selected_rows(part, block_rows).map(|rows| compress_selection(candidates, &rows)),
         )
         .unwrap();
         let retained = (!early.retained_indices.is_empty() && bitmap.null_count() < bitmap.len())
@@ -1273,8 +1328,12 @@ fn filter_early_stage(
             bytes,
         });
     }
-    let pruned = selected_rows(part);
-    if part.nums_rows > MIN_BATCH_ROWS && early.reader.can_parquet_batches(&chunks) {
+    let pruned = selected_rows(part, block_rows);
+    // Batches decode whole column chunks.
+    if block_rows.is_whole(part)
+        && block_rows.len > MIN_BATCH_ROWS
+        && early.reader.can_parquet_batches(&chunks)
+    {
         let EarlyBatchesOutput {
             selection,
             retained,
@@ -1298,9 +1357,13 @@ fn filter_early_stage(
             bytes,
         });
     }
-    let block = early
-        .reader
-        .deserialize_part(part, chunks, None, Some(&mut early.field_levels))?;
+    let block = early.reader.deserialize_part_with_num_rows(
+        part,
+        block_rows.len,
+        chunks,
+        None,
+        Some(&mut early.field_levels),
+    )?;
     let bytes = block.memory_size();
     let bitmap: Bitmap = eval_filter(
         &early.filter,
@@ -1381,9 +1444,18 @@ fn runtime_filter_column_is_projectable(
 }
 
 /// The rows of the block that index pruning selected for output (see
-/// `BlockMetaIndex::selected_rows`). `None` when every row is output.
-fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
-    part.block_meta_index()?.selected_rows(part.nums_rows)
+/// `BlockMetaIndex::selected_rows`) among the `rows` read. `None` when every row of them is
+/// output.
+fn selected_rows(part: &FuseBlockPartInfo, rows: BlockRows) -> Option<Bitmap> {
+    let selected = part.block_meta_index()?.selected_rows(part.nums_rows)?;
+    let selected = match rows.is_whole(part) {
+        true => selected,
+        false => selected.sliced(rows.start, rows.len),
+    };
+    if selected.null_count() == 0 {
+        return None;
+    }
+    Some(selected)
 }
 
 /// Decodes `chunks` for the rows `selection` sets and adds the bytes of the whole block to
@@ -1392,6 +1464,7 @@ fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
 fn deserialize_selected(
     reader: &BlockReader,
     part: &FuseBlockPartInfo,
+    block_rows: usize,
     chunks: HashMap<ColumnId, DataItem>,
     selection: Option<&Bitmap>,
     threshold: u64,
@@ -1402,21 +1475,24 @@ fn deserialize_selected(
         selection.filter(|selection| should_push_down_row_selection(selection, threshold))
     {
         let raw_bytes = raw_bytes_of_chunks(&chunks);
-        let block = reader.deserialize_part(
+        let block = reader.deserialize_part_with_num_rows(
             part,
+            block_rows,
             chunks,
             Some(&RowSelection::from(selection)),
             Some(field_levels),
         )?;
-        *bytes += estimate_block_bytes(
-            block.memory_size(),
-            block.num_rows(),
-            part.nums_rows,
-            raw_bytes,
-        );
+        *bytes +=
+            estimate_block_bytes(block.memory_size(), block.num_rows(), block_rows, raw_bytes);
         return Ok(block);
     }
-    let block = reader.deserialize_part(part, chunks, None, Some(field_levels))?;
+    let block = reader.deserialize_part_with_num_rows(
+        part,
+        block_rows,
+        chunks,
+        None,
+        Some(field_levels),
+    )?;
     *bytes += block.memory_size();
     match selection {
         Some(selection) => block.filter_with_bitmap(selection),
@@ -1439,7 +1515,7 @@ fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
 
 fn raw_bytes_of_item(item: &DataItem) -> usize {
     match item {
-        DataItem::RawData(buffer) => buffer.len(),
+        DataItem::RawData(buffer) | DataItem::GranuleData(buffer, _) => buffer.len(),
         DataItem::ColumnArray(array) => array.1,
     }
 }

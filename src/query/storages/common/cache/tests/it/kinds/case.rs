@@ -29,6 +29,7 @@ use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::granule;
 use databend_storages_common_cache::kinds::iceberg;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::parquet;
@@ -99,6 +100,7 @@ pub fn cases() -> Vec<Box<dyn KindCase>> {
         case::<inverted::Searcher>(),
         case::<inverted::TermInfo>(),
         case::<spatial::Index>(),
+        case::<granule::Marks>(),
         case::<column::Data>(),
         case::<column::Array>(),
     ]

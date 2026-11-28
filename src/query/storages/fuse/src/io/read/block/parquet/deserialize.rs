@@ -248,7 +248,7 @@ pub(super) fn column_chunks_record_reader(
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {
-            DataItem::RawData(bytes) => {
+            DataItem::RawData(bytes) | DataItem::GranuleData(bytes, _) => {
                 let dfs_id = read_schema.column_id_to_dfs_id[column_id];
                 projection_mask.push(dfs_id);
                 builder.add_column_chunk_with_compression(

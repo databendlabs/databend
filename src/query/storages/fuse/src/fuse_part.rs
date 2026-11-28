@@ -51,6 +51,7 @@ use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
 
@@ -61,6 +62,8 @@ pub struct FuseBlockPartInfo {
 
     pub bloom_filter_index_location: Option<Location>,
     pub bloom_filter_index_size: u64,
+    #[serde(default)]
+    pub granule_index: Option<GranuleIndexLayout>,
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
@@ -214,6 +217,7 @@ impl FuseBlockPartInfo {
         location: String,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        granule_index: Option<GranuleIndexLayout>,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
@@ -228,6 +232,7 @@ impl FuseBlockPartInfo {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            granule_index,
             create_on,
             columns_meta,
             nums_rows: rows_count as usize,
@@ -396,6 +401,7 @@ mod tests {
             "1/2/_b/block.parquet".to_string(),
             None,
             0,
+            None,
             0,
             (0..columns)
                 .map(|id| (id, ColumnMeta::Parquet(meta.clone())))
@@ -462,6 +468,7 @@ mod tests {
             "1/2/_b/block.parquet".to_string(),
             None,
             0,
+            None,
             rows,
             HashMap::new(),
             None,

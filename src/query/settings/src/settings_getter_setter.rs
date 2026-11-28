@@ -291,6 +291,10 @@ impl Settings {
         self.try_get_u64("storage_io_min_bytes_for_seek")
     }
 
+    pub fn get_storage_io_merge_equivalent_bytes(&self) -> Result<u64> {
+        self.try_get_u64("storage_io_merge_equivalent_bytes")
+    }
+
     pub fn get_storage_io_max_page_bytes_for_read(&self) -> Result<u64> {
         self.try_get_u64("storage_io_max_page_bytes_for_read")
     }
@@ -817,6 +821,10 @@ impl Settings {
 
     pub fn get_enable_recluster_multiway_merge(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_recluster_multiway_merge")? != 0)
+    }
+
+    pub fn get_recluster_depth_reduction(&self) -> Result<u64> {
+        self.try_get_u64("recluster_depth_reduction")
     }
 
     pub fn set_recluster_block_size(&self, val: u64) -> Result<()> {

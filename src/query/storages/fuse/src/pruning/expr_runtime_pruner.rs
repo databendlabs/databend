@@ -653,6 +653,7 @@ mod tests {
             "memory:///block".to_string(),
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
             4,
             column_metas(&[column_id]),
             Some(column_stats),
@@ -681,6 +682,7 @@ mod tests {
                 .filter_map(|group| group.bloom.as_ref())
                 .map(|bloom| bloom.file_size)
                 .sum(),
+            None,
             part.nums_rows as u64,
             part.columns_meta.clone(),
             part.columns_stat.clone(),
@@ -954,6 +956,7 @@ mod tests {
             "memory:///block".to_string(),
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
             1000,
             column_metas(&[column_id]),
             Some(column_stats),

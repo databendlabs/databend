@@ -15,6 +15,7 @@
 use crate::CacheRegistry;
 use crate::kinds::bloom;
 use crate::kinds::column;
+use crate::kinds::granule;
 use crate::kinds::iceberg;
 use crate::kinds::inverted;
 use crate::kinds::parquet;
@@ -56,6 +57,7 @@ impl CacheRegistry {
             .register::<inverted::Searcher>()
             .register::<inverted::TermInfo>()
             .register::<spatial::Index>()
+            .register::<granule::Marks>()
             .register::<column::Data>()
             .register::<column::Array>();
         registry

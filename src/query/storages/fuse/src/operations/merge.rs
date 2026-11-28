@@ -31,6 +31,7 @@ use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::block_index::create_block_index_specs;
+use crate::io::granule_index::build_granule_index_specs;
 use crate::statistics::ClusterStatsGenerator;
 
 impl FuseTable {
@@ -97,6 +98,8 @@ impl FuseTable {
             .approx_distinct_cols()
             .distinct_column_fields(new_schema.clone(), RangeIndex::supported_table_type)?;
         let block_index_specs = create_block_index_specs(self, new_schema.clone())?;
+        let granule_index_specs =
+            build_granule_index_specs(&self.table_info.meta.indexes, &self.table_info.meta.schema)?;
 
         let json_path_statistics_builder = if self.enable_virtual_column() {
             JsonPathStatisticsBuilder::try_create(
@@ -118,6 +121,7 @@ impl FuseTable {
             bloom_columns_map,
             ndv_columns_map,
             top_n: None,
+            granule_index_specs,
             block_index_specs,
             virtual_column_builder: None,
             json_path_statistics_builder,

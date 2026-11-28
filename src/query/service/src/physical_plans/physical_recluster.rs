@@ -57,6 +57,7 @@ use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
@@ -64,10 +65,10 @@ use databend_common_storages_fuse::operations::HilbertRangeExchange;
 use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::ReclusterTaskBudget;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
-use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
+use databend_common_storages_fuse::operations::build_recluster_index_merge_pipeline;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -149,7 +150,14 @@ impl IPhysicalPlan for Recluster {
         let threads = settings.get_max_threads()? as usize;
         let io_requests = threads.max(settings.get_max_storage_io_requests()? as usize);
         if self.tasks.len() == 1 && self.task_batches.is_none() {
-            return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
+            return self.build_task_pipeline(
+                builder,
+                &self.tasks[0],
+                threads,
+                io_requests,
+                0,
+                true,
+            );
         }
         let bytes = self.validate_node_batch(&builder.ctx)?;
         log::info!(
@@ -159,7 +167,14 @@ impl IPhysicalPlan for Recluster {
             "Building isolated recluster branches with node-local concurrency limits"
         );
         if self.tasks.len() == 1 {
-            return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
+            return self.build_task_pipeline(
+                builder,
+                &self.tasks[0],
+                threads,
+                io_requests,
+                0,
+                true,
+            );
         }
         let sequential = self.tasks.len() > threads;
         let active_tasks = if sequential { 1 } else { self.tasks.len() };
@@ -179,7 +194,8 @@ impl IPhysicalPlan for Recluster {
             }
             let parent_ctx = std::mem::replace(&mut builder.ctx, child_ctx);
             // Restore the parent even if constructing this branch fails.
-            let result = self.build_task_pipeline(builder, task, task_threads, task_io, idx);
+            let result =
+                self.build_task_pipeline(builder, task, task_threads, task_io, idx, !sequential);
             builder.ctx = parent_ctx;
             result?;
             let sinks = builder.main_pipeline.take_sinks();
@@ -272,6 +288,7 @@ impl Recluster {
         max_threads: usize,
         max_io_requests: usize,
         task_index: usize,
+        index_merge_allowed: bool,
     ) -> Result<()> {
         let table = builder
             .ctx
@@ -322,6 +339,31 @@ impl Recluster {
         }
         let recluster_block_nums = task.parts.len();
         let table_info = table.get_table_info();
+        let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
+            task.total_rows,
+            task.total_bytes,
+            task.total_compressed,
+        );
+        // Only the ordinary linear merge of MergeBlocks may write several sorted outputs.
+        // Multiway merge, Hilbert, vector and re-aggregating tables keep their layouts.
+        let sorted_outputs = if task.kind == ReclusterTaskKind::MergeBlocks
+            && !multiway_merge
+            && cluster_stats_gen.is_linear()
+            && !is_materialized_view_engine(table.engine())
+        {
+            recluster_sorted_outputs(
+                settings.get_recluster_depth_reduction()?,
+                recluster_block_nums,
+                task.total_rows.div_ceil(rows_per_block.max(1)),
+                max_threads,
+                table_info
+                    .options()
+                    .get(FUSE_OPT_KEY_RECLUSTER_DEPTH)
+                    .and_then(|depth| depth.parse::<u64>().ok()),
+            )
+        } else {
+            1
+        };
         let description = task.stats.get_description(&table_info.desc);
         let plan = DataSourcePlan {
             source_info: DataSourceInfo::TableSource(table_info.clone()),
@@ -356,12 +398,14 @@ impl Recluster {
                 task_kind :? = task.kind,
                 cluster_layout = cluster_stats_gen.layout_name(),
                 input_blocks = recluster_block_nums,
+                sorted_outputs,
                 input_levels :serde = task.input_level_stats;
                 "Recluster input planned"
             );
         }
-
-        let index_merge = match multiway_merge {
+        // The index merge pipeline ends the data pipeline with a sink, which a sequential
+        // node batch cannot hold back, so such a batch rebuilds the indexes instead.
+        let index_merge = match multiway_merge && index_merge_allowed {
             true if settings.get_enable_recluster_inverted_index_merge()?
                 && !table.schema().fields().iter().any(|field| {
                     matches!(field.data_type(), TableDataType::AggregateState { .. })
@@ -371,6 +415,12 @@ impl Recluster {
             }
             _ => None,
         };
+        // With an index merge, the written blocks end in a sink of their own pipeline, and the
+        // index merge continues the main pipeline, which may already hold the other tasks of
+        // the node batch.
+        let main_pipeline = index_merge
+            .as_ref()
+            .map(|_| std::mem::replace(&mut builder.main_pipeline, Pipeline::create()));
         if multiway_merge {
             if !cluster_stats_gen.is_linear() {
                 return Err(ErrorCode::Internal(
@@ -440,11 +490,6 @@ impl Recluster {
                 .main_pipeline
                 .add_transformer(|| TransformReclusterOutputOrder { next_row: 0 });
         }
-        let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
-            task.total_rows,
-            task.total_bytes,
-            task.total_compressed,
-        );
 
         // Cut lines never drop below the table thresholds, so every output block,
         // including a constant-key one, is large enough to be judged complete.
@@ -490,6 +535,7 @@ impl Recluster {
                 rows_per_block,
                 compact_thresholds,
                 max_threads,
+                sorted_outputs,
             )?;
         }
 
@@ -552,15 +598,17 @@ impl Recluster {
                 proc.into_processor()
             },
         )?;
-        if let Some(index_merge) = index_merge {
-            builder.main_pipeline.try_resize(1)?;
-            builder.main_pipeline.add_accumulating_transformer(|| {
-                TransformReclusterIndexMerge::new(
-                    builder.ctx.clone(),
-                    index_merge_table.clone(),
-                    index_merge.clone(),
-                )
-            });
+        if let (Some(index_merge), Some(main_pipeline)) = (index_merge, main_pipeline) {
+            let mut data_pipeline = std::mem::replace(&mut builder.main_pipeline, main_pipeline);
+            build_recluster_index_merge_pipeline(
+                &mut data_pipeline,
+                &mut builder.main_pipeline,
+                builder.ctx.clone(),
+                &index_merge_table,
+                index_merge,
+                max_threads,
+            )?;
+            builder.pipelines.push(data_pipeline);
         }
         Ok(())
     }
@@ -674,6 +722,7 @@ impl Recluster {
         rows_per_block: usize,
         compact_thresholds: BlockThresholds,
         max_threads: usize,
+        sorted_outputs: usize,
     ) -> Result<()> {
         if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
             let vector_column_input_offset = vector_operator.vector_column_input_offset;
@@ -703,6 +752,29 @@ impl Recluster {
         )?
         .with_block_size_hit(rows_per_block)
         .with_max_threads(max_threads);
+        if sorted_outputs > 1 {
+            debug_assert_eq!(task.kind, ReclusterTaskKind::MergeBlocks);
+            // Mergers also emit at the bytes that make an output block large enough, so
+            // wide rows reach the compactors without waiting for a full row batch.
+            sort_pipeline_builder.build_merge_sort_without_combiner_pipeline(
+                &mut builder.main_pipeline,
+                sorted_outputs,
+                Some(compact_thresholds.min_bytes_per_block),
+            )?;
+            // Each output is sorted, so compacting it on its own cuts blocks over contiguous
+            // key ranges. The outputs overlap one another: that is the depth the task gives
+            // up for writing without one global order. Blocks of all outputs then serialize
+            // in parallel.
+            let extra_key_num = cluster_stats_gen.extra_key_num;
+            builder.main_pipeline.add_accumulating_transformer(move || {
+                OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+            });
+            builder.main_pipeline.try_resize(max_threads)?;
+            builder
+                .main_pipeline
+                .add_block_meta_transformer(|| TransformCompactBlock);
+            return Ok(());
+        }
         Self::build_recluster_sort_pipeline(
             task.kind,
             sort_pipeline_builder,
@@ -716,6 +788,48 @@ impl Recluster {
             cluster_stats_gen.extra_key_num,
         )
     }
+}
+
+/// Each sorted output cuts at least this many blocks, so its last, partial block stays a
+/// small share of it.
+const MIN_BLOCKS_PER_SORTED_OUTPUT: usize = 4;
+/// Fewer sorted outputs than this narrow the k-way merge more than they gain.
+const MIN_PARALLEL_SORTED_OUTPUTS: usize = 4;
+
+/// Sorted outputs a MergeBlocks task over `input_blocks` overlapping blocks writes in
+/// parallel; 1 keeps the merge into one global order.
+///
+/// `depth_reduction` is the percentage of the overlap depth the task must still remove.
+/// With `r` outputs, `r` of the `k` overlapping blocks remain, which removes
+/// `(k - r) / (k - 1)` of the depth, so the largest `r` it allows is
+/// `1 + (1 - depth_reduction) * (k - 1)`: it grows with the inputs and shrinks to 1 for
+/// few. The count is also bounded by the output blocks, the threads and the table option
+/// `recluster_depth`, the depth the table accepts.
+///
+/// Each output merges on one thread while the global merge uses them all, so fewer
+/// outputs than `MIN_PARALLEL_SORTED_OUTPUTS` or half the threads keep the global merge.
+fn recluster_sorted_outputs(
+    depth_reduction: u64,
+    input_blocks: usize,
+    output_blocks: usize,
+    threads: usize,
+    recluster_depth: Option<u64>,
+) -> usize {
+    if depth_reduction == 0 || input_blocks < 2 {
+        return 1;
+    }
+    let lost_percent = 100 - depth_reduction.min(100) as usize;
+    let mut outputs = 1 + lost_percent * (input_blocks - 1) / 100;
+    outputs = outputs
+        .min(output_blocks / MIN_BLOCKS_PER_SORTED_OUTPUT)
+        .min(threads);
+    if let Some(depth) = recluster_depth {
+        outputs = outputs.min(usize::try_from(depth).unwrap_or(usize::MAX));
+    }
+    if outputs < MIN_PARALLEL_SORTED_OUTPUTS.max(threads.div_ceil(2)) {
+        return 1;
+    }
+    outputs
 }
 
 #[cfg(test)]
@@ -911,7 +1025,7 @@ mod tests {
                     let mut task = source.tasks[0].clone();
                     task.kind = ReclusterTaskKind::SortBlocks;
                     let err = source
-                        .build_task_pipeline(&mut builder, &task, 1, 1, 0)
+                        .build_task_pipeline(&mut builder, &task, 1, 1, 0, true)
                         .unwrap_err();
                     assert_eq!(err.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
                 }
@@ -1047,5 +1161,31 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_recluster_sorted_outputs() {
+        // Disabled, or a task that removes all of its depth, keeps one global order.
+        assert_eq!(recluster_sorted_outputs(0, 3000, 1000, 16, None), 1);
+        assert_eq!(recluster_sorted_outputs(100, 3000, 1000, 16, None), 1);
+        assert_eq!(recluster_sorted_outputs(87, 1, 1000, 16, None), 1);
+
+        // Many inputs grow to the threads; fewer shrink with 13% of the inputs.
+        assert_eq!(recluster_sorted_outputs(87, 3000, 1000, 16, None), 16);
+        assert_eq!(recluster_sorted_outputs(87, 64, 1000, 16, None), 9);
+        // Below half the threads, the global merge keeps all of them.
+        assert_eq!(recluster_sorted_outputs(87, 40, 1000, 16, None), 1);
+        assert_eq!(recluster_sorted_outputs(87, 40, 1000, 8, None), 6);
+        // Fewer than four parallel outputs never pay off, even with few threads.
+        assert_eq!(recluster_sorted_outputs(87, 24, 1000, 4, None), 1);
+        assert_eq!(recluster_sorted_outputs(87, 25, 1000, 4, None), 4);
+
+        // Every output cuts at least four blocks.
+        assert_eq!(recluster_sorted_outputs(87, 3000, 20, 16, None), 1);
+        assert_eq!(recluster_sorted_outputs(87, 3000, 20, 8, None), 5);
+
+        // The table option `recluster_depth` bounds the depth left behind.
+        assert_eq!(recluster_sorted_outputs(87, 3000, 1000, 8, Some(4)), 4);
+        assert_eq!(recluster_sorted_outputs(87, 3000, 1000, 8, Some(1)), 1);
     }
 }

@@ -67,6 +67,9 @@ pub(crate) struct ReclusterProperties {
     pub(crate) partition_key_count: usize,
     pub(crate) partition_key_id: Option<u32>,
     pub(crate) memory_threshold: usize,
+    /// Mirrors `ReclusterStrategy::supports_ordered_merge` so candidate builders can classify
+    /// tasks without holding the strategy.
+    pub(crate) supports_ordered_merge: bool,
     /// Split unordered linear inputs before overlap-based merge selection.
     /// Materialized views retain their re-aggregation selection semantics.
     pub(crate) split_sort_tasks: bool,
@@ -125,6 +128,7 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
+            supports_ordered_merge: strategy.supports_ordered_merge(),
             split_sort_tasks: strategy.supports_ordered_merge()
                 && !is_materialized_view_engine(table.engine()),
             cluster_key_info,
@@ -174,6 +178,7 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
+            supports_ordered_merge: strategy.supports_ordered_merge(),
             split_sort_tasks: strategy.supports_ordered_merge(),
             cluster_key_info,
             partition_key_count,
@@ -354,18 +359,41 @@ impl CandidateScore {
     }
 }
 
+/// The selector class that produced a recluster task candidate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReclusterCandidateKind {
+    Repack,
+    Depth,
+}
+
+impl fmt::Display for ReclusterCandidateKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Repack => write!(f, "repack"),
+            Self::Depth => write!(f, "depth"),
+        }
+    }
+}
+
 /// In-memory rewrite candidate produced from one probed window.
 #[derive(Clone)]
 pub(crate) struct ReclusterTaskCandidate {
     pub(crate) score: CandidateScore,
+    pub(crate) kind: ReclusterCandidateKind,
     // Empty means a rebuild-only repack candidate.
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
     pub(crate) base_level: i32,
     pub(crate) input_level_stats: Vec<ClusterLevelLogStats>,
-    pub(crate) kind: ReclusterTaskKind,
+    /// Row-sort stage work for the horizontal pipeline; `MergeBlocks` implies every input is
+    /// already ordered by the current linear cluster key.
+    pub(crate) task_kind: ReclusterTaskKind,
 }
 
 impl ReclusterTaskCandidate {
+    /// Whether this candidate only repacks unchanged blocks into fewer segments.
+    pub(crate) fn is_repack_only(&self) -> bool {
+        self.selected_blocks.is_empty()
+    }
     pub(crate) fn selected_block_count(&self) -> usize {
         self.selected_blocks
             .iter()
@@ -382,20 +410,17 @@ impl ReclusterTaskCandidate {
             (self.base_level + 1).to_string()
         }
     }
-
-    /// Whether this candidate only repacks unchanged blocks into fewer segments.
-    pub(crate) fn is_repack_only(&self) -> bool {
-        self.selected_blocks.is_empty()
-    }
 }
 
 impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "requested_output_level={} repack_only={} max_depth={} avg_depth={} block_count={} block_size={}",
+            "requested_output_level={} repack_only={} candidate_kind={} task_kind={:?} max_depth={} avg_depth={} block_count={} block_size={}",
             self.requested_output_level(),
             self.is_repack_only(),
+            self.kind,
+            self.task_kind,
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
@@ -438,7 +463,8 @@ pub struct SelectedReclusterSegment {
 }
 
 pub(crate) fn task_candidate(
-    supports_ordered_merge: bool,
+    properties: &ReclusterProperties,
+    kind: ReclusterCandidateKind,
     group: ReclusterGroup,
     score: CandidateScore,
     task_indices: &[usize],
@@ -475,7 +501,7 @@ pub(crate) fn task_candidate(
         stats.block_size = stats.block_size.saturating_add(block.meta.block_size);
         stats.file_size = stats.file_size.saturating_add(block.meta.file_size);
     }
-    let kind = match supports_ordered_merge
+    let task_kind = match properties.supports_ordered_merge
         && task_indices
             .iter()
             .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original))
@@ -485,10 +511,11 @@ pub(crate) fn task_candidate(
     };
     ReclusterTaskCandidate {
         score,
+        kind,
         selected_blocks,
         base_level,
         input_level_stats: stats_by_level.into_values().collect(),
-        kind,
+        task_kind,
     }
 }
 
@@ -499,4 +526,38 @@ pub(crate) fn passes_depth_gate(
 ) -> bool {
     let mature_gate = (2.0 * depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
     average_depth > depth_threshold || max_depth as f64 >= mature_gate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ReclusterGroup;
+    use super::ReclusterMode;
+
+    #[test]
+    fn test_aggressive_groups_only_low_maturity_blocks() {
+        for level in 1..=3 {
+            assert_eq!(
+                ReclusterGroup::assign(level, ReclusterMode::Aggressive),
+                ReclusterGroup::LowMaturity
+            );
+        }
+        for level in [0, 4, 8, 9, 15] {
+            assert_eq!(
+                ReclusterGroup::assign(level, ReclusterMode::Aggressive),
+                ReclusterGroup::Level(level)
+            );
+        }
+    }
+
+    #[test]
+    fn test_conservative_keeps_exact_level_groups() {
+        assert_eq!(
+            ReclusterGroup::assign(0, ReclusterMode::Conservative),
+            ReclusterGroup::Level(0)
+        );
+        assert_eq!(
+            ReclusterGroup::assign(1, ReclusterMode::Conservative),
+            ReclusterGroup::Level(1)
+        );
+    }
 }

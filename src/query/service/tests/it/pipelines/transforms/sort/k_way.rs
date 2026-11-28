@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use databend_common_expression::Column;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::StringType;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
+use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort_without_combiner;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 
 use super::*;
@@ -250,4 +252,142 @@ async fn test_k_way_merge_sort_exact_limit_compacts_string_views() -> anyhow::Re
     let data = vec![vec![first], vec![second]];
 
     assert_limit_compacts_string_views(ctx, data, 10).await
+}
+
+/// Merges `data` without the combiner and returns the blocks of every merger output.
+async fn merge_without_combiner(
+    ctx: Arc<QueryContext>,
+    data: Vec<Vec<DataBlock>>,
+    worker: usize,
+    block_size: usize,
+    batch_bytes: Option<usize>,
+) -> Result<Vec<Vec<DataBlock>>> {
+    let mut pipeline = Pipeline::create();
+    let schema = DataSchemaRefExt::create(vec![DataField::new(
+        "c0",
+        data[0][0].get_by_offset(0).data_type(),
+    )]);
+    pipeline.add_pipe(create_source_pipe(ctx, data)?);
+
+    let sort_desc = [SortColumnDescription {
+        offset: 0,
+        asc: true,
+        nulls_first: true,
+    }];
+    add_k_way_merge_sort_without_combiner(
+        &mut pipeline,
+        SortKeyDescription::new(sort_desc.into(), schema, true)?,
+        worker,
+        block_size,
+        batch_bytes,
+        false,
+        true,
+        true,
+    )?;
+
+    let (rxs, sink_pipe) = create_sink_pipe(pipeline.output_len())?;
+    pipeline.add_pipe(sink_pipe);
+    pipeline.set_max_threads(3);
+    let settings = ExecutorSettings {
+        query_id: Arc::new("".to_string()),
+        max_execute_time_in_seconds: Default::default(),
+        enable_queries_executor: false,
+        max_threads: 8,
+        executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
+    };
+    QueryPipelineExecutor::create(pipeline, settings)?.execute()?;
+
+    let mut outputs = Vec::with_capacity(rxs.len());
+    for mut rx in rxs {
+        let mut blocks = Vec::new();
+        while !rx.is_empty() {
+            blocks.push(rx.recv().await.unwrap()?);
+        }
+        outputs.push(blocks);
+    }
+    Ok(outputs)
+}
+
+fn int32_values(blocks: &[DataBlock]) -> Vec<i32> {
+    blocks
+        .iter()
+        .flat_map(|block| {
+            let column = block.get_by_offset(0).to_column();
+            Int32Type::try_downcast_column(&column)
+                .unwrap()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Every merger output is non-decreasing and carries no task meta, and the outputs
+/// together hold exactly the input rows.
+fn check_outputs_without_combiner(outputs: &[Vec<DataBlock>], expected: &DataBlock) {
+    let mut all = Vec::new();
+    for blocks in outputs {
+        assert!(blocks.iter().all(|block| block.get_meta().is_none()));
+        let values = int32_values(blocks);
+        assert!(
+            values.windows(2).all(|pair| pair[0] <= pair[1]),
+            "merger output is not sorted: {values:?}"
+        );
+        all.extend(values);
+    }
+    all.sort();
+    assert_eq!(all, int32_values(std::slice::from_ref(expected)));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_k_way_merge_sort_without_combiner() -> anyhow::Result<()> {
+    let mut rng = rand::thread_rng();
+    let fixture = TestFixture::setup().await?;
+
+    let (data, expected) = basic_test_data(None);
+    let ctx = fixture.new_query_ctx().await?;
+    let outputs = merge_without_combiner(ctx, data, 3, 4, None).await?;
+    assert_eq!(outputs.len(), 3);
+    check_outputs_without_combiner(&outputs, &expected);
+
+    for _ in 0..5 {
+        let worker = rng.gen_range(1..=5);
+        let block_size = rng.gen_range(1..=20);
+        let (data, expected, _) = random_test_data(&mut rng, false);
+        let ctx = fixture.new_query_ctx().await?;
+        let outputs = merge_without_combiner(ctx, data, worker, block_size, None).await?;
+        assert_eq!(outputs.len(), worker);
+        check_outputs_without_combiner(&outputs, &expected);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_k_way_merge_sort_without_combiner_batch_bytes() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let max_rows = |outputs: &[Vec<DataBlock>]| {
+        outputs
+            .iter()
+            .flatten()
+            .map(DataBlock::num_rows)
+            .max()
+            .unwrap()
+    };
+
+    // The row limit alone lets the first task, six rows, out in one batch.
+    let (data, expected) = basic_test_data(None);
+    let ctx = fixture.new_query_ctx().await?;
+    let outputs = merge_without_combiner(ctx, data, 2, 16, None).await?;
+    check_outputs_without_combiner(&outputs, &expected);
+    assert!(max_rows(&outputs) > 3);
+
+    // An Int32 row is four bytes, so eight bytes target two rows. A task splits into
+    // even batches, which stay under twice the target.
+    let (data, expected) = basic_test_data(None);
+    let ctx = fixture.new_query_ctx().await?;
+    let outputs = merge_without_combiner(ctx, data, 2, 16, Some(8)).await?;
+    check_outputs_without_combiner(&outputs, &expected);
+    assert!(max_rows(&outputs) <= 3);
+    Ok(())
 }

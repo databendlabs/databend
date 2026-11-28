@@ -540,3 +540,26 @@ pub struct ReclusterInfoSideCar {
     #[serde(default)]
     pub acquire_commit_lock: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_old_recluster_task_defaults_optional_fields() {
+        let encoded = serde_json::json!({
+            "parts": { "kind": "Seq", "partitions": [] },
+            "stats": PartStatistics::default(),
+            "total_rows": 0,
+            "total_bytes": 0,
+            "total_compressed": 0,
+            "level": 0,
+            "kind": "SortBlocks"
+        });
+        let decoded: ReclusterTask = serde_json::from_value(encoded).unwrap();
+
+        assert!(decoded.input_level_stats.is_empty());
+        assert!(decoded.virtual_column_layout.is_none());
+        assert!(decoded.inverted_index_sources.is_empty());
+    }
+}

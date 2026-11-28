@@ -92,6 +92,8 @@ impl StreamTablePart {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct StreamColumnMeta {
     pub block_id: i128,
+    #[serde(default)]
+    pub block_row_offset: usize,
     pub inner: Option<BlockMetaInfoPtr>,
 }
 
@@ -121,8 +123,9 @@ impl StreamColumnMeta {
     }
 }
 
-pub fn build_origin_block_row_num(num_rows: usize) -> BlockEntry {
-    let row_ids = (0..num_rows as u64).collect();
+pub fn build_origin_block_row_num(block_row_offset: usize, num_rows: usize) -> BlockEntry {
+    let base = block_row_offset as u64;
+    let row_ids = (0..num_rows as u64).map(|i| i + base).collect();
     UInt64Type::from_data(row_ids).wrap_nullable(None).into()
 }
 
@@ -197,7 +200,9 @@ impl StreamColumn {
                     )
                 })
             }
-            StreamColumnType::OriginRowNum => build_origin_block_row_num(num_rows),
+            StreamColumnType::OriginRowNum => {
+                build_origin_block_row_num(meta.block_row_offset, num_rows)
+            }
         }
     }
 }
@@ -212,7 +217,12 @@ pub fn block_id_from_location(path: &str) -> Result<i128> {
 pub fn gen_mutation_stream_meta(
     inner: Option<BlockMetaInfoPtr>,
     path: &str,
+    block_row_offset: usize,
 ) -> Result<StreamColumnMeta> {
     let block_id = block_id_from_location(path)?;
-    Ok(StreamColumnMeta { block_id, inner })
+    Ok(StreamColumnMeta {
+        block_id,
+        block_row_offset,
+        inner,
+    })
 }

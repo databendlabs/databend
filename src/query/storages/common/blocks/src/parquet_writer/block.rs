@@ -14,7 +14,7 @@
 
 //! High-level, row-oriented single-row-group Parquet writer.
 //!
-//! [`BlockParquetWriter`] receives data row-wise (block by block) but parquet needs columns
+//! [`ParquetFileWriter`] receives data row-wise (block by block) but parquet needs columns
 //! written sequentially, so it holds one [`ArrowColumnWriter`] per leaf and encodes+compresses
 //! each block immediately into them. Buffered memory is therefore the compressed pages, not the
 //! raw blocks. At `finish` each column closes into an already-encoded `Vec<Bytes>` which is
@@ -24,7 +24,10 @@
 
 use std::sync::Arc;
 
+use arrow_array::Array;
 use arrow_array::RecordBatch;
+use arrow_array::cast::AsArray;
+use arrow_schema::DataType;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
@@ -46,6 +49,8 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::schema::types::SchemaDescPtr;
 
+use super::DataPageOffset;
+use super::LeafPageLayout;
 use super::SerializedParquet;
 use crate::MAX_BATCH_MEMORY_SIZE;
 use crate::PARQUET_PAGE_SIZE_HARD_LIMIT;
@@ -55,9 +60,9 @@ const PARQUET_MAGIC: &[u8; 4] = b"PAR1";
 
 /// High-level row-oriented writer: encodes+compresses each incoming `DataBlock` immediately
 /// into per-leaf [`ArrowColumnWriter`]s, then at [`Self::finish`] assembles the single-row-group
-/// file from the closed column chunks. Used by the insert / fuse `StreamBlockBuilder` path and
+/// file from the closed column chunks. Used by the standard FUSE `FuseBlockWriter` path and
 /// `blocks_to_parquet*` where blocks arrive incrementally or as a batch.
-pub struct BlockParquetWriter {
+pub struct ParquetFileWriter {
     arrow_schema: Arc<Schema>,
     props: WriterPropertiesPtr,
     /// Lazily created on first `write_block` (one writer per parquet leaf column). Each
@@ -65,6 +70,9 @@ pub struct BlockParquetWriter {
     /// compressed pages, not the raw blocks.
     state: Option<ColumnWriterState>,
     num_rows: usize,
+    /// When true, `finish` captures the per-leaf page layout (absolute offsets) into
+    /// `SerializedParquet::page_layout`. Off by default so the common write path pays nothing.
+    capture_page_layout: bool,
 }
 
 struct ColumnWriterState {
@@ -74,13 +82,55 @@ struct ColumnWriterState {
     parquet_schema: SchemaDescPtr,
 }
 
-impl BlockParquetWriter {
+/// Estimate bytes referenced by this slice, not the capacity of its backing buffers.
+/// Arrow's slice-size helper handles offset-based binary and fixed-width leaves, but
+/// does not count the payload of views or restrict list/map children to the visible range.
+fn slice_bytes(array: &dyn Array) -> Result<usize> {
+    if array.is_empty() {
+        return Ok(0);
+    }
+    let bytes = match array.data_type() {
+        DataType::Utf8View => array.as_string_view().total_bytes_len() + array.len() * 4,
+        DataType::LargeList(_) => {
+            let list = array.as_list::<i64>();
+            let offsets = list.value_offsets();
+            let start = offsets[0] as usize;
+            let len = offsets[array.len()] as usize - start;
+            slice_bytes(list.values().slice(start, len).as_ref())? + array.len() * 8
+        }
+        DataType::Map(_, _) => {
+            let map = array.as_map();
+            let offsets = map.value_offsets();
+            let start = offsets[0] as usize;
+            let len = offsets[array.len()] as usize - start;
+            slice_bytes(&map.entries().slice(start, len))? + array.len() * 4
+        }
+        DataType::Struct(_) => array
+            .as_struct()
+            .columns()
+            .iter()
+            .try_fold(0, |sum, child| {
+                Ok::<_, ErrorCode>(sum + slice_bytes(child.as_ref())?)
+            })?,
+        DataType::FixedSizeList(_, _) => slice_bytes(array.as_fixed_size_list().values().as_ref())?,
+        _ => return Ok(array.to_data().get_slice_memory_size()?),
+    };
+    Ok(bytes
+        + if array.nulls().is_some() {
+            array.len().div_ceil(8)
+        } else {
+            0
+        })
+}
+
+impl ParquetFileWriter {
     pub fn new(arrow_schema: Arc<Schema>, props: WriterPropertiesPtr) -> Self {
         Self {
             arrow_schema,
             props,
             state: None,
             num_rows: 0,
+            capture_page_layout: false,
         }
     }
 
@@ -100,6 +150,25 @@ impl BlockParquetWriter {
         Ok(self.state.as_mut().unwrap())
     }
 
+    /// Ask `finish` to capture the per-leaf page layout (absolute offsets) into
+    /// `SerializedParquet::page_layout`. Pair with [`Self::flush_page`] at granule boundaries so
+    /// the captured pages align to the index granularity.
+    pub fn enable_page_layout(&mut self) {
+        self.capture_page_layout = true;
+    }
+
+    /// Force a page boundary across every leaf column at the current row position, so all columns
+    /// share the same page boundary rows. No-op before the first block is written or when no
+    /// values are buffered. Call this at each index-granularity boundary.
+    pub fn flush_page(&mut self) -> Result<()> {
+        if let Some(state) = self.state.as_mut() {
+            for writer in state.column_writers.iter_mut() {
+                writer.flush_data_page()?;
+            }
+        }
+        Ok(())
+    }
+
     /// Encode and compress the block's columns immediately into the per-leaf column writers.
     /// Returns an error if leaf expansion or encoding fails.
     ///
@@ -107,9 +176,7 @@ impl BlockParquetWriter {
     /// the column writers flush pages by their `data_page_*` limits, but a single oversized
     /// `write` of values that all land in one mini-batch can still produce one page exceeding
     /// parquet's ~2GB page-size hard limit (i32 overflow). Pre-splitting keeps each `write`
-    /// bounded. Row size is assumed roughly uniform (`RecordBatch::slice` shares buffers, so a
-    /// sliced chunk's true size cannot be measured) — see the `LIMITATION` on the old
-    /// `write_batch_with_page_limit`.
+    /// bounded even when row sizes are skewed.
     pub fn write_block(&mut self, block: DataBlock) -> Result<()> {
         if block.is_empty() {
             return Ok(());
@@ -120,43 +187,51 @@ impl BlockParquetWriter {
         // Convert through the arrow schema so the columns line up with the parquet leaves by
         // schema (name/type/coercion), not by the block's positional column order.
         let batch = block.to_record_batch_with_arrow_schema(&arrow_schema)?;
-        let batch_size = batch.get_array_memory_size();
-
-        // Fast path: the whole batch fits within the soft limit, encode it in one go.
-        if batch_size <= MAX_BATCH_MEMORY_SIZE {
-            self.write_record_batch(&arrow_schema, &batch)?;
-            self.num_rows += num_rows;
-            return Ok(());
-        }
-
-        // A single row cannot be split across pages, so if one row exceeds the ~2GB hard limit
-        // the encode would overflow the i32 page size. Reject it up front with a clear error.
-        if num_rows == 1 {
-            if batch_size > PARQUET_PAGE_SIZE_HARD_LIMIT {
-                return Err(ErrorCode::Internal(format!(
-                    "A single row requires {} bytes which exceeds Parquet's page size limit ({} bytes).",
-                    batch_size, PARQUET_PAGE_SIZE_HARD_LIMIT
-                )));
-            }
-            self.write_record_batch(&arrow_schema, &batch)?;
-            self.num_rows += num_rows;
-            return Ok(());
-        }
-
-        // Split into row-chunks sized to stay under the soft limit, assuming uniform row size.
-        let rows_per_chunk = (((num_rows as f64) * (MAX_BATCH_MEMORY_SIZE as f64)
-            / batch_size as f64)
-            .ceil() as usize)
-            .max(1);
-        let mut offset = 0;
-        while offset < num_rows {
-            let length = rows_per_chunk.min(num_rows - offset);
-            let chunk = batch.slice(offset, length);
-            self.write_record_batch(&arrow_schema, &chunk)?;
-            offset += length;
-        }
+        self.write_sized_batch(
+            &arrow_schema,
+            &batch,
+            MAX_BATCH_MEMORY_SIZE,
+            PARQUET_PAGE_SIZE_HARD_LIMIT,
+        )?;
         self.num_rows += num_rows;
         Ok(())
+    }
+
+    fn write_sized_batch(
+        &mut self,
+        schema: &Schema,
+        batch: &RecordBatch,
+        soft_limit: usize,
+        hard_limit: usize,
+    ) -> Result<()> {
+        let num_rows = batch.num_rows();
+        let mut batch_size = 0;
+        for (field, column) in schema.fields().iter().zip(batch.columns()) {
+            let bytes = slice_bytes(column.as_ref())?;
+            // Different top-level fields never share a data page. Keep a conservative
+            // logical-size guard for a single field (which can itself be nested).
+            if num_rows == 1 && bytes > hard_limit {
+                return Err(ErrorCode::Internal(format!(
+                    "Single-row Parquet field '{}' exceeds the page size limit: estimated_slice_bytes={bytes}, field_arrow_memory_bytes={}, batch_arrow_memory_bytes={}, limit={hard_limit}",
+                    field.name(),
+                    column.get_array_memory_size(),
+                    batch.get_array_memory_size()
+                )));
+            }
+            batch_size += bytes;
+        }
+
+        if num_rows == 1 || batch_size <= soft_limit {
+            return self.write_record_batch(schema, batch);
+        }
+        let mid = num_rows / 2;
+        self.write_sized_batch(schema, &batch.slice(0, mid), soft_limit, hard_limit)?;
+        self.write_sized_batch(
+            schema,
+            &batch.slice(mid, num_rows - mid),
+            soft_limit,
+            hard_limit,
+        )
     }
 
     /// Leaf-expand each top-level column of `batch` and feed every leaf fragment into the
@@ -207,13 +282,20 @@ impl BlockParquetWriter {
         // same path: each leaf closes into a valid 0-row column chunk that `assemble_parquet`
         // stitches into an empty-schema file — no separate low-level fallback.
         self.ensure_state()?;
-        let BlockParquetWriter {
+        let ParquetFileWriter {
             arrow_schema,
             props,
             state,
             num_rows,
+            capture_page_layout,
         } = self;
-        assemble_parquet(&arrow_schema, props, state.unwrap(), num_rows)
+        assemble_parquet(
+            &arrow_schema,
+            props,
+            state.unwrap(),
+            num_rows,
+            capture_page_layout,
+        )
     }
 }
 
@@ -225,6 +307,7 @@ fn assemble_parquet(
     props: WriterPropertiesPtr,
     state: ColumnWriterState,
     num_rows: usize,
+    capture_page_layout: bool,
 ) -> Result<SerializedParquet> {
     let ColumnWriterState {
         column_writers,
@@ -241,8 +324,13 @@ fn assemble_parquet(
 
     let mut column_chunks = Vec::with_capacity(column_writers.len());
     let mut total_uncompressed: i64 = 0;
+    let mut page_layout: Option<Vec<LeafPageLayout>> =
+        capture_page_layout.then(|| Vec::with_capacity(column_writers.len()));
     for writer in column_writers {
         let (data, close) = writer.close()?.into_parts();
+        // The offset index (enabled by default in the fork) carries per-page locations with
+        // chunk-relative offsets; capture it before `close` is partially moved below.
+        let offset_index = close.offset_index.clone();
         let metadata = close.metadata;
 
         // A freshly closed chunk's offsets are relative to its own start (offset 0), so the
@@ -257,6 +345,35 @@ fn assemble_parquet(
             if !chunk.is_empty() {
                 payload.push(chunk);
             }
+        }
+
+        // Capture the per-leaf page layout with offsets remapped to absolute file positions.
+        // `chunk_end` is the post-chunk write position; the dict page (when present) starts at
+        // the chunk's absolute start (`write_offset`) and runs until the first data page.
+        if let Some(layout) = page_layout.as_mut() {
+            let chunk_end = file_offset as u64;
+            let abs_data_offset = map_offset(src_data_offset) as u64;
+            let dict_page = src_dictionary_offset.map(|d| {
+                let abs = map_offset(d) as u64;
+                (abs, abs_data_offset - abs)
+            });
+            let data_pages = offset_index
+                .as_ref()
+                .map(|oi| {
+                    oi.page_locations()
+                        .iter()
+                        .map(|p| DataPageOffset {
+                            first_row_index: p.first_row_index as u64,
+                            offset: map_offset(p.offset) as u64,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            layout.push(LeafPageLayout {
+                dict_page,
+                chunk_end,
+                data_pages,
+            });
         }
 
         total_uncompressed += metadata.uncompressed_size();
@@ -333,7 +450,11 @@ fn assemble_parquet(
     ParquetMetaDataWriter::new(&mut footer, &metadata).finish()?;
     payload.push(Bytes::from(footer));
 
-    Ok(SerializedParquet { payload, metadata })
+    Ok(SerializedParquet {
+        payload,
+        metadata,
+        page_layout,
+    })
 }
 
 #[cfg(test)]
@@ -362,7 +483,7 @@ mod tests {
         let arrow_schema = Arc::new(Schema::from(&schema));
         let block = sample_block();
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         writer.write_block(block.clone()).unwrap();
         let serialized = writer.finish().unwrap();
 
@@ -378,7 +499,7 @@ mod tests {
         let schema = sample_schema();
         let arrow_schema = Arc::new(Schema::from(&schema));
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         writer.write_block(sample_block()).unwrap();
         writer.write_block(sample_block()).unwrap();
         writer.write_block(sample_block()).unwrap();
@@ -403,7 +524,7 @@ mod tests {
         let values: Vec<String> = (0..1000).map(|i| format!("v{}", i % 5)).collect();
         let block = DataBlock::new_from_columns(vec![StringType::from_data(values)]);
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         writer.write_block(block.clone()).unwrap();
         let serialized = writer.finish().unwrap();
         assert_eq!(serialized.metadata.num_row_groups(), 1);
@@ -428,7 +549,7 @@ mod tests {
             ),
         ]);
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         assert_eq!(writer.compressed_size(), 0);
         writer.write_block(block).unwrap();
         // 10k identical i64 values compress to far less than the 80 KB raw size.
@@ -447,7 +568,7 @@ mod tests {
         let arrow_schema = Arc::new(Schema::from(&schema));
         let expected = DataBlock::concat(&[wide_block(), wide_block()]).unwrap();
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         writer.write_block(wide_block()).unwrap();
         writer.write_block(wide_block()).unwrap();
         let serialized = writer.finish().unwrap();
@@ -480,7 +601,7 @@ mod tests {
         assert!(raw_size > MAX_BATCH_MEMORY_SIZE, "test setup too small");
 
         // Disable dictionary so the values land in data pages, exercising the split path.
-        let mut writer = BlockParquetWriter::new(
+        let mut writer = ParquetFileWriter::new(
             arrow_schema,
             Arc::new(crate::build_parquet_writer_properties(
                 databend_storages_common_table_meta::table::TableCompression::None,
@@ -521,6 +642,36 @@ mod tests {
         assert_eq!(got.columns()[0].to_column(), StringType::from_data(values));
     }
 
+    #[test]
+    fn test_page_limit_counts_only_visible_variant_bytes() {
+        use databend_common_expression::types::VariantType;
+
+        let schema = TableSchema::new(vec![TableField::new("attrs", TableDataType::Variant)]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let block =
+            DataBlock::new_from_columns(vec![VariantType::from_data(vec![vec![1; 4096], vec![2]])]);
+        let tail = block
+            .slice(1..2)
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        let batch = block
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        let mut writer = ParquetFileWriter::new(arrow_schema.clone(), props(&schema));
+        assert!(tail.get_array_memory_size() > 1024);
+        assert!(slice_bytes(tail.column(0).as_ref()).unwrap() < 512);
+        writer
+            .write_sized_batch(&arrow_schema, &tail, 512, 1024)
+            .unwrap();
+        let err = writer
+            .write_sized_batch(&arrow_schema, &batch, 512, 1024)
+            .unwrap_err();
+        assert!(
+            err.message()
+                .contains("'attrs' exceeds the page size limit")
+        );
+    }
+
     // Finishing without writing any block (or after only empty blocks) must still emit a valid
     // single-row-group, 0-row file readable by the arrow reader — the unified `finish` path
     // builds the column writers on demand rather than falling back to a separate writer.
@@ -529,7 +680,7 @@ mod tests {
         let schema = sample_schema();
         let arrow_schema = Arc::new(Schema::from(&schema));
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         assert!(writer.is_empty());
         // An explicitly empty block must not change the outcome.
         writer.write_block(DataBlock::empty()).unwrap();
@@ -555,7 +706,7 @@ mod tests {
         let big = "x".repeat((MAX_BATCH_MEMORY_SIZE * 3) / 2);
         let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![big.clone()])]);
 
-        let mut writer = BlockParquetWriter::new(arrow_schema, props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
         writer.write_block(block).unwrap();
         let serialized = writer.finish().unwrap();
         assert_eq!(serialized.metadata.num_row_groups(), 1);
@@ -595,7 +746,7 @@ mod tests {
             VariantType::from_opt_data(vec![Some(b"\x10".to_vec()), None]),
         ]);
 
-        let mut writer = BlockParquetWriter::new(arrow_schema.clone(), props(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema.clone(), props(&schema));
         writer.write_block(block.clone()).unwrap();
         let serialized = writer.finish().unwrap();
 
@@ -700,8 +851,8 @@ mod tests {
         arrow_writer.write(&batch).unwrap();
         arrow_writer.close().unwrap();
 
-        // New path: BlockParquetWriter.
-        let mut writer = BlockParquetWriter::new(arrow_schema.clone(), writer_props);
+        // New path: ParquetFileWriter.
+        let mut writer = ParquetFileWriter::new(arrow_schema.clone(), writer_props);
         writer.write_block(block).unwrap();
         let new_bytes = writer.finish().unwrap().payload.concat();
 
@@ -772,7 +923,7 @@ mod tests {
             StringType::from_data((0..n).map(|i| format!("row-{i}")).collect::<Vec<_>>()),
         ]);
 
-        let mut writer = BlockParquetWriter::new(
+        let mut writer = ParquetFileWriter::new(
             arrow_schema.clone(),
             props_with_data_page_rows(&schema, 100),
         );
@@ -784,7 +935,7 @@ mod tests {
         let builder = ParquetRecordBatchReaderBuilder::try_new(bytes.clone()).unwrap();
         assert!(
             builder.metadata().offset_index().is_none(),
-            "BlockParquetWriter is expected to omit the OffsetIndex"
+            "ParquetFileWriter is expected to omit the OffsetIndex"
         );
 
         // Each column chunk must actually span multiple pages, so the sequential page-header
@@ -809,5 +960,113 @@ mod tests {
         let got = DataBlock::concat(&blocks).unwrap();
         assert_eq!(got.num_rows(), n as usize);
         assert_blocks_eq(&block, &got);
+    }
+
+    // flush_page must create a page boundary at each requested granule row, even when the
+    // page-size limit auto-splits a granule into several pages (the 1:N case). The captured
+    // page_layout must carry absolute offsets that point at real page starts, and every granule
+    // boundary row must appear as some page's first_row_index.
+    #[test]
+    fn test_flush_page_aligns_pages_to_granule_rows() {
+        use parquet::file::reader::FileReader;
+        use parquet::file::reader::SerializedFileReader;
+
+        let schema = TableSchema::new(vec![TableField::new(
+            "i",
+            TableDataType::Number(NumberDataType::Int64),
+        )]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+
+        // 8000 rows, granule = 2000 rows -> 4 granules. A granule larger than the column writer's
+        // ~1024-row mini-batch causes each granule to auto-split into several data pages, so this
+        // exercises the 1:N granule-to-page case. flush_page at each boundary guarantees a page
+        // starts exactly on the granule row even when the trailing rows wouldn't auto-flush.
+        let granule_rows = 2000usize;
+        let n = 8000i64;
+        let block = DataBlock::new_from_columns(vec![
+            databend_common_expression::types::Int64Type::from_data((0..n).collect::<Vec<_>>()),
+        ]);
+
+        let mut writer =
+            ParquetFileWriter::new(arrow_schema, props_with_data_page_rows(&schema, 100));
+        writer.enable_page_layout();
+        // Write row-by-row in granule-sized slices, flushing a page at each granule boundary.
+        let mut offset = 0usize;
+        while offset < n as usize {
+            let len = granule_rows.min(n as usize - offset);
+            writer
+                .write_block(block.slice(offset..offset + len))
+                .unwrap();
+            offset += len;
+            if offset < n as usize {
+                writer.flush_page().unwrap();
+            }
+        }
+        let serialized = writer.finish().unwrap();
+
+        let layout = serialized
+            .page_layout
+            .expect("page layout must be captured");
+        assert_eq!(layout.len(), 1, "single leaf column");
+        let leaf = &layout[0];
+
+        // Every granule boundary row must be the first_row_index of some captured page.
+        let page_first_rows: std::collections::HashSet<u64> =
+            leaf.data_pages.iter().map(|p| p.first_row_index).collect();
+        for g in 0..(n as usize / granule_rows) {
+            assert!(
+                page_first_rows.contains(&((g * granule_rows) as u64)),
+                "granule boundary row {} is not a page start; pages: {:?}",
+                g * granule_rows,
+                page_first_rows
+            );
+        }
+
+        // The 1:N split must have produced more pages than granules.
+        assert!(
+            leaf.data_pages.len() > 4,
+            "expected auto-split pages beyond the 4 granule boundaries, got {}",
+            leaf.data_pages.len()
+        );
+
+        // Captured absolute offsets must point at real page starts: read each page via a standard
+        // reader and confirm the set of page start offsets matches what we captured.
+        let bytes = bytes::Bytes::from(serialized.payload.concat());
+        let reader = SerializedFileReader::new(bytes.clone()).unwrap();
+        let rg = reader.get_row_group(0).unwrap();
+        let col_meta = rg.metadata().column(0);
+        let (chunk_start, chunk_end) = col_meta.byte_range();
+        // The data pages' offsets must be ascending, within the column chunk, and the recorded
+        // chunk_end must bound them.
+        let mut prev = 0u64;
+        for p in &leaf.data_pages {
+            assert!(p.offset >= chunk_start, "page offset before chunk start");
+            assert!(p.offset < leaf.chunk_end, "page offset past chunk_end");
+            assert!(p.offset >= prev, "page offsets must be ascending");
+            prev = p.offset;
+        }
+        assert!(
+            leaf.chunk_end >= chunk_end,
+            "recorded chunk_end {} must bound the column chunk end {}",
+            leaf.chunk_end,
+            chunk_end
+        );
+
+        // Round-trip integrity is preserved despite the forced flushes.
+        let (blocks, _) = read_back(bytes.to_vec());
+        let got = DataBlock::concat(&blocks).unwrap();
+        assert_blocks_eq(&block, &got);
+    }
+
+    // When flush_page / enable_page_layout are never used, page_layout stays None so the common
+    // write path is unaffected.
+    #[test]
+    fn test_page_layout_absent_without_capture() {
+        let schema = sample_schema();
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let mut writer = ParquetFileWriter::new(arrow_schema, props(&schema));
+        writer.write_block(sample_block()).unwrap();
+        let serialized = writer.finish().unwrap();
+        assert!(serialized.page_layout.is_none());
     }
 }

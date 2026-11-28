@@ -428,6 +428,24 @@ impl PushDownInfo {
         }
     }
 
+    /// Whether the pushed down filter rejects every row the inverted index did
+    /// not match: the match is the filter, or one of its top level conjuncts.
+    ///
+    /// Only then may a pruner drop the rows without a match, as whole blocks or
+    /// as the granules of a block. In `id = 1 OR match(..)` or `NOT match(..)`
+    /// those rows can still pass the filter. Without a pushed down filter, the
+    /// filter stays above another operator (a join, a window, a limit) that has
+    /// to see every row.
+    pub fn filter_requires_index_match(&self) -> bool {
+        if self.inverted_index.is_none() {
+            return false;
+        }
+        match &self.filters {
+            Some(filters) => remote_expr_requires_index_match(&filters.filter),
+            None => false,
+        }
+    }
+
     pub fn has_secure_filters(&self) -> bool {
         self.secure_filters.is_some()
     }
@@ -462,6 +480,25 @@ fn remote_expr_only_uses_index_columns(expr: &RemoteExpr<String>) -> bool {
     if let RemoteExpr::ColumnRef { id, .. } = expr {
         if id == SEARCH_MATCHED_COL_NAME {
             return true;
+        }
+    }
+    false
+}
+
+/// Whether `expr` is the index match, or a conjunction with the index match as
+/// one of its conjuncts. Any other use of the match, such as `match(..) = true`,
+/// is not recognized: the unmatched rows are then read, which is always correct.
+fn remote_expr_requires_index_match(expr: &RemoteExpr<String>) -> bool {
+    let mut conjuncts = vec![expr];
+    while let Some(conjunct) = conjuncts.pop() {
+        match conjunct {
+            RemoteExpr::ColumnRef { id, .. } if id == SEARCH_MATCHED_COL_NAME => return true,
+            RemoteExpr::FunctionCall { id, args, .. }
+                if matches!(id.name().as_ref(), "and" | "and_filters") =>
+            {
+                conjuncts.extend(args);
+            }
+            _ => {}
         }
     }
     false

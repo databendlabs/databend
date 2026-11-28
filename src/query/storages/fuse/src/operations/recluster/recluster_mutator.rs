@@ -65,6 +65,7 @@ use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterBlockStats;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterGroup;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
@@ -140,6 +141,36 @@ fn push_unique_batch(
     }
     batches.push(batch);
     true
+}
+
+/// Aggregated block-selection statistics for one scanned window.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ReclusterSelectionStats {
+    pub(crate) scanned_blocks: usize,
+    pub(crate) eligible_blocks: usize,
+    pub(crate) skipped_negative_level_blocks: usize,
+    pub(crate) skipped_terminal_level_blocks: usize,
+    pub(crate) skipped_terminal_level_bytes: u64,
+    pub(crate) level_0: usize,
+    pub(crate) level_1_3: usize,
+    pub(crate) level_4_8: usize,
+    pub(crate) level_9_31: usize,
+    pub(crate) level_ge_32: usize,
+}
+
+impl std::ops::AddAssign for ReclusterSelectionStats {
+    fn add_assign(&mut self, other: Self) {
+        self.scanned_blocks += other.scanned_blocks;
+        self.eligible_blocks += other.eligible_blocks;
+        self.skipped_negative_level_blocks += other.skipped_negative_level_blocks;
+        self.skipped_terminal_level_blocks += other.skipped_terminal_level_blocks;
+        self.skipped_terminal_level_bytes += other.skipped_terminal_level_bytes;
+        self.level_0 += other.level_0;
+        self.level_1_3 += other.level_1_3;
+        self.level_4_8 += other.level_4_8;
+        self.level_9_31 += other.level_9_31;
+        self.level_ge_32 += other.level_ge_32;
+    }
 }
 
 /// Rank resource-feasible, non-overlapping prefixes of the singleton seeds.
@@ -223,6 +254,7 @@ pub struct ReclusterCandidateWindow {
     // Window locations plus cached SegmentInfo for positions touched by candidates.
     pub(crate) segments: Vec<(Location, Option<Arc<SegmentInfo>>)>,
     pub(crate) tasks: Vec<ReclusterTaskCandidate>,
+    pub(crate) selection_stats: ReclusterSelectionStats,
     // The tasks are one joint-gain winner and must be selected as a batch.
     pub(crate) atomic_tasks: bool,
 }
@@ -534,6 +566,7 @@ impl ReclusterMutator {
         let mut candidate_window = ReclusterCandidateWindow {
             segments: window_segments,
             tasks: Vec::new(),
+            selection_stats: self.selection_stats(&blocks),
             atomic_tasks: false,
         };
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
@@ -596,10 +629,11 @@ impl ReclusterMutator {
                         max_depth: 0,
                         average_depth: 0.0,
                     },
+                    kind: ReclusterCandidateKind::Repack,
                     selected_blocks: Vec::new(),
                     base_level: 0,
                     input_level_stats: Vec::new(),
-                    kind: ReclusterTaskKind::SortBlocks,
+                    task_kind: ReclusterTaskKind::SortBlocks,
                 });
             } else {
                 return Ok(candidate_window);
@@ -1025,9 +1059,8 @@ impl ReclusterMutator {
             .into_iter()
             .map(|task| {
                 task_candidate(
-                    // Both callers use scalar Linear strategies, which support ordered merge.
-                    // task_candidate still requires Original stats to produce MergeBlocks.
-                    true,
+                    properties,
+                    ReclusterCandidateKind::Depth,
                     task.group,
                     CandidateScore {
                         selected_total_bytes: task.bytes,
@@ -1113,6 +1146,31 @@ impl ReclusterMutator {
         Ok(tasks)
     }
 
+    fn selection_stats(&self, blocks: &[&ReclusterBlock]) -> ReclusterSelectionStats {
+        let mut stats = ReclusterSelectionStats {
+            scanned_blocks: blocks.len(),
+            ..Default::default()
+        };
+        for block in blocks {
+            let level = block.stats().level;
+            match level {
+                i32::MIN..=-1 => stats.skipped_negative_level_blocks += 1,
+                0 => stats.level_0 += 1,
+                1..=3 => stats.level_1_3 += 1,
+                4..=8 => stats.level_4_8 += 1,
+                9..=31 => stats.level_9_31 += 1,
+                _ => stats.level_ge_32 += 1,
+            }
+            if level >= MAX_RECLUSTER_LEVEL {
+                stats.skipped_terminal_level_blocks += 1;
+                stats.skipped_terminal_level_bytes += block.meta.block_size;
+            } else if level >= 0 {
+                stats.eligible_blocks += 1;
+            }
+        }
+        stats
+    }
+
     /// Convert selected in-memory candidates into physical recluster parts.
     pub async fn materialize_task_candidates(
         &self,
@@ -1178,7 +1236,7 @@ impl ReclusterMutator {
                 }
 
                 if self.properties.split_sort_tasks
-                    && candidate.kind == ReclusterTaskKind::MergeBlocks
+                    && candidate.task_kind == ReclusterTaskKind::MergeBlocks
                     && block_metas.iter().any(|(_, meta)| {
                         !meta.cluster_stats.as_ref().is_some_and(|stats| {
                             self.strategy
@@ -1218,7 +1276,7 @@ impl ReclusterMutator {
                     total_compressed,
                     level: candidate.base_level,
                     input_level_stats: candidate.input_level_stats.clone(),
-                    kind: candidate.kind,
+                    kind: candidate.task_kind,
                     virtual_column_layout,
                     inverted_index_sources: match self
                         .ctx
@@ -1352,7 +1410,8 @@ impl ReclusterMutator {
                 average_depth: block_count as f64,
             };
             return Ok(vec![task_candidate(
-                self.strategy.supports_ordered_merge(),
+                &self.properties,
+                ReclusterCandidateKind::Depth,
                 group,
                 score,
                 &indices,
@@ -1374,7 +1433,8 @@ impl ReclusterMutator {
             let mut candidates = Vec::with_capacity(bins.len());
             for (indices, bytes) in bins {
                 candidates.push(task_candidate(
-                    self.strategy.supports_ordered_merge(),
+                    &self.properties,
+                    ReclusterCandidateKind::Depth,
                     group,
                     CandidateScore {
                         selected_total_bytes: bytes,

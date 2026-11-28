@@ -89,6 +89,7 @@ pub use kinds::column::CachedColumnArray;
 pub use kinds::column::ColumnData;
 pub use kinds::column::SizedColumnArray;
 pub use kinds::column::TableDataCacheKey;
+pub use kinds::granule::GranuleMarkArray;
 pub use kinds::iceberg::IcebergTableCacheValue;
 pub use kinds::table::BlockCondition;
 pub use kinds::vector::CachedVectorIndex;

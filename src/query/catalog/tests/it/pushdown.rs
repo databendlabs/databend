@@ -21,6 +21,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -36,6 +37,19 @@ fn column(name: &str, data_type: DataType) -> RemoteExpr<String> {
         id: name.to_string(),
         data_type,
         display_name: name.to_string(),
+    }
+}
+
+fn function(name: &str, args: Vec<RemoteExpr<String>>) -> RemoteExpr<String> {
+    RemoteExpr::FunctionCall {
+        span: None,
+        id: Box::new(FunctionID::Builtin {
+            name: name.to_string(),
+            id: 0,
+        }),
+        generics: vec![],
+        args,
+        return_type: DataType::Boolean,
     }
 }
 
@@ -149,6 +163,53 @@ fn test_inverted_index_top_k_rejects_unsafe_pushdowns() {
             dest_type: DataType::Number(NumberDataType::Float64),
         };
     });
+}
+
+#[test]
+fn test_filter_requires_index_match() {
+    fn requires(filter: RemoteExpr<String>) -> bool {
+        let mut push_down = score_top_k();
+        push_down.filters.as_mut().unwrap().filter = filter;
+        // A scan that outputs only the matched rows drops the others, like a pruner does.
+        assert!(!push_down.filter_only_use_index() || push_down.filter_requires_index_match());
+        push_down.filter_requires_index_match()
+    }
+    let matched = || column(SEARCH_MATCHED_COL_NAME, DataType::Boolean);
+    let flag = || column("flag", DataType::Boolean);
+
+    // The match is the filter, or one of its conjuncts: `match(..) AND flag`.
+    assert!(requires(matched()));
+    assert!(requires(function("and_filters", vec![flag(), matched()])));
+    assert!(requires(function("and", vec![
+        function("and_filters", vec![flag(), matched()]),
+        flag(),
+    ])));
+
+    // A row the index did not match can still pass these filters.
+    for filter in [
+        flag(),
+        function("or", vec![flag(), matched()]),
+        function("or_filters", vec![matched(), flag()]),
+        function("not", vec![matched()]),
+        function("and_filters", vec![
+            flag(),
+            function("or", vec![flag(), matched()]),
+        ]),
+        function("and_filters", vec![
+            flag(),
+            function("not", vec![matched()]),
+        ]),
+    ] {
+        assert!(!requires(filter.clone()), "{filter:?}");
+    }
+
+    // The filter stays above the scan, or the scan has no index to match.
+    let mut push_down = score_top_k();
+    push_down.filters = None;
+    assert!(!push_down.filter_requires_index_match());
+    let mut push_down = score_top_k();
+    push_down.inverted_index = None;
+    assert!(!push_down.filter_requires_index_match());
 }
 
 fn vector_top_n() -> PushDownInfo {

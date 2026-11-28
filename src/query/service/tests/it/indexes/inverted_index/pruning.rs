@@ -17,22 +17,29 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
+use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
@@ -497,6 +504,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         block0, block1, block2, block3, block4, block5, block6, block7, block8, block9, block10,
         block11, block12, block13,
     ];
+    let num_blocks = blocks.len();
 
     fixture
         .append_commit_blocks(table.clone(), blocks, false, true)
@@ -776,45 +784,85 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         }),
         ..Default::default()
     };
+    // The blocks and the rows the index matches for each search.
     let extras = vec![
-        (Some(e1), 0, 0),
-        (Some(e2), 2, 2),
-        (Some(e3), 2, 3),
-        (Some(e4), 0, 0),
-        (Some(e5), 2, 2),
-        (Some(e6), 1, 1),
-        (Some(e7), 5, 7),
-        (Some(e8), 4, 4),
-        (Some(e9), 1, 2),
-        (Some(e10), 2, 2),
-        (Some(e11), 9, 15),
-        (Some(e12), 2, 2),
-        (Some(e13), 3, 3),
-        (Some(e14), 2, 2),
-        (Some(e15), 2, 5),
+        (e1, 0, 0),
+        (e2, 2, 2),
+        (e3, 2, 3),
+        (e4, 0, 0),
+        (e5, 2, 2),
+        (e6, 1, 1),
+        (e7, 5, 7),
+        (e8, 4, 4),
+        (e9, 1, 2),
+        (e10, 2, 2),
+        (e11, 9, 15),
+        (e12, 2, 2),
+        (e13, 3, 3),
+        (e14, 2, 2),
+        (e15, 2, 5),
     ];
 
-    for (extra, expected_blocks, expected_rows) in extras {
-        let block_metas = apply_block_pruning(
-            snapshot.clone(),
-            table.get_table_info().schema(),
-            &extra,
-            ctx.clone(),
-            fuse_table.get_operator(),
-            fuse_table.bloom_index_cols(),
-        )
-        .await?;
+    let matched = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: SEARCH_MATCHED_COL_NAME.to_string(),
+        data_type: DataType::Boolean,
+        display_name: SEARCH_MATCHED_COL_NAME.to_string(),
+    });
+    let not_matched = check_function(
+        None,
+        "not",
+        &[],
+        std::slice::from_ref(&matched),
+        &BUILTIN_FUNCTIONS,
+    )?;
+    // `WHERE match(..)`: a row without a match fails the filter.
+    let match_filter = Filters {
+        filter: matched.as_remote_expr(),
+        inverted_filter: not_matched.as_remote_expr(),
+    };
+    // `WHERE NOT match(..)`: the rows without a match are the ones that pass the filter.
+    let not_match_filter = Filters {
+        filter: not_matched.as_remote_expr(),
+        inverted_filter: matched.as_remote_expr(),
+    };
 
-        let rows = block_metas
-            .iter()
-            .map(|(v, _)| match &v.inverted_index_matches {
-                Some(matches) => matches.rows.len(),
-                None => 0,
-            })
-            .sum::<usize>();
+    for (push_down, matched_blocks, matched_rows) in extras {
+        // Only a filter that requires the match prunes the blocks without a matched row.
+        // Otherwise every block is kept, including when the filter is not pushed down
+        // because it stays above another operator, such as a join. The index still
+        // reports the rows it matched.
+        let cases = [
+            (Some(match_filter.clone()), matched_blocks),
+            (Some(not_match_filter.clone()), num_blocks),
+            (None, num_blocks),
+        ];
+        for (filters, expected_blocks) in cases {
+            let push_down = Some(PushDownInfo {
+                filters,
+                ..push_down.clone()
+            });
+            let block_metas = apply_block_pruning(
+                snapshot.clone(),
+                table.get_table_info().schema(),
+                &push_down,
+                ctx.clone(),
+                fuse_table.get_operator(),
+                fuse_table.bloom_index_cols(),
+            )
+            .await?;
 
-        assert_eq!(expected_rows, rows);
-        assert_eq!(expected_blocks, block_metas.len());
+            let rows = block_metas
+                .iter()
+                .map(|(v, _)| match &v.inverted_index_matches {
+                    Some(matches) => matches.rows.len(),
+                    None => 0,
+                })
+                .sum::<usize>();
+
+            assert_eq!(matched_rows, rows, "{push_down:?}");
+            assert_eq!(expected_blocks, block_metas.len(), "{push_down:?}");
+        }
     }
 
     Ok(())

@@ -15,7 +15,6 @@
 use std::cmp::Reverse;
 use std::collections::VecDeque;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
@@ -31,13 +30,6 @@ pub trait SortedStream {
     /// If the block is [None] and it's not pending, it means the stream is finished.
     /// If the block is [None] but it's pending, it means the stream is not finished yet.
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
-}
-
-/// An input stream and its already-decoded, unconsumed head after interrupting
-/// a merge at an output boundary.
-pub struct RecoveredMergeStream<S> {
-    pub stream: S,
-    pub head: Option<(DataBlock, Column)>,
 }
 
 struct BufferState {
@@ -267,37 +259,6 @@ where A: SortAlgorithm
 
     pub fn streams(self) -> Vec<S> {
         self.unsorted_streams
-    }
-
-    /// Recover each stream's unconsumed suffix after flushing the selected
-    /// output prefix. Used by external mergers to reduce fan-in under pressure.
-    pub fn into_remaining_streams(mut self) -> Result<Vec<RecoveredMergeStream<S>>> {
-        if self.buffers.has_output() {
-            return Err(ErrorCode::Internal(
-                "flush the selected merge prefix before recovering streams",
-            ));
-        }
-        let mut heads = vec![None; self.unsorted_streams.len()];
-        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
-            let stream = cursor.input_index;
-            let buffer = self.buffers.stream_to_buffer[stream].expect("active cursor buffer");
-            let mut indices = ChunkIndex::default();
-            indices.push_merge_range(
-                buffer as _,
-                cursor.row_index as _,
-                (cursor.num_rows() - cursor.row_index) as _,
-            );
-            let block = self.buffers.buffer.take(&indices);
-            let keys = cursor.rows_column_suffix();
-            heads[stream] = Some((block, keys));
-            self.sorted_cursors.pop();
-        }
-        Ok(self
-            .unsorted_streams
-            .into_iter()
-            .zip(heads)
-            .map(|(stream, head)| RecoveredMergeStream { stream, head })
-            .collect())
     }
 }
 

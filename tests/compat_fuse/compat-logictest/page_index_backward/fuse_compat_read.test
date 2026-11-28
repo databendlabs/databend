@@ -1,0 +1,59 @@
+# Read side of the cluster-key page-pruning backward-compat test. The CURRENT reader (page_pruner
+# removed, pruning main path reworked) must correctly read the clustered data written by an old
+# writer, across point/range/out-of-range/full-scan cluster-key predicates.
+
+query I
+select count(*) from page_index_bw_table;
+----
+100000
+
+# Point lookup deep inside the data.
+query IIT
+select a, b, c from page_index_bw_table where a = 54321;
+----
+54321 28642 v14321
+
+# Point lookup on an insert boundary.
+query IIT
+select a, b, c from page_index_bw_table where a = 20000;
+----
+20000 0 v0
+
+# Range predicate spanning a page boundary.
+query III
+select count(*), min(a), max(a) from page_index_bw_table where a between 30000 and 30099;
+----
+100 30000 30099
+
+# Out-of-range predicate: nothing matches.
+query I
+select count(*) from page_index_bw_table where a = 9999999;
+----
+0
+
+# Full aggregate over the whole table.
+query III
+select count(*), min(a), max(a) from page_index_bw_table;
+----
+100000 0 99999
+
+# Multi-column cluster key table.
+query I
+select count(*) from page_index_bw_table_multi;
+----
+40000
+
+query IIT
+select a, b, c from page_index_bw_table_multi where a = 24321;
+----
+24321 1 v4321
+
+query III
+select count(*), min(a), max(a) from page_index_bw_table_multi where a between 12000 and 12099;
+----
+100 12000 12099
+
+query I
+select count(*) from page_index_bw_table_multi where a = 9999999;
+----
+0
