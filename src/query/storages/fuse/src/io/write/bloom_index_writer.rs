@@ -18,15 +18,12 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_blocks::block_to_parquet_with_writer;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
@@ -34,7 +31,6 @@ use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
-use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -45,17 +41,12 @@ use opendal::Operator;
 
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;
-use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
-use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingBloomIndex;
 use crate::io::write::block_index::PendingIndexFile;
-use crate::io::write::block_index::WrittenBlockIndexOutput;
-use crate::io::write::block_index::WrittenBloomIndex;
-use crate::io::write::block_index::WrittenIndexFile;
 
 #[derive(Debug)]
 pub struct BloomIndexState {
@@ -64,14 +55,6 @@ pub struct BloomIndexState {
     pub(crate) ngram_size: Option<u64>,
     pub(crate) location: Location,
     pub(crate) column_distinct_count: HashMap<ColumnId, usize>,
-}
-
-#[derive(Debug)]
-pub struct BloomIndexWrittenState {
-    pub size: u64,
-    pub ngram_size: Option<u64>,
-    pub location: Location,
-    pub column_distinct_count: HashMap<ColumnId, usize>,
 }
 
 fn bloom_index_block(bloom_index: &BloomIndex) -> Result<(DataBlock, Option<u64>)> {
@@ -112,30 +95,6 @@ impl BloomIndexState {
         Ok(Self {
             data,
             size: data_size,
-            ngram_size,
-            location,
-            column_distinct_count: bloom_index.column_distinct_count.clone(),
-        })
-    }
-
-    /// Serialize a completed Bloom/Ngram index directly to an OpenDAL blocking writer. No complete
-    /// Parquet payload is retained in memory.
-    pub fn write_bloom_index(
-        bloom_index: &BloomIndex,
-        location: Location,
-        write: OpenDalBlockingWrite,
-    ) -> Result<BloomIndexWrittenState> {
-        let (index_block, ngram_size) = bloom_index_block(bloom_index)?;
-        let (_, writer) = block_to_parquet_with_writer(
-            &bloom_index.filter_schema,
-            index_block,
-            TableCompression::None,
-            false,
-            None,
-            write,
-        )?;
-        Ok(BloomIndexWrittenState {
-            size: writer.bytes_written(),
             ngram_size,
             location,
             column_distinct_count: bloom_index.column_distinct_count.clone(),
@@ -214,21 +173,6 @@ impl BlockIndexSpec for BloomIndexWriteSpec {
             location: context.bloom_location,
         }))
     }
-
-    fn new_low_level_writer(
-        &self,
-        context: BlockIndexWriteContext,
-    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let write = context.create_write(&context.bloom_location);
-        Ok(Box::new(BloomIndexLowLevelWriter {
-            builder: self
-                .create_builder(context.func_ctx, context.write_settings.bloom_index_type)?,
-            location: context.bloom_location,
-            write: Some(write),
-            next_field: 0,
-            num_fields: context.physical_schema.num_fields(),
-        }))
-    }
 }
 
 struct BloomIndexWriter {
@@ -257,80 +201,6 @@ impl BlockIndexWriter for BloomIndexWriter {
             }),
             ..Default::default()
         })
-    }
-}
-
-struct BloomIndexLowLevelWriter {
-    builder: BloomIndexBuilder,
-    location: Location,
-    write: Option<OpenDalBlockingWrite>,
-    next_field: FieldIndex,
-    num_fields: usize,
-}
-
-impl BlockIndexLowLevelWriter for BloomIndexLowLevelWriter {
-    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
-        if self.next_field >= self.num_fields {
-            return Err(ErrorCode::Internal(
-                "bloom index low-level writer has no remaining columns",
-            ));
-        }
-        let field_index = self.next_field;
-        self.next_field += 1;
-        Ok(Box::new(BloomIndexLowLevelColumnWriter {
-            parent: Some(self),
-            field_index,
-        }))
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
-        if self.next_field != self.num_fields {
-            return Err(ErrorCode::Internal(format!(
-                "bloom index low-level writer consumed {} of {} columns",
-                self.next_field, self.num_fields
-            )));
-        }
-        let Some(index) = self.builder.finalize()? else {
-            return Ok(WrittenBlockIndexOutput::default());
-        };
-        let write = self
-            .write
-            .take()
-            .ok_or_else(|| ErrorCode::Internal("bloom index blocking output was consumed"))?;
-        let state = BloomIndexState::write_bloom_index(&index, self.location, write)?;
-        Ok(WrittenBlockIndexOutput {
-            bloom: Some(WrittenBloomIndex {
-                file: WrittenIndexFile {
-                    location: state.location,
-                    size: state.size,
-                },
-                ngram_size: state.ngram_size,
-                column_distinct_count: state.column_distinct_count,
-            }),
-            ..Default::default()
-        })
-    }
-}
-
-struct BloomIndexLowLevelColumnWriter {
-    parent: Option<Box<BloomIndexLowLevelWriter>>,
-    field_index: FieldIndex,
-}
-
-impl BlockIndexLowLevelColumnWriter for BloomIndexLowLevelColumnWriter {
-    fn write(&mut self, column: &Column) -> Result<()> {
-        self.parent
-            .as_mut()
-            .ok_or_else(|| ErrorCode::Internal("bloom index column writer has no parent"))?
-            .builder
-            .add_column(self.field_index, column.clone())
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        self.parent
-            .take()
-            .map(|parent| parent as Box<dyn BlockIndexLowLevelWriter>)
-            .ok_or_else(|| ErrorCode::Internal("bloom index column writer has no parent"))
     }
 }
 

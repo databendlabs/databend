@@ -34,9 +34,6 @@ statement ok
 ALTER TABLE gi_t CLUSTER BY(k)
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE gi_t RECLUSTER FINAL
 
 query III

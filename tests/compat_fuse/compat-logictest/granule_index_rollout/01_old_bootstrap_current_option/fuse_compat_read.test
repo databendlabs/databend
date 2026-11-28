@@ -16,9 +16,6 @@ SELECT table_option LIKE '%INDEX_GRANULARITY=''4''%', table_option LIKE '%AUTO_C
 1 1
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE rollout_t RECLUSTER FINAL
 
 query III

@@ -17,7 +17,6 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
@@ -187,46 +186,6 @@ impl BlockColumnSketchesBuilder {
         Ok(())
     }
 
-    /// Add one physical-schema column fragment for an explicitly selected field.
-    pub fn add_column(&mut self, field_index: FieldIndex, column: &Column) -> Result<()> {
-        let Some(builder_index) = self
-            .builders
-            .iter()
-            .position(|builder| builder.index == field_index)
-        else {
-            return Ok(());
-        };
-        let builder = &mut self.builders[builder_index];
-        if let Some(hll) = &mut builder.hll {
-            hll.update_column(column);
-        }
-        if builder.top_n.is_some() || builder.count_min_sketch.is_some() {
-            let mut row = 0;
-            while row < column.len() {
-                if let Some(scalar) = column.index(row) {
-                    let mut count = 1;
-                    while row + count < column.len()
-                        && column.index(row + count).is_some_and(|next| next == scalar)
-                    {
-                        count += 1;
-                    }
-                    if should_collect_top_n_scalar(&scalar)
-                        && let Some(top_n) = &mut builder.top_n
-                    {
-                        top_n.add(scalar.clone(), count as u64);
-                    }
-                    if let Some(sketch) = &mut builder.count_min_sketch {
-                        sketch.add_with_count(scalar, count as u64);
-                    }
-                    row += count;
-                } else {
-                    row += 1;
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
         self.builders
             .iter()
@@ -357,8 +316,8 @@ mod tests {
 
         let mut fragmented =
             BlockColumnSketchesBuilder::new(&empty_columns_map(), Some((&columns, 2)), None)?;
-        fragmented.add_column(0, &column.slice(0..1))?;
-        fragmented.add_column(0, &column.slice(1..2))?;
+        fragmented.add_block(&DataBlock::new_from_columns(vec![column.slice(0..1)]))?;
+        fragmented.add_block(&DataBlock::new_from_columns(vec![column.slice(1..2)]))?;
         let fragmented = fragmented.finalize_sketches()?.unwrap();
 
         assert_eq!(whole.top_n, fragmented.top_n);
@@ -382,9 +341,9 @@ mod tests {
 
         let mut fragmented =
             BlockColumnSketchesBuilder::new(&empty_columns_map(), Some((&columns, 2)), None)?;
-        fragmented.add_column(0, &column.slice(0..2))?;
-        fragmented.add_column(0, &column.slice(2..5))?;
-        fragmented.add_column(0, &column.slice(5..8))?;
+        fragmented.add_block(&DataBlock::new_from_columns(vec![column.slice(0..2)]))?;
+        fragmented.add_block(&DataBlock::new_from_columns(vec![column.slice(2..5)]))?;
+        fragmented.add_block(&DataBlock::new_from_columns(vec![column.slice(5..8)]))?;
         let fragmented = fragmented.finalize_sketches()?.unwrap();
 
         assert_eq!(whole.top_n, fragmented.top_n);

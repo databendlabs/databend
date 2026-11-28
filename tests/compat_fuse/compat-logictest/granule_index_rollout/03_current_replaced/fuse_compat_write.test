@@ -15,9 +15,6 @@ SELECT count(),sum(payload),count_if(source='current-after-replace-1') FROM roll
 72 360252 8
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE rollout_t RECLUSTER FINAL
 
 query II

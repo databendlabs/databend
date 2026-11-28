@@ -25,7 +25,6 @@ use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::plan::RetainedBlockMeta;
-use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -399,8 +398,6 @@ impl ReclusterMutator {
         ctx: Arc<dyn TableContext>,
         snapshot: &TableSnapshot,
         mode: ReclusterMode,
-        vertical_kind: Option<VerticalReclusterKind>,
-        max_tasks_override: Option<usize>,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
         let cluster_key_info = table
@@ -437,9 +434,6 @@ impl ReclusterMutator {
         if !cluster.is_empty() {
             max_tasks = cluster.nodes.len();
         }
-        if let Some(override_tasks) = max_tasks_override {
-            max_tasks = max_tasks.min(override_tasks.max(1));
-        }
 
         let Some(cluster_keys) = table.resolve_cluster_keys() else {
             return Err(ErrorCode::Internal(
@@ -457,7 +451,6 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_info,
             memory_threshold,
-            vertical_kind,
         )?;
 
         let task_budget = if properties.cluster_key_info.cluster_type == ClusterType::Linear
@@ -536,12 +529,6 @@ impl ReclusterMutator {
         }
     }
 
-    /// Used for tests that compare horizontal and vertical task selection.
-    pub fn with_vertical_kind(mut self, vertical_kind: Option<VerticalReclusterKind>) -> Self {
-        self.properties.vertical_kind = vertical_kind;
-        self
-    }
-
     /// Decode one selected segment window and build candidate tasks from it.
     #[async_backtrace::framed]
     pub async fn probe_candidate_window(
@@ -585,10 +572,8 @@ impl ReclusterMutator {
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
 
         // Persisted Linear also covers vector clustering. Only scalar inputs use
-        // joint-gain selection; other strategies retain their own geometry. Vertical
-        // recluster keeps its own per-kind selection in `build_tasks`.
-        let scalar_linear = self.properties.vertical_kind.is_none()
-            && self.properties.cluster_key_info.cluster_type == ClusterType::Linear
+        // joint-gain selection; other strategies retain their own geometry.
+        let scalar_linear = self.properties.cluster_key_info.cluster_type == ClusterType::Linear
             && self.strategy.supports_ordered_merge();
         let tasks = if scalar_linear {
             match self.build_linear_window_tasks(&blocks, task_limit)? {
@@ -629,12 +614,10 @@ impl ReclusterMutator {
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
                 total_block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
-            let compactable_repack = self.properties.vertical_kind.is_none()
-                && total_block_count > 0
+            let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack = self.properties.vertical_kind.is_none()
-                && self.properties.mode == ReclusterMode::Conservative
+            let unordered_repack = self.properties.mode == ReclusterMode::Conservative
                 && all_original_stats
                 && unordered();
             if compactable_repack || unordered_repack {
@@ -651,7 +634,6 @@ impl ReclusterMutator {
                     base_level: 0,
                     input_level_stats: Vec::new(),
                     task_kind: ReclusterTaskKind::SortBlocks,
-                    vertical_kind: None,
                 });
             } else {
                 return Ok(candidate_window);
@@ -683,11 +665,6 @@ impl ReclusterMutator {
     ) -> BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> {
         let mut groups = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
-            if self.properties.vertical_kind == Some(VerticalReclusterKind::MergeBlocks)
-                && !matches!(block.stats, ReclusterBlockStats::Original)
-            {
-                continue;
-            }
             let level = block.stats().level;
             if level < 0 {
                 continue;
@@ -1117,36 +1094,6 @@ impl ReclusterMutator {
         blocks: &[&ReclusterBlock],
         task_limit: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        if self.properties.vertical_kind == Some(VerticalReclusterKind::SortBlocks) {
-            // Vertical sort rewrites each unordered block in place, so every
-            // normalized block becomes its own single-block candidate.
-            let mut tasks = blocks
-                .iter()
-                .enumerate()
-                .filter(|(_, block)| {
-                    matches!(block.stats, ReclusterBlockStats::Normalized(_))
-                        && block.stats().level >= 0
-                })
-                .map(|(idx, block)| {
-                    task_candidate(
-                        &self.properties,
-                        ReclusterCandidateKind::Depth,
-                        ReclusterGroup::Level(0),
-                        CandidateScore {
-                            selected_total_bytes: block.meta.block_size as usize,
-                            max_depth: 1,
-                            average_depth: 1.0,
-                        },
-                        &[idx],
-                        blocks,
-                    )
-                })
-                .collect::<Vec<_>>();
-            tasks.sort_by(|left, right| right.score.cmp_desc(&left.score));
-            tasks.truncate(task_limit);
-            return Ok(tasks);
-        }
-
         let blocks_map = self.bin_blocks_into_groups(blocks);
         let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
         let mut deferred_candidates = Vec::new();
@@ -1217,10 +1164,7 @@ impl ReclusterMutator {
             if level >= MAX_RECLUSTER_LEVEL {
                 stats.skipped_terminal_level_blocks += 1;
                 stats.skipped_terminal_level_bytes += block.meta.block_size;
-            } else if level >= 0
-                && (self.properties.vertical_kind != Some(VerticalReclusterKind::MergeBlocks)
-                    || matches!(block.stats, ReclusterBlockStats::Original))
-            {
+            } else if level >= 0 {
                 stats.eligible_blocks += 1;
             }
         }
@@ -1333,8 +1277,6 @@ impl ReclusterMutator {
                     level: candidate.base_level,
                     input_level_stats: candidate.input_level_stats.clone(),
                     kind: candidate.task_kind,
-                    vertical_kind: candidate.vertical_kind,
-                    memory_budget: self.properties.memory_threshold,
                     virtual_column_layout,
                     inverted_index_sources: match self
                         .ctx

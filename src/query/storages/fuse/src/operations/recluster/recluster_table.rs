@@ -21,7 +21,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
-use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -30,7 +29,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
-use databend_common_settings::ReclusterMethod;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
@@ -308,8 +306,6 @@ impl FuseTable {
         limit: Option<usize>,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
-        vertical_kind_override: Option<VerticalReclusterKind>,
-        max_tasks_override: Option<usize>,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
@@ -333,23 +329,9 @@ impl FuseTable {
             return Ok(None);
         };
 
-        let method = ctx.get_settings().get_recluster_method()?;
-        let vertical_kind = match method {
-            ReclusterMethod::Auto | ReclusterMethod::Horizontal => None,
-            ReclusterMethod::Vertical => {
-                vertical_kind_override.or(Some(VerticalReclusterKind::MergeBlocks))
-            }
-        };
         let mutator = Arc::new(
-            ReclusterMutator::try_create(
-                self,
-                ctx.clone(),
-                snapshot.as_ref(),
-                mode,
-                vertical_kind,
-                max_tasks_override,
-            )?
-            .with_vector_full_pass(carry.vector_full_pass.clone()),
+            ReclusterMutator::try_create(self, ctx.clone(), snapshot.as_ref(), mode)?
+                .with_vector_full_pass(carry.vector_full_pass.clone()),
         );
 
         // Carry is tied to the current cluster key because cached block metas
@@ -934,7 +916,6 @@ mod tests {
             input_level_stats: Vec::new(),
             kind: ReclusterCandidateKind::Depth,
             task_kind: ReclusterTaskKind::SortBlocks,
-            vertical_kind: None,
         }
     }
 

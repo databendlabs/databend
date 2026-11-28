@@ -313,68 +313,6 @@ mod tests {
     use crate::io::block_index::BlockIndexSpec;
 
     #[test]
-    fn test_inverted_spec_reused_by_full_and_low_level_writers() -> Result<()> {
-        use databend_common_expression::DataBlock;
-        use databend_common_expression::FromData;
-        use databend_common_expression::TableDataType;
-        use databend_common_expression::TableField;
-        use databend_common_expression::TableSchema;
-        use databend_common_expression::types::StringType;
-        use databend_storages_common_index::MergeSourceDirectory;
-        use opendal::Operator;
-        use opendal::services::Memory;
-
-        use crate::io::TableMetaLocationGenerator;
-        use crate::io::WriteSettings;
-        use crate::io::block_index::BlockIndexWriteContext;
-
-        crate::test_utils::init_test_globals()?;
-        let schema = Arc::new(TableSchema::new(vec![TableField::new(
-            "content",
-            TableDataType::String,
-        )]));
-        let builder = InvertedIndexBuilder {
-            name: "text_idx".into(),
-            version: "v1".into(),
-            schema: DataSchema::new(vec![DataField::new("content", DataType::String)]),
-            options: BTreeMap::new(),
-            user_dictionary: None,
-        };
-        let spec = builder.into_write_spec();
-        let context = BlockIndexWriteContext {
-            func_ctx: Default::default(),
-            physical_schema: schema,
-            block_location: ("data.parquet".into(), 0),
-            meta_locations: TableMetaLocationGenerator::new("reuse".into()),
-            bloom_location: ("bloom.parquet".into(), 0),
-            operator: Operator::new(Memory::default()).unwrap().finish(),
-            write_settings: WriteSettings::default(),
-        };
-        let column = StringType::from_data(vec!["alpha", "beta"]);
-        let mut writer = spec.new_writer(context.clone())?;
-        writer.write(&DataBlock::new_from_columns(vec![column.clone()]))?;
-        let full = writer.finish()?;
-        let writer = spec.new_low_level_writer(context.clone())?;
-        let mut field = writer.next_column()?;
-        field.write(&column)?;
-        let low = field.finish()?.finish()?;
-        assert_ne!(full.inverted[0].location, low.inverted[0].location);
-        for output in [full.inverted, low.inverted] {
-            let meta = &output[0];
-            let directory = MergeSourceDirectory::open(
-                context.operator.clone(),
-                meta.location.0.clone(),
-                meta.bundle_size,
-            )
-            .unwrap();
-            let index = directory.open_index().unwrap();
-            let reader = index.reader().unwrap();
-            assert_eq!(reader.searcher().num_docs(), 2);
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_inverted_spec_merge_admission() -> Result<()> {
         let builder = InvertedIndexBuilder {
             name: "text_idx".into(),

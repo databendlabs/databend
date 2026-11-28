@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::plan::ReclusterTaskKind;
-use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -76,7 +75,6 @@ pub(crate) struct ReclusterProperties {
     pub(crate) split_sort_tasks: bool,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
-    pub(crate) vertical_kind: Option<VerticalReclusterKind>,
     /// Blocks of the final full pass of a vector RECLUSTER FINAL, which are
     /// rewritten once regardless of level; see `ReclusterFinalCarry`.
     pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
@@ -93,13 +91,7 @@ impl ReclusterProperties {
         block_thresholds: BlockThresholds,
         cluster_key_info: ClusterKeyInfo,
         memory_threshold: usize,
-        vertical_kind: Option<VerticalReclusterKind>,
     ) -> Result<(Self, Arc<dyn ReclusterStrategy>)> {
-        if vertical_kind.is_some() && !matches!(&cluster_keys, ClusterKeys::Linear(_)) {
-            return Err(ErrorCode::Unimplemented(
-                "vertical recluster supports linear scalar cluster keys only",
-            ));
-        }
         let (cluster_key_exprs, strategy): (Vec<Expr<usize>>, Arc<dyn ReclusterStrategy>) =
             match cluster_keys {
                 ClusterKeys::Linear(keys) => {
@@ -145,7 +137,6 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
-            vertical_kind,
             vector_full_pass: None,
         };
         Ok((properties, strategy))
@@ -195,7 +186,6 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
-            vertical_kind: None,
             vector_full_pass: None,
         };
         (properties, strategy)
@@ -397,7 +387,6 @@ pub(crate) struct ReclusterTaskCandidate {
     /// Row-sort stage work for the horizontal pipeline; `MergeBlocks` implies every input is
     /// already ordered by the current linear cluster key.
     pub(crate) task_kind: ReclusterTaskKind,
-    pub(crate) vertical_kind: Option<VerticalReclusterKind>,
 }
 
 impl ReclusterTaskCandidate {
@@ -427,12 +416,11 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "requested_output_level={} repack_only={} candidate_kind={} task_kind={:?} executor_kind={:?} max_depth={} avg_depth={} block_count={} block_size={}",
+            "requested_output_level={} repack_only={} candidate_kind={} task_kind={:?} max_depth={} avg_depth={} block_count={} block_size={}",
             self.requested_output_level(),
             self.is_repack_only(),
             self.kind,
             self.task_kind,
-            self.vertical_kind,
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
@@ -528,7 +516,6 @@ pub(crate) fn task_candidate(
         base_level,
         input_level_stats: stats_by_level.into_values().collect(),
         task_kind,
-        vertical_kind: properties.vertical_kind,
     }
 }
 

@@ -37,9 +37,6 @@ statement ok
 INSERT INTO gi_t VALUES (NULL,NULL,'current-edge2'),(100,100,'current-edge2'),(4098,4098,'current-edge2'),(4099,4099,'current-edge2')
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE gi_t RECLUSTER FINAL
 
 query III

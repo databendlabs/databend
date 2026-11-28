@@ -119,17 +119,6 @@ impl PendingGranuleIndexOutput {
     }
 }
 
-#[derive(Default)]
-pub struct GranuleIndexLowLevelOutput {
-    pub marks: Vec<GranuleMark>,
-}
-
-impl GranuleIndexLowLevelOutput {
-    pub fn merge(&mut self, other: GranuleIndexLowLevelOutput) -> Result<()> {
-        merge_marks(&mut self.marks, other.marks)
-    }
-}
-
 fn merge_marks(target: &mut Vec<GranuleMark>, marks: Vec<GranuleMark>) -> Result<()> {
     for mark in marks {
         if target
@@ -156,22 +145,6 @@ pub trait GranuleIndexWriter: Send {
     fn finish(self: Box<Self>) -> Result<PendingGranuleIndexOutput>;
 }
 
-/// Writes one logical column of a low-level granule-index writer. It temporarily owns its parent
-/// writer and returns that parent after committing the completed column state internally.
-pub trait GranuleIndexLowLevelColumnWriter: Send {
-    fn write(&mut self, column: &Column) -> Result<()>;
-
-    fn finish(self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelWriter>>;
-}
-
-/// Low-level granule-index writer. Opening a column consumes the parent, which makes it impossible
-/// to open two columns or finish the index while a column is active.
-pub trait GranuleIndexLowLevelWriter: Send {
-    fn next_column(self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelColumnWriter>>;
-
-    fn finish(self: Box<Self>) -> Result<GranuleIndexLowLevelOutput>;
-}
-
 pub(super) struct NoopGranuleIndexWriter;
 
 impl GranuleIndexWriter for NoopGranuleIndexWriter {
@@ -185,64 +158,6 @@ impl GranuleIndexWriter for NoopGranuleIndexWriter {
 
     fn finish(self: Box<Self>) -> Result<PendingGranuleIndexOutput> {
         Ok(PendingGranuleIndexOutput::default())
-    }
-}
-
-pub(super) struct NoopGranuleIndexLowLevelColumnWriter {
-    parent: Option<Box<dyn GranuleIndexLowLevelWriter>>,
-}
-
-impl NoopGranuleIndexLowLevelColumnWriter {
-    fn new(parent: Box<dyn GranuleIndexLowLevelWriter>) -> Self {
-        Self {
-            parent: Some(parent),
-        }
-    }
-}
-
-impl GranuleIndexLowLevelColumnWriter for NoopGranuleIndexLowLevelColumnWriter {
-    fn write(&mut self, _column: &Column) -> Result<()> {
-        Ok(())
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelWriter>> {
-        self.parent
-            .take()
-            .ok_or_else(|| ErrorCode::Internal("no-op granule index column writer has no parent"))
-    }
-}
-
-pub(super) struct NoopGranuleIndexLowLevelWriter {
-    remaining_columns: usize,
-}
-
-impl NoopGranuleIndexLowLevelWriter {
-    pub(super) fn new(columns: usize) -> Self {
-        Self {
-            remaining_columns: columns,
-        }
-    }
-}
-
-impl GranuleIndexLowLevelWriter for NoopGranuleIndexLowLevelWriter {
-    fn next_column(mut self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelColumnWriter>> {
-        if self.remaining_columns == 0 {
-            return Err(ErrorCode::Internal(
-                "granule index low-level writer has no remaining columns",
-            ));
-        }
-        self.remaining_columns -= 1;
-        Ok(Box::new(NoopGranuleIndexLowLevelColumnWriter::new(self)))
-    }
-
-    fn finish(self: Box<Self>) -> Result<GranuleIndexLowLevelOutput> {
-        if self.remaining_columns != 0 {
-            return Err(ErrorCode::Internal(format!(
-                "granule index low-level writer has {} unconsumed columns",
-                self.remaining_columns
-            )));
-        }
-        Ok(GranuleIndexLowLevelOutput::default())
     }
 }
 
@@ -269,28 +184,13 @@ pub trait GranuleIndexSpec: Send + Sync {
     /// must not perform I/O here; payloads from dropped specs are handled by the orphan sweep.
     fn payload_locations(&self, block_location: &str) -> Vec<String>;
 
-    /// Default writers bind stable IDs and return compressed pending payloads. Low-level writers
-    /// additionally bind lazy blocking outputs and write payloads directly.
+    /// Default writers bind stable IDs and return compressed pending payloads.
     fn new_writer(
         &self,
         func_ctx: FunctionContext,
         physical_schema: &TableSchema,
         block_location: &str,
     ) -> Result<Box<dyn GranuleIndexWriter>>;
-
-    /// Number of lazy blocking outputs retained by the low-level writer.
-    fn low_level_blocking_writers(&self, _physical_schema: &TableSchema) -> usize {
-        0
-    }
-
-    fn new_low_level_writer(
-        &self,
-        func_ctx: FunctionContext,
-        physical_schema: &TableSchema,
-        block_location: &str,
-        dal: Operator,
-        granule_rows: usize,
-    ) -> Result<Box<dyn GranuleIndexLowLevelWriter>>;
 
     fn new_pruner(
         &self,

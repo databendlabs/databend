@@ -28,7 +28,6 @@ pub use settings_default::SettingScope;
 pub use settings_getter_setter::FlightCompression;
 pub use settings_getter_setter::FlightKeepAliveParams;
 pub use settings_getter_setter::OutofMemoryBehavior;
-pub use settings_getter_setter::ReclusterMethod;
 
 pub const ENABLE_EXPERIMENTAL_RBAC_CHECK: &str = "enable_experimental_rbac_check";
 pub const ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK: &str =

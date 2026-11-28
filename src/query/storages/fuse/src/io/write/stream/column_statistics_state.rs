@@ -15,14 +15,11 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
@@ -124,29 +121,6 @@ impl ColumnStatisticsState {
                     self.keep_fragment(column_id, &col);
                 }
             }
-        }
-        Ok(())
-    }
-
-    pub fn add_column(&mut self, field: &TableField, column: &Column) -> Result<()> {
-        let entry = BlockEntry::Column(column.clone());
-        let leaves =
-            traverse_values_dfs(std::slice::from_ref(&entry), std::slice::from_ref(field))?;
-        for (column_id, value, data_type) in leaves {
-            let Value::Column(column) = value else {
-                unreachable!("column traversal cannot produce a scalar")
-            };
-            let Some(stats) = self.col_stats.get_mut(&column_id) else {
-                return Err(ErrorCode::Internal(format!(
-                    "missing statistics builder for column {column_id}"
-                )));
-            };
-            stats.update_column_streaming(&column);
-            if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
-                estimator.update_column(&column);
-            }
-            self.keep_fragment(column_id, &column);
-            debug_assert_eq!(column.data_type(), data_type);
         }
         Ok(())
     }
@@ -263,51 +237,12 @@ mod tests {
         column_stats_state.add_block(&schema, &block)?;
         let stats_1 = column_stats_state.finalize(HashMap::new())?;
 
-        let mut single_fragment_state =
-            ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new());
-        for (field_index, entry) in block.columns().iter().enumerate() {
-            single_fragment_state.add_column(schema.field(field_index), &entry.to_column())?;
-        }
-        let single_fragment_stats = single_fragment_state.finalize(HashMap::new())?;
-
-        let mut fragmented_state =
-            ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new());
-        for (field_index, entry) in block.columns().iter().enumerate() {
-            let column = entry.to_column();
-            fragmented_state.add_column(schema.field(field_index), &column.slice(0..2))?;
-            fragmented_state.add_column(schema.field(field_index), &column.slice(2..5))?;
-        }
-        let fragmented_stats = fragmented_state.finalize(HashMap::new())?;
-
         assert_eq!(stats_0, stats_1);
-        assert_eq!(stats_0, single_fragment_stats);
-        for (column_id, expected) in &stats_0 {
-            let actual = fragmented_stats.get(column_id).unwrap();
-            assert_eq!(actual.min, expected.min);
-            assert_eq!(actual.max, expected.max);
-            assert_eq!(actual.null_count, expected.null_count);
-            assert_eq!(actual.distinct_of_values, expected.distinct_of_values);
-        }
-        assert_eq!(
-            fragmented_stats
-                .get(&schema.field(0).column_id())
-                .unwrap()
-                .in_memory_size,
-            41
-        );
-        let string_column = block.get_by_offset(1).to_column();
-        assert_eq!(
-            fragmented_stats
-                .get(&schema.field(1).column_id())
-                .unwrap()
-                .in_memory_size,
-            string_column.memory_size(true) as u64
-        );
         Ok(())
     }
 
-    /// The exact mode counts what `gen_columns_statistics` counts, whole or in fragments, and
-    /// counts constant columns too.
+    /// The exact mode counts what `gen_columns_statistics` counts, also over several blocks,
+    /// and counts constant columns too.
     #[test]
     fn test_exact_distinct_matches_batch_statistics() -> Result<()> {
         let field = TableField::new("d", TableDataType::Number(NumberDataType::Int64));
@@ -339,9 +274,8 @@ mod tests {
         let mut fragmented =
             ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new())
                 .with_exact_distinct();
-        let column = block.get_by_offset(0).to_column();
-        fragmented.add_column(schema.field(0), &column.slice(0..95))?;
-        fragmented.add_column(schema.field(0), &column.slice(95..100))?;
+        fragmented.add_block(&schema, &block.slice(0..95))?;
+        fragmented.add_block(&schema, &block.slice(95..100))?;
         assert_eq!(
             fragmented
                 .finalize(HashMap::new())?

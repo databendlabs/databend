@@ -12,8 +12,6 @@ INSERT INTO gi_t SELECT number+5000,number+5000,'old-final-100' FROM numbers(100
 statement ok
 INSERT INTO gi_t VALUES (NULL,NULL,'old-final-edge'),(100,100,'old-final-edge')
 
-# The old version has no recluster_method setting; its default recluster path is
-# horizontal.
 statement ok
 ALTER TABLE gi_t RECLUSTER FINAL
 

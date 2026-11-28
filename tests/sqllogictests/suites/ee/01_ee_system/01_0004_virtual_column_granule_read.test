@@ -173,9 +173,6 @@ select k, v:a::int, v:b::string from granule where k in (2, 4, 7)
 7 7 seven
 
 statement ok
-set recluster_method = 'vertical'
-
-statement ok
 alter table virtual_only recluster final
 
 query IIT rowsort
@@ -184,9 +181,6 @@ select k, v:a::int, v:b::string from virtual_only where k in (2, 4, 7)
 2 2 two
 4 4 four
 7 7 seven
-
-statement ok
-set recluster_method = 'horizontal'
 
 statement ok
 optimize table granule compact
@@ -210,9 +204,6 @@ select k, v:a::int, v:b::string from indexed_virtual where k in (4, 8)
 ----
 4 4 four
 8 8 eight
-
-statement ok
-set recluster_method = 'auto'
 
 statement ok
 set enable_experimental_virtual_column = 0

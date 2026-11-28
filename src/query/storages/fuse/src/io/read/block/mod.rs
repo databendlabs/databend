@@ -28,7 +28,6 @@ pub use block_reader_merge_io::DataItem;
 pub(crate) use granule_data_reader::GranuleDataReader;
 pub use low_level_block_reader::FuseLowLevelBlockReadOptions;
 pub use low_level_block_reader::FuseLowLevelBlockReader;
-pub use low_level_block_reader::FuseLowLevelClusterKeyReader;
 pub use low_level_block_reader::FuseLowLevelColumnBatchReader;
 pub use low_level_block_reader::FuseLowLevelColumnReader;
 pub use low_level_block_reader::FuseLowLevelDataReader;

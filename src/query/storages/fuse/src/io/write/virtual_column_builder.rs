@@ -197,71 +197,6 @@ impl VirtualColumnBuilder {
         })
     }
 
-    pub fn add_column(&mut self, field_index: usize, column: &Column) -> Result<()> {
-        let Some(variant_index) = self
-            .variant_offsets
-            .iter()
-            .position(|offset| *offset == field_index)
-        else {
-            return Ok(());
-        };
-        let mut hash_to_index: StackHashMap<u128, usize, 16> =
-            StackHashMap::with_capacity(self.virtual_paths[variant_index].len());
-        for (virtual_path, index) in &self.virtual_paths[variant_index] {
-            let mut hasher = SipHasher24::new();
-            virtual_path.as_key_paths().hash(&mut hasher);
-            let hash_value = hasher.finish128().into();
-            unsafe {
-                match hash_to_index.insert_and_entry(hash_value) {
-                    Ok(entry) | Err(entry) => *entry.get_mut() = *index,
-                }
-            }
-        }
-
-        let base_row = self.variant_rows[variant_index];
-        for row in 0..column.len() {
-            let ScalarRef::Variant(jsonb_bytes) = (unsafe { column.index_unchecked(row) }) else {
-                continue;
-            };
-            let raw_jsonb = RawJsonb::new(jsonb_bytes);
-            raw_jsonb
-                .visit_scalar_key_values(true, |key_paths, jsonb_value| {
-                    let scalar_value = JsonbScalarValue {
-                        row: base_row + row,
-                        scalar: Self::jsonb_value_to_scalar(jsonb_value),
-                    };
-                    let mut hasher = SipHasher24::new();
-                    key_paths.hash(&mut hasher);
-                    let hash_value = hasher.finish128().into();
-                    if let Some(index) = hash_to_index.get(&hash_value) {
-                        self.virtual_values[*index].push(scalar_value);
-                    } else {
-                        let index = self.virtual_values.len();
-                        let owned_key_paths = jsonb::keypath::KeyPaths {
-                            paths: key_paths.to_vec(),
-                        }
-                        .to_owned();
-                        unsafe {
-                            match hash_to_index.insert_and_entry(hash_value) {
-                                Ok(entry) | Err(entry) => *entry.get_mut() = index,
-                            }
-                        }
-                        self.virtual_paths[variant_index].insert(owned_key_paths, index);
-                        self.virtual_values.push(vec![scalar_value]);
-                    }
-                    Ok(())
-                })
-                .map_err(|error| {
-                    ErrorCode::VirtualColumnError(format!(
-                        "failed to extract virtual column values: {error}"
-                    ))
-                })?;
-        }
-        self.variant_rows[variant_index] += column.len();
-        self.total_rows = self.total_rows.max(self.variant_rows[variant_index]);
-        Ok(())
-    }
-
     pub fn with_exact_layout(mut self, layout: Arc<VirtualColumnLayout>) -> Self {
         self.mode = VirtualColumnBuildMode::Exact(layout);
         self
@@ -1605,73 +1540,6 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_column_writes_preserve_adaptive_layout_and_path_statistics() {
-        let schema = Arc::new(TableSchema::new(vec![
-            TableField::new("left", TableDataType::Variant),
-            TableField::new("right", TableDataType::Variant),
-        ]));
-        let layout = Arc::new(VirtualColumnLayout {
-            direct_paths: vec![VirtualColumnPath {
-                source_column_id: schema.fields()[0].column_id,
-                path: "a".to_string(),
-            }],
-        });
-        let mut column_builder =
-            VirtualColumnBuilder::try_create(schema.clone(), Default::default())
-                .unwrap()
-                .with_adaptive_layout(layout.clone());
-        let mut block_builder = VirtualColumnBuilder::try_create(schema, Default::default())
-            .unwrap()
-            .with_adaptive_layout(layout);
-        let left = variant_column(&[r#"{"a":1,"b":null}"#, r#"{"a":2}"#, r#"{"b":3}"#]);
-        let right = variant_column(&[r#"{"x":"one"}"#, r#"{}"#, r#"{"x":"three"}"#]);
-        column_builder.add_column(0, &left.slice(0..1)).unwrap();
-        column_builder.add_column(0, &left.slice(1..3)).unwrap();
-        column_builder.add_column(1, &right.slice(0..2)).unwrap();
-        column_builder.add_column(1, &right.slice(2..3)).unwrap();
-        block_builder
-            .add_block(&DataBlock::new_from_columns(vec![left, right]))
-            .unwrap();
-
-        let settings = WriteSettings::default();
-        let location = ("table/_b/block.parquet".to_string(), 0);
-        let column_state = column_builder.finalize(&settings, &location).unwrap();
-        let block_state = block_builder.finalize(&settings, &location).unwrap();
-        assert_eq!(
-            column_state.draft_virtual_block_meta.path_statistics,
-            block_state.draft_virtual_block_meta.path_statistics
-        );
-        let mut column_meta = column_state
-            .draft_virtual_block_meta
-            .virtual_columns
-            .unwrap();
-        let mut block_meta = block_state
-            .draft_virtual_block_meta
-            .virtual_columns
-            .unwrap();
-        // Each materialization has a fresh generation-specific location.
-        assert_ne!(column_meta.virtual_location, block_meta.virtual_location);
-        column_meta.virtual_location.0.clear();
-        block_meta.virtual_location.0.clear();
-        assert_eq!(column_meta, block_meta);
-        // Footer JSON maps have randomized iteration order; compare decoded data,
-        // not the byte order of otherwise equivalent metadata.
-        let decode = |data| {
-            parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
-                databend_storages_common_io::BufferReader(data),
-            )
-            .unwrap()
-            .build()
-            .unwrap()
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .unwrap()
-        };
-        assert_eq!(decode(column_state.data), decode(block_state.data));
-        assert_eq!(column_builder.variant_rows, vec![0, 0]);
-        assert_eq!(column_builder.total_rows, 0);
-    }
-
     #[tokio::test]
     async fn test_virtual_granule_offsets_roundtrip_direct_and_shared() {
         use arrow_array::RecordBatch;
@@ -1873,33 +1741,5 @@ mod tests {
                 ))
             )
         );
-    }
-
-    #[test]
-    fn test_add_column_tracks_rows_per_variant_source() {
-        let schema = Arc::new(TableSchema::new(vec![
-            TableField::new("left", TableDataType::Variant),
-            TableField::new("right", TableDataType::Variant),
-        ]));
-        let mut builder = VirtualColumnBuilder::try_create(schema, Default::default()).unwrap();
-        let left = variant_column(&[r#"{"a":1}"#, r#"{"a":2}"#, r#"{"a":3}"#]);
-        let right = variant_column(&[r#"{"b":4}"#, r#"{"b":5}"#, r#"{"b":6}"#]);
-
-        builder.add_column(0, &left.slice(0..1)).unwrap();
-        builder.add_column(0, &left.slice(1..3)).unwrap();
-        builder.add_column(1, &right.slice(0..2)).unwrap();
-        builder.add_column(1, &right.slice(2..3)).unwrap();
-
-        assert_eq!(builder.variant_rows, vec![3, 3]);
-        assert_eq!(builder.total_rows, 3);
-        for paths in &builder.virtual_paths {
-            assert_eq!(paths.len(), 1);
-            let value_index = *paths.values().next().unwrap();
-            let rows = builder.virtual_values[value_index]
-                .iter()
-                .map(|value| value.row)
-                .collect::<Vec<_>>();
-            assert_eq!(rows, vec![0, 1, 2]);
-        }
     }
 }

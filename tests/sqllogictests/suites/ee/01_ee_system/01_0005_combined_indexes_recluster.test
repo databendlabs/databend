@@ -14,9 +14,6 @@ statement ok
 set enable_recluster_inverted_index_merge=1
 
 statement ok
-set recluster_method='vertical'
-
-statement ok
 set recluster_timeout_secs=30
 
 statement ok
@@ -50,9 +47,6 @@ select sum(row_count),count_if(inverted_index_size>0)=count(),count_if(virtual_c
 257 1 1
 
 statement ok
-set recluster_method='horizontal'
-
-statement ok
 set force_sort_data_spill=1
 
 statement ok
@@ -76,9 +70,6 @@ select count(),sum(id),sum(v:n::int) from t where match(content,'common')
 
 statement ok
 unset force_sort_data_spill
-
-statement ok
-unset recluster_method
 
 statement ok
 unset recluster_timeout_secs

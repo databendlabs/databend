@@ -28,7 +28,6 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -49,7 +48,6 @@ use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::EmptySource;
-use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
 use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -68,7 +66,6 @@ use databend_common_storages_fuse::operations::ReclusterTaskBudget;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
-use databend_common_storages_fuse::operations::VerticalReclusterSource;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_common_storages_fuse::operations::build_recluster_index_merge_pipeline;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
@@ -303,8 +300,7 @@ impl Recluster {
             ));
         }
         let settings = builder.ctx.get_settings();
-        let multiway_merge = task.vertical_kind.is_none()
-            && task.kind == ReclusterTaskKind::MergeBlocks
+        let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
             && settings.get_enable_recluster_multiway_merge()?
             && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
             && !table
@@ -380,31 +376,6 @@ impl Recluster {
                 "Recluster input planned"
             );
         }
-        if let Some(kind) = task.vertical_kind {
-            log::debug!(
-                "recluster: scheduled vertical kind={:?} block_count={} rows={} budget={}",
-                kind,
-                recluster_block_nums,
-                task.total_rows,
-                task.memory_budget,
-            );
-            return builder.main_pipeline.add_source(
-                |output| {
-                    SyncSourcer::create(
-                        builder.ctx.get_scan_progress(),
-                        output,
-                        VerticalReclusterSource::create(
-                            builder.ctx.clone(),
-                            table.clone(),
-                            task.clone(),
-                            self.table_meta_timestamps,
-                        ),
-                    )
-                },
-                1,
-            );
-        }
-
         // The index merge pipeline ends the data pipeline with a sink, which a sequential
         // node batch cannot hold back, so such a batch rebuilds the indexes instead.
         let index_merge = match multiway_merge && index_merge_allowed {
@@ -914,8 +885,6 @@ mod tests {
                         level: 0,
                         input_level_stats: vec![],
                         kind: ReclusterTaskKind::MergeBlocks,
-                        vertical_kind: None,
-                        memory_budget: 0,
                         virtual_column_layout: None,
                         inverted_index_sources: vec![],
                     }

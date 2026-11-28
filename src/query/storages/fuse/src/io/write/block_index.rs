@@ -23,7 +23,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -31,9 +30,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RowMapping;
 use databend_storages_common_index::SourceRows;
-use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
-use databend_storages_common_io::OpenDalBlockingWrite;
-use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -61,15 +57,7 @@ pub struct BlockIndexWriteContext {
     pub write_settings: WriteSettings,
 }
 
-impl BlockIndexWriteContext {
-    pub fn create_write(&self, location: &Location) -> OpenDalBlockingWrite {
-        create_blocking_write(
-            self.operator.clone(),
-            location.0.clone(),
-            BLOCKING_WRITE_MAX_CHUNKS,
-        )
-    }
-}
+impl BlockIndexWriteContext {}
 
 #[derive(Debug)]
 pub struct PendingIndexFile {
@@ -91,21 +79,8 @@ impl PendingIndexFile {
 }
 
 #[derive(Debug)]
-pub struct WrittenIndexFile {
-    pub location: Location,
-    pub size: u64,
-}
-
-#[derive(Debug)]
 pub struct PendingBloomIndex {
     pub file: PendingIndexFile,
-    pub ngram_size: Option<u64>,
-    pub column_distinct_count: HashMap<ColumnId, usize>,
-}
-
-#[derive(Debug)]
-pub struct WrittenBloomIndex {
-    pub file: WrittenIndexFile,
     pub ngram_size: Option<u64>,
     pub column_distinct_count: HashMap<ColumnId, usize>,
 }
@@ -148,21 +123,8 @@ pub struct PendingVectorIndex {
 }
 
 #[derive(Debug)]
-pub struct WrittenVectorIndex {
-    /// One bundle file per index, already written.
-    pub files: Vec<BlockIndexMeta>,
-    pub statistics: Option<StatisticsOfVectorColumns>,
-}
-
-#[derive(Debug)]
 pub struct PendingSpatialIndex {
     pub file: Option<PendingIndexFile>,
-    pub statistics: Option<StatisticsOfSpatialColumns>,
-}
-
-#[derive(Debug)]
-pub struct WrittenSpatialIndex {
-    pub file: Option<WrittenIndexFile>,
     pub statistics: Option<StatisticsOfSpatialColumns>,
 }
 
@@ -181,25 +143,6 @@ impl PendingBlockIndexOutput {
         merge_inverted(&mut self.inverted, other.inverted, "pending inverted index")?;
         merge_singleton(&mut self.vector, other.vector, "pending vector index")?;
         merge_singleton(&mut self.spatial, other.spatial, "pending spatial index")?;
-        Ok(())
-    }
-}
-
-/// Direct-I/O writer and merger output.
-#[derive(Debug, Default)]
-pub struct WrittenBlockIndexOutput {
-    pub bloom: Option<WrittenBloomIndex>,
-    pub inverted: Vec<WrittenInvertedIndex>,
-    pub vector: Option<WrittenVectorIndex>,
-    pub spatial: Option<WrittenSpatialIndex>,
-}
-
-impl WrittenBlockIndexOutput {
-    pub fn merge(&mut self, other: Self) -> Result<()> {
-        merge_singleton(&mut self.bloom, other.bloom, "written bloom index")?;
-        merge_inverted(&mut self.inverted, other.inverted, "written inverted index")?;
-        merge_singleton(&mut self.vector, other.vector, "written vector index")?;
-        merge_singleton(&mut self.spatial, other.spatial, "written spatial index")?;
         Ok(())
     }
 }
@@ -367,31 +310,12 @@ pub trait BlockIndexSpec: Send + Sync {
     }
 
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>>;
-
-    fn new_low_level_writer(
-        &self,
-        context: BlockIndexWriteContext,
-    ) -> Result<Box<dyn BlockIndexLowLevelWriter>>;
 }
 
 pub trait BlockIndexWriter: Send {
     fn write(&mut self, block: &DataBlock) -> Result<()>;
 
     fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput>;
-}
-
-/// Column-oriented direct-I/O writer.
-pub trait BlockIndexLowLevelWriter: Send {
-    fn next_column(self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>>;
-
-    fn finish(self: Box<Self>) -> Result<WrittenBlockIndexOutput>;
-}
-
-/// Accumulates one column and returns its parent writer on finish.
-pub trait BlockIndexLowLevelColumnWriter: Send {
-    fn write(&mut self, column: &Column) -> Result<()>;
-
-    fn finish(self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>>;
 }
 
 #[cfg(test)]
@@ -465,19 +389,5 @@ mod tests {
                 })
                 .is_err()
         );
-
-        let written = WrittenBlockIndexOutput {
-            vector: Some(WrittenVectorIndex {
-                files: vec![BlockIndexMeta {
-                    index_name: "vector".to_owned(),
-                    index_version: "v1".to_owned(),
-                    location: ("written".to_owned(), 1),
-                    size: 11,
-                }],
-                statistics: None,
-            }),
-            ..Default::default()
-        };
-        assert_eq!(written.vector.unwrap().files[0].size, 11);
     }
 }

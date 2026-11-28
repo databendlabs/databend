@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -81,8 +80,6 @@ use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::inverted_index_user_dictionary::JAPANESE_DICTIONARY;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
-use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
-use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexMergeContext;
 use crate::io::write::block_index::BlockIndexMergeSource;
 use crate::io::write::block_index::BlockIndexMerger;
@@ -90,7 +87,6 @@ use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
-use crate::io::write::block_index::WrittenBlockIndexOutput;
 use crate::io::write::block_index::WrittenInvertedIndex;
 use crate::io::write::inverted_index_merge::InvertedIndexMerger;
 use crate::io::write::inverted_index_merge::merge_sources;
@@ -159,42 +155,6 @@ impl BlockIndexSpec for InvertedIndexWriteSpec {
             writer,
         }))
     }
-
-    fn new_low_level_writer(
-        &self,
-        context: BlockIndexWriteContext,
-    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let location = (
-            self.builder
-                .gen_inverted_index_location(&context.meta_locations),
-            INVERTED_INDEX_FILE_FORMAT_VERSION,
-        );
-        let field_indexes = self
-            .builder
-            .schema
-            .fields()
-            .iter()
-            .map(|field| context.physical_schema.index_of(field.name()))
-            .collect::<Result<Vec<_>>>()?;
-        let num_fields = context.physical_schema.num_fields();
-        let writer = InvertedIndexWriter::try_create(
-            Arc::new(self.builder.schema.clone()),
-            &self.builder.options,
-            context.operator,
-            location.0.clone(),
-            self.builder.user_dictionary.clone(),
-        )?;
-        Ok(Box::new(InvertedIndexLowLevelWriter {
-            index_name: self.builder.name.clone(),
-            index_version: self.builder.version.clone(),
-            location,
-            field_indexes,
-            columns: vec![None; num_fields],
-            writer: Some(writer),
-            next_field: 0,
-            num_fields,
-        }))
-    }
 }
 
 struct InvertedIndexBlockWriter {
@@ -234,105 +194,6 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
             inverted: vec![written_index],
             ..Default::default()
         })
-    }
-}
-
-struct InvertedIndexLowLevelWriter {
-    index_name: String,
-    index_version: String,
-    location: Location,
-    field_indexes: Vec<usize>,
-    columns: Vec<Option<Vec<Column>>>,
-    writer: Option<InvertedIndexWriter>,
-    next_field: usize,
-    num_fields: usize,
-}
-
-impl BlockIndexLowLevelWriter for InvertedIndexLowLevelWriter {
-    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
-        if self.next_field >= self.num_fields {
-            return Err(ErrorCode::Internal(
-                "inverted index low-level writer has no remaining columns",
-            ));
-        }
-        let field_index = self.next_field;
-        self.next_field += 1;
-        let fragments = self
-            .field_indexes
-            .contains(&field_index)
-            .then(Vec::<Column>::new);
-        Ok(Box::new(InvertedIndexLowLevelColumnWriter {
-            parent: Some(self),
-            field_index,
-            fragments,
-        }))
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
-        if self.next_field != self.num_fields {
-            return Err(ErrorCode::Internal(format!(
-                "inverted index low-level writer consumed {} of {} columns",
-                self.next_field, self.num_fields
-            )));
-        }
-        let mut columns = Vec::with_capacity(self.field_indexes.len());
-        for field_index in self.field_indexes {
-            let fragments = self.columns[field_index]
-                .take()
-                .ok_or_else(|| ErrorCode::Internal("missing inverted index column"))?;
-            columns.push(if fragments.len() == 1 {
-                fragments.into_iter().next().unwrap()
-            } else {
-                Column::concat_columns(fragments)?
-            });
-        }
-        let mut writer = self
-            .writer
-            .take()
-            .ok_or_else(|| ErrorCode::Internal("inverted index writer was consumed"))?;
-        writer.add_columns(&columns)?;
-        let start = Instant::now();
-        let sizes = writer.finalize()?;
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        let total_size = sizes.bundle + sizes.siblings;
-        metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
-        metrics_inc_block_inverted_index_write_nums(1);
-        metrics_inc_block_inverted_index_write_bytes(total_size);
-        metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);
-        Ok(WrittenBlockIndexOutput {
-            inverted: vec![WrittenInvertedIndex {
-                index_name: self.index_name,
-                index_version: self.index_version,
-                location: self.location,
-                bundle_size: sizes.bundle,
-                total_size,
-            }],
-            ..Default::default()
-        })
-    }
-}
-
-struct InvertedIndexLowLevelColumnWriter {
-    parent: Option<Box<InvertedIndexLowLevelWriter>>,
-    field_index: usize,
-    fragments: Option<Vec<Column>>,
-}
-
-impl BlockIndexLowLevelColumnWriter for InvertedIndexLowLevelColumnWriter {
-    fn write(&mut self, column: &Column) -> Result<()> {
-        if let Some(fragments) = self.fragments.as_mut() {
-            fragments.push(column.clone());
-        }
-        Ok(())
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let mut parent = self
-            .parent
-            .take()
-            .ok_or_else(|| ErrorCode::Internal("inverted index column writer has no parent"))?;
-        parent.columns[self.field_index] = self.fragments.take();
-        Ok(parent)
     }
 }
 

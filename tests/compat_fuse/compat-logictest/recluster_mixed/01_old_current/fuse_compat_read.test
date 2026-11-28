@@ -7,9 +7,6 @@ SELECT count(),sum(value) FROM mixed_t
 10 550
 
 statement ok
-SET recluster_method = 'vertical'
-
-statement ok
 ALTER TABLE mixed_t RECLUSTER FINAL
 
 query IIT

@@ -15,9 +15,6 @@ SELECT count(),sum(payload),count_if(source LIKE 'current-after-replace-%') FROM
 80 440280 16
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE rollout_t RECLUSTER FINAL
 
 query II

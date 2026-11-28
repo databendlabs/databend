@@ -61,11 +61,6 @@
 # index_granularity is a current-only feature, so the writer must always be current.
 - { writer: current, reader: "1.2.833", meta: [1.2.833], suite: page_index }
 
-# --- Current-version horizontal/vertical compatibility ---
-# Run identical INSERT, UPDATE, MERGE, stream, and recluster workloads through
-# both methods, then restart query and verify/consume the results.
-- { writer: current, reader: current, meta: [current], suite: recluster_current }
-
 # --- Mixed query-version rolling compatibility ---
 # Each object is a complete old-writer -> meta-chain -> current-reader case.
 # The enclosing array preserves Meta/Fuse data between objects, allowing the
@@ -76,7 +71,7 @@
     { writer: "1.2.833", reader: current, meta: [1.2.833], suite: recluster_mixed/03_old_current },
   ]
 
-# --- Granule index, boundary, and vertical SortBlocks/MergeBlocks compatibility ---
+# --- Granule index, boundary, and SortBlocks/MergeBlocks compatibility ---
 # Run the exact same four-round snapshot history against both 1.2.833 and
 # 1.2.929. Each group uses an independent data directory lifecycle and current
 # Meta, which understands the Bloom index enum. Current emits sparse and Bloom

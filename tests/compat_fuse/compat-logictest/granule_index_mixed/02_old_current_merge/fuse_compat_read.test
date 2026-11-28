@@ -15,9 +15,6 @@ statement ok
 DELETE FROM gi_t WHERE k IN (-2147483648,50,2147483647)
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE gi_t RECLUSTER FINAL
 
 query III
@@ -39,9 +36,6 @@ query T
 SELECT info:average_depth FROM clustering_information('compat_granule_mixed','gi_t')
 ----
 1.0
-
-statement ok
-SET recluster_method='vertical'
 
 statement ok
 ALTER TABLE gi_sort_merge RECLUSTER FINAL

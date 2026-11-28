@@ -46,11 +46,8 @@ use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
-use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
-use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::ReadSettings;
-use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -59,15 +56,10 @@ use opendal::Buffer;
 use opendal::Operator;
 use parquet::arrow::arrow_writer::compute_leaves;
 
-use super::GranuleIndexLowLevelColumnWriter;
-use super::GranuleIndexLowLevelOutput;
-use super::GranuleIndexLowLevelWriter;
 use super::GranuleIndexPruner;
 use super::GranuleIndexSpec;
 use super::GranuleIndexWriter;
 use super::GranuleMark;
-use super::NoopGranuleIndexLowLevelColumnWriter;
-use super::NoopGranuleIndexLowLevelWriter;
 use super::NoopGranuleIndexWriter;
 use super::PendingGranuleIndexOutput;
 use super::PendingGranuleIndexPayload;
@@ -203,57 +195,6 @@ impl GranuleIndexSpec for BloomGranuleIndexSpec {
         }))
     }
 
-    fn low_level_blocking_writers(&self, physical_schema: &TableSchema) -> usize {
-        self.bind_columns(physical_schema)
-            .map(|columns| columns.into_iter().flatten().count())
-            .unwrap_or(0)
-    }
-
-    fn new_low_level_writer(
-        &self,
-        func_ctx: FunctionContext,
-        physical_schema: &TableSchema,
-        block_location: &str,
-        dal: Operator,
-        granule_rows: usize,
-    ) -> Result<Box<dyn GranuleIndexLowLevelWriter>> {
-        let Some(bound_columns) = self.bind_columns(physical_schema) else {
-            log::debug!(
-                "Ignoring granule bloom index {} while writing: not all indexed columns exist in the physical schema",
-                self.index_name
-            );
-            return Ok(Box::new(NoopGranuleIndexLowLevelWriter::new(
-                physical_schema.num_fields(),
-            )));
-        };
-        let columns = bound_columns
-            .into_iter()
-            .map(|field| {
-                field.map(|field| {
-                    let location =
-                        TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
-                            block_location,
-                            &self.index_name,
-                            &self.index_version,
-                            field.column_id(),
-                        );
-                    let write =
-                        create_blocking_write(dal.clone(), location, BLOCKING_WRITE_MAX_CHUNKS);
-                    (field, write)
-                })
-            })
-            .collect();
-        Ok(Box::new(BloomGranuleIndexLowLevelWriter {
-            func_ctx,
-            bloom_index_type: self.bloom_index_type,
-            index_version: self.index_version.clone(),
-            granule_rows,
-            columns,
-            next_column: 0,
-            output: GranuleIndexLowLevelOutput::default(),
-        }))
-    }
-
     fn new_pruner(
         &self,
         func_ctx: FunctionContext,
@@ -314,49 +255,6 @@ impl PendingColumnPayloadState {
             field,
             col_id,
             location,
-            payload_field: payload_arrow_field(),
-            payload_write: Some(payload_write),
-            payload_writer: None,
-            granules_written: 0,
-            current: None,
-        }
-    }
-
-    fn current_builder(
-        &mut self,
-        func_ctx: &FunctionContext,
-        ty: BloomIndexType,
-    ) -> Result<&mut BloomIndexBuilder> {
-        current_builder(&self.field, &mut self.current, func_ctx, ty)
-    }
-
-    fn write_filter(&mut self, filter_bytes: Option<Vec<u8>>) -> Result<()> {
-        write_filter(
-            &self.payload_field,
-            &mut self.payload_write,
-            &mut self.payload_writer,
-            &mut self.granules_written,
-            filter_bytes,
-        )
-    }
-}
-
-struct ColumnPayloadState {
-    field: TableField,
-    col_id: u32,
-    payload_field: Arc<arrow_schema::Field>,
-    payload_write: Option<OpenDalBlockingWrite>,
-    payload_writer: Option<BulkParquetLeafWriter<OpenDalBlockingWrite>>,
-    granules_written: usize,
-    current: Option<BloomIndexBuilder>,
-}
-
-impl ColumnPayloadState {
-    fn new(field: TableField, payload_write: OpenDalBlockingWrite) -> Self {
-        let col_id = field.column_id();
-        Self {
-            field,
-            col_id,
             payload_field: payload_arrow_field(),
             payload_write: Some(payload_write),
             payload_writer: None,
@@ -476,54 +374,6 @@ impl GranuleIndexWriter for BloomGranuleIndexWriter {
     }
 }
 
-struct BloomGranuleIndexLowLevelWriter {
-    func_ctx: FunctionContext,
-    bloom_index_type: BloomIndexType,
-    index_version: String,
-    granule_rows: usize,
-    columns: Vec<Option<(TableField, OpenDalBlockingWrite)>>,
-    next_column: usize,
-    output: GranuleIndexLowLevelOutput,
-}
-
-impl GranuleIndexLowLevelWriter for BloomGranuleIndexLowLevelWriter {
-    fn next_column(mut self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelColumnWriter>> {
-        let index = self.next_column;
-        if index >= self.columns.len() {
-            return Err(ErrorCode::Internal(
-                "granule bloom low-level writer has no remaining columns",
-            ));
-        }
-        self.next_column += 1;
-        let slot = self.columns[index].take();
-        let Some((field, payload_write)) = slot else {
-            return Ok(Box::new(NoopGranuleIndexLowLevelColumnWriter::new(self)));
-        };
-        Ok(Box::new(BloomGranuleIndexLowLevelColumnWriter {
-            parent: Some(self),
-            rows_in_granule: 0,
-            payload: ColumnPayloadState::new(field, payload_write),
-        }))
-    }
-
-    fn finish(self: Box<Self>) -> Result<GranuleIndexLowLevelOutput> {
-        if self.next_column != self.columns.len() {
-            return Err(ErrorCode::Internal(format!(
-                "granule bloom low-level writer consumed {} of {} columns",
-                self.next_column,
-                self.columns.len()
-            )));
-        }
-        Ok(self.output)
-    }
-}
-
-struct BloomGranuleIndexLowLevelColumnWriter {
-    parent: Option<Box<BloomGranuleIndexLowLevelWriter>>,
-    rows_in_granule: usize,
-    payload: ColumnPayloadState,
-}
-
 fn finalize_filter(builder: Option<BloomIndexBuilder>) -> Result<Option<Vec<u8>>> {
     match builder {
         Some(builder) => match builder.finalize()? {
@@ -560,77 +410,6 @@ fn finish_pending_payload(
             data: opendal::Buffer::from(write.into_chunks()),
         }],
     })
-}
-
-fn finish_payload(
-    mut payload: ColumnPayloadState,
-    index_version: &str,
-) -> Result<GranuleIndexLowLevelOutput> {
-    let granules = payload.granules_written;
-    if granules == 0 {
-        return Ok(GranuleIndexLowLevelOutput::default());
-    }
-    let leaf = payload
-        .payload_writer
-        .take()
-        .expect("non-empty payload has writer");
-    let writer = leaf.finish()?;
-    let (metadata, _) = writer.finish()?;
-    let (offs, lens) = page_offsets_from_metadata(&metadata, granules)?;
-    let (off_name, len_name) = bloom_mark_names(index_version, payload.col_id);
-    Ok(GranuleIndexLowLevelOutput {
-        marks: vec![
-            GranuleMark::create(&off_name, offs),
-            GranuleMark::create(&len_name, lens),
-        ],
-    })
-}
-
-impl BloomGranuleIndexLowLevelColumnWriter {
-    fn finish_granule(&mut self) -> Result<()> {
-        let filter_bytes = finalize_filter(self.payload.current.take())?;
-        self.payload.write_filter(filter_bytes)
-    }
-}
-
-impl GranuleIndexLowLevelColumnWriter for BloomGranuleIndexLowLevelColumnWriter {
-    fn write(&mut self, column: &Column) -> Result<()> {
-        let parent = self
-            .parent
-            .as_ref()
-            .ok_or_else(|| ErrorCode::Internal("granule bloom column writer has no parent"))?;
-        let granule_rows = parent.granule_rows;
-        let func_ctx = parent.func_ctx.clone();
-        let bloom_index_type = parent.bloom_index_type;
-        let mut offset = 0;
-        while offset < column.len() {
-            let take = (granule_rows - self.rows_in_granule).min(column.len() - offset);
-            let sub = DataBlock::new_from_columns(vec![column.slice(offset..offset + take)]);
-            self.payload
-                .current_builder(&func_ctx, bloom_index_type)?
-                .add_block(&sub)?;
-            offset += take;
-            self.rows_in_granule += take;
-            if self.rows_in_granule == granule_rows {
-                self.finish_granule()?;
-                self.rows_in_granule = 0;
-            }
-        }
-        Ok(())
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<Box<dyn GranuleIndexLowLevelWriter>> {
-        if self.rows_in_granule != 0 {
-            self.finish_granule()?;
-        }
-        let mut parent = self
-            .parent
-            .take()
-            .ok_or_else(|| ErrorCode::Internal("granule bloom column writer has no parent"))?;
-        let output = finish_payload(self.payload, &parent.index_version)?;
-        parent.output.merge(output)?;
-        Ok(parent)
-    }
 }
 
 fn build_single_binary_column(filter_bytes: Option<Vec<u8>>) -> Column {
@@ -1100,18 +879,6 @@ mod tests {
             bound[0].as_ref().unwrap().column_id(),
             indexed_field.column_id()
         );
-        assert_eq!(spec.low_level_blocking_writers(&physical_schema), 1);
-
-        let unrelated_schema = TableSchema::new_from_column_ids(
-            vec![TableField::new_from_column_id(
-                "other_col",
-                TableDataType::Number(NumberDataType::Int64),
-                30,
-            )],
-            Default::default(),
-            31,
-        );
-        assert_eq!(spec.low_level_blocking_writers(&unrelated_schema), 0);
     }
 
     #[test]
@@ -1199,23 +966,19 @@ mod tests {
         );
         let physical_schema =
             TableSchema::new_from_column_ids(vec![unrelated_field], Default::default(), 31);
-        let dal = Operator::new(opendal::services::Memory::default())
-            .unwrap()
-            .finish();
 
-        let writer = spec
-            .new_low_level_writer(
+        let mut writer = spec
+            .new_writer(
                 FunctionContext::default(),
                 &physical_schema,
                 "1/2/_b/block.parquet",
-                dal,
-                2,
             )
             .unwrap();
-        let mut column = writer.next_column().unwrap();
-        column.write(&Int64Type::from_data(vec![1i64, 2])).unwrap();
-        let writer = column.finish().unwrap();
-        assert!(writer.finish().unwrap().marks.is_empty());
+        let block = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![1i64, 2])]);
+        writer.write(&block, 0..2).unwrap();
+        let output = writer.finish().unwrap();
+        assert!(output.marks.is_empty());
+        assert!(output.pending_payloads.is_empty());
     }
 
     #[test]
@@ -1245,22 +1008,13 @@ mod tests {
             bloom_index_type: BloomIndexType::Xor8,
             column_ids: vec![field.column_id()],
         };
-        let dal = Operator::new(opendal::services::Memory::default())
-            .unwrap()
-            .finish();
         let schema = TableSchema::new(vec![field]);
         let writer = spec
-            .new_low_level_writer(
-                FunctionContext::default(),
-                &schema,
-                "1/2/_b/block.parquet",
-                dal,
-                2,
-            )
+            .new_writer(FunctionContext::default(), &schema, "1/2/_b/block.parquet")
             .unwrap();
-        let column = writer.next_column().unwrap();
-        let writer = column.finish().unwrap();
-        assert!(writer.finish().unwrap().marks.is_empty());
+        let output = writer.finish().unwrap();
+        assert!(output.marks.is_empty());
+        assert!(output.pending_payloads.is_empty());
     }
 
     #[test]
@@ -1350,19 +1104,22 @@ mod tests {
                 field.column_id(),
             );
 
-        let column = Int64Type::from_data(vec![1i64, 2, 3, 4]);
+        let block = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![1i64, 2, 3, 4])]);
         let schema = TableSchema::new(vec![field.clone()]);
-        let writer = spec
-            .new_low_level_writer(func_ctx.clone(), &schema, block_location, dal.clone(), 2)
+        let mut writer = spec
+            .new_writer(func_ctx.clone(), &schema, block_location)
             .unwrap();
-        let mut column_writer = writer.next_column().unwrap();
-        column_writer.write(&column.slice(0..2)).unwrap();
-        column_writer.write(&column.slice(2..4)).unwrap();
-
-        let writer = column_writer.finish().unwrap();
+        writer.write(&block, 0..2).unwrap();
+        writer.finish_granule().unwrap();
+        writer.write(&block, 2..4).unwrap();
         let out = writer.finish().unwrap();
 
         assert_eq!(out.marks.len(), 2);
+        assert_eq!(out.pending_payloads.len(), 1);
+        assert_eq!(out.pending_payloads[0].location.0, payload_loc);
+        dal.write(&payload_loc, out.pending_payloads[0].data.clone())
+            .await
+            .unwrap();
 
         let offs = out.marks[0].values.clone();
         let lens = out.marks[1].values.clone();

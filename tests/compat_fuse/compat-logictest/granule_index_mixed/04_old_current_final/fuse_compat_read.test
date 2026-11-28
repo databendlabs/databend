@@ -22,9 +22,6 @@ SELECT count_if(k BETWEEN 5000 AND 5099),count_if(k=3100),count_if(k=5100) FROM 
 100 1 0
 
 statement ok
-SET recluster_method='vertical'
-
-statement ok
 ALTER TABLE gi_t RECLUSTER FINAL
 
 query T
