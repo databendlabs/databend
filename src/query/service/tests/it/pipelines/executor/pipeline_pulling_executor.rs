@@ -43,6 +43,7 @@ fn executor_settings(max_threads: u64) -> ExecutorSettings {
         max_threads,
         executor_node_id: "".to_string(),
         perf_event_groups: vec![],
+        timeline: None,
     }
 }
 

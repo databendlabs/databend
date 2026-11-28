@@ -19,6 +19,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 
+use crate::pipelines::executor::pipeline_timeline::TimelineConfig;
 use crate::sessions::TableContext;
 
 #[derive(Clone)]
@@ -29,6 +30,7 @@ pub struct ExecutorSettings {
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
     pub perf_event_groups: Vec<Vec<PerfEvent>>,
+    pub timeline: Option<TimelineConfig>,
 }
 
 impl ExecutorSettings {
@@ -51,13 +53,23 @@ impl ExecutorSettings {
             config_enable_queries_executor
         };
 
+        let timeline_interval_ms = settings.get_pipeline_timeline_interval_ms()?;
+        let executor_node_id = ctx.get_cluster().local_id.clone();
+        let timeline = (timeline_interval_ms > 0).then(|| TimelineConfig {
+            interval: Duration::from_millis(timeline_interval_ms),
+            query_id: query_id.clone(),
+            node_id: executor_node_id.clone(),
+            max_threads,
+        });
+
         Ok(ExecutorSettings {
             enable_queries_executor,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
-            executor_node_id: ctx.get_cluster().local_id.clone(),
+            executor_node_id,
             perf_event_groups: ctx.get_perf_config().event_groups,
+            timeline,
         })
     }
 }

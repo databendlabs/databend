@@ -463,6 +463,7 @@ fn queries_executor_settings() -> ExecutorSettings {
         max_execute_time_in_seconds: Default::default(),
         executor_node_id: "".to_string(),
         perf_event_groups: vec![],
+        timeline: None,
     }
 }
 
@@ -513,6 +514,7 @@ fn create_graph(
         Arc::new(query_id.to_string()),
         Some(finished.clone()),
         vec![],
+        None,
     )?;
     Ok((graph, finished))
 }

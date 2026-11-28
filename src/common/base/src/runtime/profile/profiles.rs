@@ -69,6 +69,9 @@ pub enum ProfileStatisticsName {
     ExchangeSendQueueWaitTime,
     ExchangeHeldBackTime,
     ExchangeReceiveQueueWaitTime,
+    ExchangeFrameRoundTripTime,
+    ExchangeFramesAcked,
+    ExchangeAckedBytes,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -391,6 +394,27 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 desc: "The time received data waited for room in the receive queue, which fills when the downstream operators do not keep up",
                 index: ProfileStatisticsName::ExchangeReceiveQueueWaitTime as usize,
                 unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::ExchangeFrameRoundTripTime, ProfileDesc {
+                display_name: "exchange frame round trip time",
+                desc: "The time from sending a frame to its answer, summed over frames; it includes the time the receiver held the answer back",
+                index: ProfileStatisticsName::ExchangeFrameRoundTripTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::ExchangeFramesAcked, ProfileDesc {
+                display_name: "exchange frames acked",
+                desc: "The number of frames the receivers answered",
+                index: ProfileStatisticsName::ExchangeFramesAcked as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::ExchangeAckedBytes, ProfileDesc {
+                display_name: "exchange acked bytes",
+                desc: "The bytes of the frames the receivers answered",
+                index: ProfileStatisticsName::ExchangeAckedBytes as usize,
+                unit: StatisticsUnit::Bytes,
                 plain_statistics: false,
             }),
         ]))

@@ -48,6 +48,7 @@ async fn test_always_call_on_finished() -> anyhow::Result<()> {
         max_threads: 8,
         executor_node_id: "".to_string(),
         perf_event_groups: vec![],
+        timeline: None,
     };
 
     {

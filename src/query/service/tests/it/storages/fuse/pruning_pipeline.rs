@@ -141,6 +141,7 @@ async fn apply_snapshot_pruning(
         max_threads: 8,
         executor_node_id: "".to_string(),
         perf_event_groups: vec![],
+        timeline: None,
     };
     let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
 

@@ -23,6 +23,7 @@ mod memory_limit_diagnostics;
 mod pipeline_complete_executor;
 mod pipeline_executor;
 mod pipeline_pulling_executor;
+mod pipeline_timeline;
 mod processor_async_task;
 mod queries_executor_tasks;
 mod queries_pipeline_executor;

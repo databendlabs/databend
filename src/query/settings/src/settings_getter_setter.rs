@@ -296,6 +296,10 @@ impl Settings {
     }
 
     // Get max_execute_time_in_seconds.
+    pub fn get_pipeline_timeline_interval_ms(&self) -> Result<u64> {
+        self.try_get_u64("pipeline_timeline_interval_ms")
+    }
+
     pub fn get_max_execute_time_in_seconds(&self) -> Result<u64> {
         self.try_get_u64("max_execute_time_in_seconds")
     }

@@ -35,6 +35,10 @@ impl<T> ThreadJoinHandle<T> {
         self.inner.is_finished()
     }
 
+    pub fn thread(&self) -> &std::thread::Thread {
+        self.inner.thread()
+    }
+
     pub fn join(self) -> Result<T> {
         match self.inner.join() {
             Ok(res) => Ok(res),

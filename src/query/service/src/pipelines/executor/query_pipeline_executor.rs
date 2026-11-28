@@ -96,6 +96,7 @@ impl QueryPipelineExecutor {
             settings.query_id.clone(),
             None,
             settings.perf_event_groups.clone(),
+            settings.timeline.clone(),
         ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
@@ -163,6 +164,7 @@ impl QueryPipelineExecutor {
             settings.query_id.clone(),
             None,
             settings.perf_event_groups.clone(),
+            settings.timeline.clone(),
         ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
@@ -680,6 +682,7 @@ mod tests {
             max_execute_time_in_seconds: Default::default(),
             executor_node_id: String::new(),
             perf_event_groups: vec![],
+            timeline: None,
         };
         QueryPipelineExecutor::create(pipeline, settings)
     }
