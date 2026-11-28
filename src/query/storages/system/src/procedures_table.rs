@@ -91,11 +91,11 @@ impl AsyncSystemTable for ProceduresTable {
     ) -> Result<DataBlock> {
         // Bodies can be large. Fill them only when the scan reads `body`, and keep
         // the column (as NULLs) otherwise, since the block must match the schema.
+        // An empty projection, as for `count(*)`, reads no column. Without projection
+        // information, read the bodies.
         let body_index = self.table_info.schema().index_of("body")?;
         let read_body = match push_downs.as_ref().and_then(|p| p.projection.as_ref()) {
-            Some(Projection::Columns(columns)) if !columns.is_empty() => {
-                columns.contains(&body_index)
-            }
+            Some(Projection::Columns(columns)) => columns.contains(&body_index),
             _ => true,
         };
 

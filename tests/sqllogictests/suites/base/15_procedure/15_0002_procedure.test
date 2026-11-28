@@ -31,6 +31,11 @@ select length(body) > 0 from system.procedures where name = 'p1' and arguments =
 ----
 1
 
+query B
+select count(*) > 0 from system.procedures;
+----
+1
+
 statement ok
 drop procedure if exists p1();
 
