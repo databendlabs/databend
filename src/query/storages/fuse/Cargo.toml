@@ -85,6 +85,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
+zstd = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

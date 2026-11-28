@@ -225,6 +225,7 @@ pub(crate) mod test_util {
             schema,
             None,
             None,
+            None,
         ))
     }
 
@@ -243,6 +244,7 @@ pub(crate) mod test_util {
             0,
             schema,
             Some(data_page_rows),
+            None,
             None,
         ))
     }

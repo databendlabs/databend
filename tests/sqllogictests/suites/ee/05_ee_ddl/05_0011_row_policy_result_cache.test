@@ -74,7 +74,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 2
-└── Result size: 205
+└── Result size: 195
 
 ## ========================================
 ## Step 2: SET var=b, EXPLAIN SELECT (should NOT hit cache)
@@ -124,7 +124,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 3
-└── Result size: 241
+└── Result size: 231
 
 ## ========================================
 ## Step 4: Switch back to var=a, verify it still has its own cache
@@ -140,7 +140,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 2
-└── Result size: 205
+└── Result size: 195
 
 ## Verify data is correct for app_a
 query ITT

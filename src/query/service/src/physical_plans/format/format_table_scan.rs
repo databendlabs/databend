@@ -126,6 +126,16 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             children.push(FormatTreeNode::new(format!("apply join filters: [{rf}]")));
         }
 
+        // Columns read for the byte lengths of their values only.
+        if let Some(push_downs) = self.inner.source.push_downs.as_ref()
+            && !push_downs.length_only_columns.is_empty()
+        {
+            children.push(FormatTreeNode::new(format!(
+                "length only columns: [{}]",
+                push_downs.length_only_columns.join(", ")
+            )));
+        }
+
         // Virtual columns.
         if let Some(virtual_columns) = virtual_columns {
             if !virtual_columns.is_empty() {

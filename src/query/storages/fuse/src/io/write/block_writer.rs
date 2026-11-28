@@ -107,6 +107,7 @@ pub fn serialize_block_with_column_stats(
                 column_stats,
                 write_settings.data_page_rows,
                 write_settings.data_page_bytes,
+                write_settings.string_dictionary_page_size,
             )?;
             let meta = column_parquet_metas(&metadata, &schema)?;
             Ok((meta, Buffer::from(payload)))

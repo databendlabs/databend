@@ -180,25 +180,43 @@ fn conjunction(mut conjuncts: Vec<Expr<String>>) -> Result<Expr<String>> {
     check_function(None, name, &[], &conjuncts, &BUILTIN_FUNCTIONS)
 }
 
-/// The cache entry of a block for the filter of a scan.
+/// The rows of a block the filter of a scan selects, known before the block is read: from the
+/// condition cache, or from the statistics of the block.
 #[derive(Clone)]
 pub enum CachedCondition {
     /// The entry of the whole filter.
     Whole(Condition),
     /// The entry of its leading conjunct: a superset of the rows it selects.
     Leading(Condition),
+    /// Every row: the filter is true on the domains of the column statistics of the block. Known
+    /// without the condition cache.
+    AllByStatistics,
 }
 
 impl CachedCondition {
     pub fn condition(&self) -> &BlockCondition {
+        static ALL: BlockCondition = BlockCondition::All;
         match self {
             CachedCondition::Whole(condition) | CachedCondition::Leading(condition) => condition,
+            CachedCondition::AllByStatistics => &ALL,
         }
     }
 
     /// Whether the entry has exactly the rows the filter selects.
     pub fn is_exact(&self) -> bool {
-        matches!(self, CachedCondition::Whole(condition) if is_exact(condition))
+        match self {
+            CachedCondition::Whole(condition) => is_exact(condition),
+            CachedCondition::Leading(_) => false,
+            CachedCondition::AllByStatistics => true,
+        }
+    }
+
+    /// Whether the rows are recorded in the condition cache, so that they need not be recorded.
+    pub fn is_whole(&self) -> bool {
+        matches!(
+            self,
+            CachedCondition::Whole(_) | CachedCondition::AllByStatistics
+        )
     }
 
     /// Whether the filter selects no row.

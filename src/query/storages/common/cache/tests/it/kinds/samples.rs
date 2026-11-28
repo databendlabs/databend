@@ -47,6 +47,7 @@ use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::IcebergTableCacheValue;
+use databend_storages_common_cache::TopNBoundaryValue;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::iceberg;
@@ -167,6 +168,12 @@ impl Sample for table::PruneResult {
 impl Sample for table::Condition {
     fn sample(seed: u32) -> BlockCondition {
         BlockCondition::Rows((0..64 + seed % 64).collect())
+    }
+}
+
+impl Sample for table::TopNBoundary {
+    fn sample(seed: u32) -> TopNBoundaryValue {
+        TopNBoundaryValue(Scalar::String(format!("boundary-{seed}")))
     }
 }
 

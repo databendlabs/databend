@@ -102,6 +102,7 @@ static DELETES_FILE_PUSHDOWN_INFO: LazyLock<PushDownInfo> = LazyLock::new(|| Pus
     sample: None,
     read_partitions_pruning_mode: Default::default(),
     secure_filters: None,
+    length_only_columns: vec![],
 });
 
 enum DeleteResult {

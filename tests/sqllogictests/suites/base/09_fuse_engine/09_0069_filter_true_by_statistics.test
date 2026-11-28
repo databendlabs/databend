@@ -1,0 +1,201 @@
+statement ok
+create or replace database test_filter_true_by_statistics
+
+statement ok
+use test_filter_true_by_statistics
+
+# Blocks of 1000 rows. A prewhere filter that is true on the domains of the column statistics of a
+# block selects all of its rows without being evaluated, and when the scan outputs no column
+# the block is not read. `s` has an empty value in the first two blocks only, `n` nulls in the
+# last block only.
+statement ok
+create or replace table t(id int, s string, n string null) row_per_block = 1000
+
+statement ok
+insert into t select number, if(number % 100 = 7, '', concat('v', (number % 10)::string)), concat('w', (number % 3)::string) from numbers(2000)
+
+statement ok
+insert into t select number + 2000, concat('x', (number % 10)::string), concat('w', (number % 3)::string) from numbers(2000)
+
+statement ok
+insert into t select number + 4000, concat('y', (number % 10)::string), if(number % 4 = 0, null, 'w') from numbers(1000)
+
+query I
+select count(*) from t where s <> ''
+----
+4980
+
+query I
+select count(*) from t where s > ''
+----
+4980
+
+query I
+select count(*) from t where '' < s
+----
+4980
+
+query I
+select count(*) from t where s = ''
+----
+20
+
+query I
+select count(*) from t where octet_length(s) > 0
+----
+4980
+
+query I
+select count(*) from t where length(s) > 0
+----
+4980
+
+query I
+select count(*) from t where length(s) >= 1 and id >= 2000
+----
+3000
+
+query I
+select count(*) from t where octet_length(s) = 0
+----
+20
+
+query I
+select count(*) from t where s >= 'v'
+----
+4980
+
+query I
+select count(*) from t where s <> '' and id >= 0
+----
+4980
+
+query I
+select count(*) from t where s <> '' and s < 'y'
+----
+3980
+
+query I
+select count(*) from t where n <> ''
+----
+4750
+
+query I
+select count(*), sum(id) from t where s <> '' and n <> ''
+----
+4730 11353860
+
+# Output columns: the filter is not evaluated on the blocks where it is true for every row.
+query IT
+select id, s from t where s > '' and id % 997 = 0 order by id
+----
+0 v0
+997 v7
+1994 v4
+2991 x1
+3988 x8
+4985 y5
+
+query I
+select max(_row_id) is not null from t where s <> ''
+----
+1
+
+query I
+select count(*) from t where s <> '' and id < 2500
+----
+2480
+
+statement ok
+set enable_condition_cache = 1
+
+query I
+select count(*) from t where s <> ''
+----
+4980
+
+query I
+select count(*) from t where s <> ''
+----
+4980
+
+query I
+select count(*) from t where s <> '' and id % 2 = 0
+----
+2500
+
+query I
+select count(*) from t where s <> '' and id % 2 = 0
+----
+2500
+
+statement ok
+unset enable_condition_cache
+
+# Every row of the block has a = 2 and d = '2020-01-01'. A constant that no value of the column
+# casts to converts to that value ('02' and 2.4 to 2, the timestamp to its date): the comparison
+# is false on every row all the same, and its negation true.
+statement ok
+create or replace table c(a int, d date, s string)
+
+statement ok
+insert into c select 2, '2020-01-01', 'x' from numbers(1000)
+
+query I
+select count(*) from c where a = 2.4
+----
+0
+
+query I
+select count(*) from c where a::string = '02'
+----
+0
+
+query I
+select count(*) from c where d = '2020-01-01 12:00:00'::timestamp
+----
+0
+
+query IT
+select count(*), max(s) from c where a = 2.4
+----
+0 NULL
+
+query I
+select count(*) from c where not (a::string = '02')
+----
+1000
+
+query I
+select count(*) from c where not (a = 2.4)
+----
+1000
+
+query IT
+select count(*), max(s) from c where not (d = '2020-01-01 12:00:00'::timestamp)
+----
+1000 x
+
+# Constants the conversion keeps.
+query I
+select count(*) from c where a = 2.0
+----
+1000
+
+query I
+select count(*) from c where a::string = '2'
+----
+1000
+
+query I
+select count(*) from c where d = '2020-01-01 00:00:00'::timestamp
+----
+1000
+
+query I
+select count(*) from c where not (a::string = '2')
+----
+0
+
+statement ok
+drop database test_filter_true_by_statistics

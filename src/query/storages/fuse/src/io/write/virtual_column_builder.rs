@@ -971,6 +971,7 @@ impl VirtualColumnBuilder {
             Some(&columns_statistics),
             write_settings.data_page_rows,
             write_settings.data_page_bytes,
+            write_settings.string_dictionary_page_size,
         )?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(

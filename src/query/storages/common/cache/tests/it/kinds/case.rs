@@ -89,6 +89,7 @@ pub fn cases() -> Vec<Box<dyn KindCase>> {
         case::<iceberg::Table>(),
         case::<table::PruneResult>(),
         case::<table::Condition>(),
+        case::<table::TopNBoundary>(),
         case::<bloom::Filter>(),
         case::<zone_map::Chunk>(),
         case::<vector::Index>(),

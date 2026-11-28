@@ -16,6 +16,7 @@ mod block_format;
 mod condition_cache;
 mod fuse_rows_fetcher;
 pub mod fuse_source;
+pub mod length_only;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_rows_fetcher;
@@ -23,6 +24,7 @@ mod read_block_context;
 mod read_data_transform;
 mod read_state;
 pub(crate) mod runtime_filter_wait;
+pub mod top_n_boundary_cache;
 
 mod block_partition_meta;
 mod data_source_with_meta;

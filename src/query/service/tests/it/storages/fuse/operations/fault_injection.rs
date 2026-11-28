@@ -39,11 +39,12 @@ use futures::TryStreamExt;
 
 static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Row count computed from the data itself (`count(*)` alone is answered from statistics
-/// and would not touch a single block).
+/// Row count computed from the data itself: `count(*)` alone is answered from statistics, and
+/// a filter the statistics show true for every row (`id > 0`) reads no block when no column is
+/// output, so `sum(id)` makes the scan read `id`.
 async fn count(fixture: &TestFixture) -> Result<u64> {
     let sql = format!(
-        "SELECT count(id) FROM {}.{} WHERE id > 0",
+        "SELECT count(id), sum(id) FROM {}.{} WHERE id > 0",
         fixture.default_db_name(),
         fixture.default_table_name()
     );

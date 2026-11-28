@@ -1,0 +1,905 @@
+# A string column that a prewhere filter reads only through `octet_length`, `= ''` and `<> ''`,
+# and that the scan does not output, is read as the lengths of its values only.
+# Blocks of 10000 rows: `s` has empty, inline (up to 12 bytes), long and non-ASCII values, `n`
+# nulls and empty values; the last blocks have few distinct values (dictionary pages).
+
+statement ok
+create or replace database test_length_only
+
+statement ok
+use test_length_only
+
+statement ok
+create or replace table t(id int, s string, n string null) row_per_block = 10000
+
+statement ok
+insert into t select number, case when number % 5 = 0 then '' when number % 5 = 1 then concat('k', (number % 7)::string) when number % 5 = 2 then concat('https://example.com/', number::string) when number % 5 = 3 then concat('数据库-', (number % 11)::string) else repeat('x', number % 30) end, case when number % 6 = 0 then null when number % 6 = 1 then '' else concat('v', (number % 50)::string) end from numbers(30000)
+
+statement ok
+insert into t select number + 30000, case when number % 3 = 0 then '' else concat('w', (number % 4)::string) end, case when number % 4 = 0 then null when number % 4 = 1 then '' else 'abcdefghijklmnop' end from numbers(20000)
+
+query I
+select count(*) from t where s <> ''
+----
+37333
+
+query I
+select count(*) from t where s = ''
+----
+12667
+
+query I
+select count(*) from t where '' = s
+----
+12667
+
+query I
+select count(*) from t where not (s <> '')
+----
+12667
+
+query I
+select count(*) from t where octet_length(s) > 20
+----
+8000
+
+query I
+select count(*) from t where s <> '' and octet_length(s) < 13
+----
+27333
+
+query II
+select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query I
+select id from t where s = '' and id % 997 = 0 order by id
+----
+0
+4985
+9970
+14955
+19940
+24925
+29910
+32901
+35892
+38883
+41874
+44865
+47856
+
+query IT
+select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query I
+select count(*) from t where n <> ''
+----
+30000
+
+query I
+select count(*) from t where n = ''
+----
+10000
+
+query I
+select count(*) from t where octet_length(n) > 3
+----
+10000
+
+query I
+select count(*) from t where n is null
+----
+10000
+
+query I
+select count(*) from t where n <> '' or s = ''
+----
+35333
+
+query I
+select count(*) from t where s <> '' and n = ''
+----
+7334
+
+query I
+select count(*) from t where s <> '' and s like '%example%'
+----
+6000
+
+query TI
+select s, count(*) from t where s <> '' and id < 30000 and octet_length(s) < 4 group by s order by s
+----
+k0 857
+k1 858
+k2 857
+k3 857
+k4 857
+k5 857
+k6 857
+
+query II
+select sum(octet_length(s)), sum(octet_length(n)) from t where id % 7 = 3
+----
+50285 30850
+
+query I
+select count(*) from t where s = 'k3' or s = ''
+----
+13524
+
+# Single stage prewhere.
+statement ok
+set prewhere_selectivity_threshold = 0
+
+query I
+select count(*) from t where s <> ''
+----
+37333
+
+query I
+select count(*) from t where s = ''
+----
+12667
+
+query I
+select count(*) from t where '' = s
+----
+12667
+
+query I
+select count(*) from t where not (s <> '')
+----
+12667
+
+query I
+select count(*) from t where octet_length(s) > 20
+----
+8000
+
+query I
+select count(*) from t where s <> '' and octet_length(s) < 13
+----
+27333
+
+query II
+select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query I
+select id from t where s = '' and id % 997 = 0 order by id
+----
+0
+4985
+9970
+14955
+19940
+24925
+29910
+32901
+35892
+38883
+41874
+44865
+47856
+
+query IT
+select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query I
+select count(*) from t where n <> ''
+----
+30000
+
+query I
+select count(*) from t where n = ''
+----
+10000
+
+query I
+select count(*) from t where octet_length(n) > 3
+----
+10000
+
+query I
+select count(*) from t where n is null
+----
+10000
+
+query I
+select count(*) from t where n <> '' or s = ''
+----
+35333
+
+query I
+select count(*) from t where s <> '' and n = ''
+----
+7334
+
+query I
+select count(*) from t where s <> '' and s like '%example%'
+----
+6000
+
+query TI
+select s, count(*) from t where s <> '' and id < 30000 and octet_length(s) < 4 group by s order by s
+----
+k0 857
+k1 858
+k2 857
+k3 857
+k4 857
+k5 857
+k6 857
+
+query II
+select sum(octet_length(s)), sum(octet_length(n)) from t where id % 7 = 3
+----
+50285 30850
+
+query I
+select count(*) from t where s = 'k3' or s = ''
+----
+13524
+
+statement ok
+unset prewhere_selectivity_threshold
+
+# Encoded columns.
+statement ok
+set enable_encoded_columns = 1
+
+query I
+select count(*) from t where s <> ''
+----
+37333
+
+query I
+select count(*) from t where s = ''
+----
+12667
+
+query I
+select count(*) from t where '' = s
+----
+12667
+
+query I
+select count(*) from t where not (s <> '')
+----
+12667
+
+query I
+select count(*) from t where octet_length(s) > 20
+----
+8000
+
+query I
+select count(*) from t where s <> '' and octet_length(s) < 13
+----
+27333
+
+query II
+select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query I
+select id from t where s = '' and id % 997 = 0 order by id
+----
+0
+4985
+9970
+14955
+19940
+24925
+29910
+32901
+35892
+38883
+41874
+44865
+47856
+
+query IT
+select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query I
+select count(*) from t where n <> ''
+----
+30000
+
+query I
+select count(*) from t where n = ''
+----
+10000
+
+query I
+select count(*) from t where octet_length(n) > 3
+----
+10000
+
+query I
+select count(*) from t where n is null
+----
+10000
+
+query I
+select count(*) from t where n <> '' or s = ''
+----
+35333
+
+query I
+select count(*) from t where s <> '' and n = ''
+----
+7334
+
+query I
+select count(*) from t where s <> '' and s like '%example%'
+----
+6000
+
+query TI
+select s, count(*) from t where s <> '' and id < 30000 and octet_length(s) < 4 group by s order by s
+----
+k0 857
+k1 858
+k2 857
+k3 857
+k4 857
+k5 857
+k6 857
+
+query II
+select sum(octet_length(s)), sum(octet_length(n)) from t where id % 7 = 3
+----
+50285 30850
+
+query I
+select count(*) from t where s = 'k3' or s = ''
+----
+13524
+
+statement ok
+unset enable_encoded_columns
+
+# The condition cache, filled then read.
+statement ok
+set enable_condition_cache = 1
+
+query I
+select count(*) from t where s <> ''
+----
+37333
+
+query I
+select count(*) from t where s <> ''
+----
+37333
+
+query I
+select count(*) from t where s = ''
+----
+12667
+
+query I
+select count(*) from t where s = ''
+----
+12667
+
+query I
+select count(*) from t where '' = s
+----
+12667
+
+query I
+select count(*) from t where '' = s
+----
+12667
+
+query I
+select count(*) from t where not (s <> '')
+----
+12667
+
+query I
+select count(*) from t where not (s <> '')
+----
+12667
+
+query I
+select count(*) from t where octet_length(s) > 20
+----
+8000
+
+query I
+select count(*) from t where octet_length(s) > 20
+----
+8000
+
+query I
+select count(*) from t where s <> '' and octet_length(s) < 13
+----
+27333
+
+query I
+select count(*) from t where s <> '' and octet_length(s) < 13
+----
+27333
+
+query II
+select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query II
+select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query I
+select id from t where s = '' and id % 997 = 0 order by id
+----
+0
+4985
+9970
+14955
+19940
+24925
+29910
+32901
+35892
+38883
+41874
+44865
+47856
+
+query I
+select id from t where s = '' and id % 997 = 0 order by id
+----
+0
+4985
+9970
+14955
+19940
+24925
+29910
+32901
+35892
+38883
+41874
+44865
+47856
+
+query IT
+select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query IT
+select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query I
+select count(*) from t where n <> ''
+----
+30000
+
+query I
+select count(*) from t where n <> ''
+----
+30000
+
+query I
+select count(*) from t where n = ''
+----
+10000
+
+query I
+select count(*) from t where n = ''
+----
+10000
+
+query I
+select count(*) from t where octet_length(n) > 3
+----
+10000
+
+query I
+select count(*) from t where octet_length(n) > 3
+----
+10000
+
+query I
+select count(*) from t where n is null
+----
+10000
+
+query I
+select count(*) from t where n is null
+----
+10000
+
+query I
+select count(*) from t where n <> '' or s = ''
+----
+35333
+
+query I
+select count(*) from t where n <> '' or s = ''
+----
+35333
+
+query I
+select count(*) from t where s <> '' and n = ''
+----
+7334
+
+query I
+select count(*) from t where s <> '' and n = ''
+----
+7334
+
+query I
+select count(*) from t where s <> '' and s like '%example%'
+----
+6000
+
+query I
+select count(*) from t where s <> '' and s like '%example%'
+----
+6000
+
+query TI
+select s, count(*) from t where s <> '' and id < 30000 and octet_length(s) < 4 group by s order by s
+----
+k0 857
+k1 858
+k2 857
+k3 857
+k4 857
+k5 857
+k6 857
+
+query TI
+select s, count(*) from t where s <> '' and id < 30000 and octet_length(s) < 4 group by s order by s
+----
+k0 857
+k1 858
+k2 857
+k3 857
+k4 857
+k5 857
+k6 857
+
+query II
+select sum(octet_length(s)), sum(octet_length(n)) from t where id % 7 = 3
+----
+50285 30850
+
+query II
+select sum(octet_length(s)), sum(octet_length(n)) from t where id % 7 = 3
+----
+50285 30850
+
+query I
+select count(*) from t where s = 'k3' or s = ''
+----
+13524
+
+query I
+select count(*) from t where s = 'k3' or s = ''
+----
+13524
+
+# Blocks decoded in batches of fewer rows than they have.
+query I
+settings (max_block_size = 997) select count(*) from t where s <> ''
+----
+37333
+
+query II
+settings (max_block_size = 997) select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query IT
+settings (max_block_size = 997) select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query I
+settings (max_block_size = 997) select count(*) from t where n <> '' or s = ''
+----
+35333
+
+# Columns the plan above the scan reads only through `octet_length` and comparisons with ''
+# (not `length`, which counts characters) are read as their lengths, also when the scan
+# outputs them.
+
+query II
+select sum(octet_length(s)), count(*) from t
+----
+351989 50000
+
+query II
+settings (enable_encoded_columns = 1) select sum(octet_length(s)), count(*) from t
+----
+351989 50000
+
+query II
+select sum(octet_length(n)), count(octet_length(n)) from t
+----
+216000 40000
+
+query II
+settings (enable_encoded_columns = 1) select sum(octet_length(n)), count(octet_length(n)) from t
+----
+216000 40000
+
+query III
+select id % 3 as k, sum(octet_length(s)), max(octet_length(n)) from t group by k order by k
+----
+0 108443 16
+1 111774 16
+2 131772 16
+
+query III
+settings (enable_encoded_columns = 1) select id % 3 as k, sum(octet_length(s)), max(octet_length(n)) from t group by k order by k
+----
+0 108443 16
+1 111774 16
+2 131772 16
+
+query I
+select sum(octet_length(s)) from t where s <> ''
+----
+351989
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s)) from t where s <> ''
+----
+351989
+
+query I
+select sum(octet_length(s)) from t where id % 7 = 2
+----
+50312
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s)) from t where id % 7 = 2
+----
+50312
+
+query II
+select sum(octet_length(s)), sum(length(s)) from t
+----
+351989 315989
+
+query II
+settings (enable_encoded_columns = 1) select sum(octet_length(s)), sum(length(s)) from t
+----
+351989 315989
+
+query II
+select octet_length(s) as l, count(*) from t where id < 30 group by l order by l
+----
+0 6
+2 6
+4 1
+9 1
+11 6
+14 1
+19 1
+21 2
+22 4
+24 1
+29 1
+
+query II
+settings (enable_encoded_columns = 1) select octet_length(s) as l, count(*) from t where id < 30 group by l order by l
+----
+0 6
+2 6
+4 1
+9 1
+11 6
+14 1
+19 1
+21 2
+22 4
+24 1
+29 1
+
+query IIT
+select id, octet_length(s), octet_length(n) from t where id % 4999 = 0 order by id
+----
+0 0 NULL
+4999 19 0
+9998 12 3
+14997 25 3
+19996 2 3
+24995 0 3
+29994 24 NULL
+34993 2 0
+39992 2 NULL
+44991 0 16
+49990 2 16
+
+query IIT
+settings (enable_encoded_columns = 1) select id, octet_length(s), octet_length(n) from t where id % 4999 = 0 order by id
+----
+0 0 NULL
+4999 19 0
+9998 12 3
+14997 25 3
+19996 2 3
+24995 0 3
+29994 24 NULL
+34993 2 0
+39992 2 NULL
+44991 0 16
+49990 2 16
+
+query I
+select sum(octet_length(s)) from t where s like '%example%'
+----
+147778
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s)) from t where s like '%example%'
+----
+147778
+
+query IT
+select max(octet_length(s)), max(s) from t
+----
+29 数据库-9
+
+query IT
+settings (enable_encoded_columns = 1) select max(octet_length(s)), max(s) from t
+----
+29 数据库-9
+
+query I
+select sum(octet_length(s) + octet_length(n)) from t where n = ''
+----
+63386
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s) + octet_length(n)) from t where n = ''
+----
+63386
+
+query I
+select sum(if(s = '', 1, octet_length(s))) from t
+----
+364656
+
+query I
+settings (enable_encoded_columns = 1) select sum(if(s = '', 1, octet_length(s))) from t
+----
+364656
+
+statement ok
+unset enable_condition_cache
+
+statement ok
+drop database test_length_only

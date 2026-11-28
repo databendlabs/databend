@@ -141,6 +141,148 @@ fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
     assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
+/// `fold` tells the blocks where a filter is true for every row from those where it is false for
+/// every row, and from the others.
+#[test]
+fn test_range_index_folds_string_comparisons_with_empty_string() {
+    let s = |s: &str| Scalar::String(s.to_string());
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("u", TableDataType::String),
+        TableField::new(
+            "n",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        ),
+    ]));
+    let columns = [
+        ("u", DataType::String),
+        ("n", DataType::String.wrap_nullable()),
+    ];
+    let fold = |filter: &str, u: (&str, &str), null_count: u64| {
+        let mut stats = create_stats(&[("u", s(u.0), s(u.1)), ("n", s(u.0), s(u.1))], &schema);
+        for stat in stats.values_mut() {
+            stat.null_count = null_count;
+        }
+        let expr = parse_expr(filter, &columns);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        index.fold(&stats, None, None, |_| false).unwrap()
+    };
+
+    // Without an empty string in the block, `<> ''` and `> ''` hold for every row.
+    for filter in ["u <> ''", "u > ''", "'' <> u", "'' < u", "u >= 'a'"] {
+        assert_eq!(fold(filter, ("a", "z"), 0), Some(true), "{filter}");
+        assert_eq!(fold(filter, ("", "z"), 0), None, "{filter}");
+    }
+    assert_eq!(fold("u = ''", ("a", "z"), 0), Some(false));
+    assert_eq!(fold("u = ''", ("", ""), 0), Some(true));
+    assert_eq!(fold("u <> ''", ("", ""), 0), Some(false));
+    // A null row fails the filter.
+    assert_eq!(fold("n <> ''", ("a", "z"), 0), Some(true));
+    assert_eq!(fold("n <> ''", ("a", "z"), 3), None);
+    // So do the lengths: positive when the min is not empty, exact for a single value.
+    for filter in ["octet_length(u) > 0", "length(u) > 0", "length(u) >= 1"] {
+        assert_eq!(fold(filter, ("a", "z"), 0), Some(true), "{filter}");
+        assert_eq!(fold(filter, ("", "z"), 0), None, "{filter}");
+    }
+    assert_eq!(fold("octet_length(u) = 0", ("a", "z"), 0), Some(false));
+    assert_eq!(fold("length(u) = 0", ("", "z"), 0), None);
+    assert_eq!(
+        fold("octet_length(u) = 3", ("数据", "数据"), 0),
+        Some(false)
+    );
+    assert_eq!(fold("octet_length(u) = 6", ("数据", "数据"), 0), Some(true));
+    assert_eq!(fold("length(u) = 2", ("数据", "数据"), 0), Some(true));
+    assert_eq!(fold("length(u) > 5", ("a", "z"), 0), None);
+    assert_eq!(fold("length(n) > 0", ("a", "z"), 3), None);
+    // Every conjunct must hold.
+    assert_eq!(fold("u <> '' and u < 'zz'", ("a", "z"), 0), Some(true));
+    assert_eq!(fold("u <> '' and u < 'm'", ("a", "z"), 0), None);
+}
+
+/// `CAST(column AS type) = constant` is folded as `column = constant`, with the constant
+/// converted to the type of the column, only when the conversion keeps the constant: `2.4` and
+/// `'02'` convert to `2`, but no integer casts to them. Otherwise a block whose only value is
+/// the converted constant would select every row, and its negation none.
+#[test]
+fn test_range_index_folds_cast_comparisons_with_exact_constants_only() {
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("d", TableDataType::Date),
+    ]));
+    let columns = [("a", Int32Type::data_type()), ("d", DataType::Date)];
+    // Every row of the block has `a = 2` and `d = '2020-01-01'`.
+    let date = Scalar::Date(18262);
+    let stats = create_stats(
+        &[
+            (
+                "a",
+                Scalar::Number(2i32.into()),
+                Scalar::Number(2i32.into()),
+            ),
+            ("d", date.clone(), date),
+        ],
+        &schema,
+    );
+    let fold = |filter: &str| {
+        // The planner folds the constants of a filter before it reaches the scan.
+        let expr = parse_expr(filter, &columns);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        index.fold(&stats, None, None, |_| false).unwrap()
+    };
+
+    // The conversion keeps these constants.
+    for filter in [
+        "a::string = '2'",
+        "a = 2.0",
+        "a::int64 = 2",
+        "d = '2020-01-01 00:00:00'::timestamp",
+    ] {
+        assert_eq!(fold(filter), Some(true), "{filter}");
+        assert_eq!(fold(&format!("not({filter})")), Some(false), "{filter}");
+    }
+    // No value of the column casts to these: they are false on every row.
+    for filter in [
+        "a = 2.4",
+        "a::string = '02'",
+        "a::string = '+2'",
+        "a::string = ' 2'",
+        "d = '2020-01-01 12:00:00'::timestamp",
+    ] {
+        assert_ne!(fold(filter), Some(true), "{filter}");
+        assert_ne!(fold(&format!("not({filter})")), Some(false), "{filter}");
+    }
+
+    // The rewrite itself. An implicit cast keeps the nullability of the column.
+    let rewrites = |filter: &str, data_type: &DataType| {
+        let expr = parse_expr(filter, &[("a", data_type.clone())]);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
+        let domains = HashMap::from([("a".to_string(), Domain::full(data_type))]);
+        eliminate_cast(&expr, domains, &func_ctx).is_some()
+    };
+    let int = Int32Type::data_type();
+    let nullable = int.wrap_nullable();
+    for (filter, data_type, rewritten) in [
+        ("a::string = '2'", &int, true),
+        ("a::string = '02'", &int, false),
+        ("a = 2.0", &int, true),
+        ("a = 2.4", &int, false),
+        ("a = 2.0", &nullable, true),
+        ("a = 2.4", &nullable, false),
+    ] {
+        assert_eq!(
+            rewrites(filter, data_type),
+            rewritten,
+            "{filter} {data_type}"
+        );
+    }
+}
+
 #[test]
 fn test_range_index_prunes_by_virtual_column_statistics() {
     fn n(value: i32) -> Scalar {

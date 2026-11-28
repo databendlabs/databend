@@ -51,6 +51,7 @@ use roaring::RoaringTreemap;
 
 use super::condition_cache;
 use super::condition_cache::CachedCondition;
+use super::length_only;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
@@ -374,6 +375,28 @@ impl ReadState {
             }
         }
         let runtime_filter_column_names: Vec<_> = runtime_filter_column_names.iter().collect();
+        // Runtime filters read the values of their columns, which the plan above the scan may
+        // read only the lengths of.
+        let block_reader = match block_reader.length_only_columns().is_empty() {
+            true => block_reader,
+            false => {
+                let runtime_filter_ids = runtime_filter_column_names
+                    .iter()
+                    .filter_map(|name| original_schema.field_with_name(name).ok())
+                    .map(|field| field.column_id())
+                    .collect::<HashSet<_>>();
+                let columns = block_reader
+                    .length_only_columns()
+                    .difference(&runtime_filter_ids)
+                    .copied()
+                    .collect::<HashSet<_>>();
+                match columns.len() == block_reader.length_only_columns().len() {
+                    true => block_reader,
+                    false => block_reader.with_length_only_columns(columns),
+                }
+            }
+        };
+        let original_schema = block_reader.original_schema.as_ref();
 
         let mut preread_projection =
             Projection::from_column_names(original_schema, &runtime_filter_column_names)?;
@@ -408,6 +431,46 @@ impl ReadState {
         } else {
             block_reader.change_projection(preread_projection)?
         };
+        // The string columns the prewhere filter reads only the lengths of, and that nothing else
+        // reads (the scan outputs the columns of `output_columns`): their values are not read,
+        // see `length_only`.
+        let length_only_names = prewhere_info
+            .map(|prewhere_info| {
+                let filter = prewhere_info.filter.as_expr(&BUILTIN_FUNCTIONS);
+                let output = prewhere_info.output_columns.project_schema(original_schema);
+                length_only::length_only_columns(&filter)
+                    .into_iter()
+                    .filter(|name| {
+                        // A column of the table, not a field of a tuple.
+                        original_schema
+                            .fields()
+                            .iter()
+                            .any(|field| field.name() == name)
+                            && output.field_with_name(name).is_err()
+                            && !runtime_filter_column_names.contains(&name)
+                    })
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
+        // Besides those the plan above the scan reads only the lengths of.
+        let length_only = |reader: Arc<BlockReader>| {
+            let ids = reader
+                .schema()
+                .fields()
+                .iter()
+                .filter(|field| length_only_names.contains(field.name()))
+                .map(|field| field.column_id())
+                .filter(|id| !reader.length_only_columns().contains(id))
+                .collect::<HashSet<_>>();
+            match ids.is_empty() {
+                true => reader,
+                false => {
+                    let ids = ids.union(reader.length_only_columns()).copied().collect();
+                    reader.with_length_only_columns(ids)
+                }
+            }
+        };
+        let prewhere_reader = length_only(prewhere_reader);
         let remain_reader = block_reader.change_projection(remain_projection)?;
         let pre_column_ids = prewhere_reader.schema().to_leaf_column_id_set();
         let remain_column_ids = remain_reader.schema().to_leaf_column_id_set();
@@ -418,7 +481,9 @@ impl ReadState {
         let mut prewhere_fields = prewhere_reader.data_fields();
         let early_conjuncts = staged.as_ref().map(|plan| plan.conjuncts);
         let (early, late_filter) = if let Some(plan) = staged {
-            let reader = block_reader.change_projection(plan.projection)?;
+            // A length-only column retained for the later conjuncts is read by them for its
+            // lengths only.
+            let reader = length_only(block_reader.change_projection(plan.projection)?);
             let schema = reader.data_schema();
             let filter = plan
                 .filter
@@ -621,13 +686,16 @@ impl ReadState {
         io_skipped: bool,
     ) -> Result<ReadStateOutput> {
         // The condition cache entry of the block, looked up before it was read: the rows where
-        // the filter can select rows, or exactly the rows it selects. Without an entry of the
+        // the filter can select rows, or exactly the rows it selects; or every row, when the
+        // statistics of the block show the filter true for all. Without an entry of the
         // filter, its result is recorded, and without an entry of its leading conjunct either,
         // that of the conjunct.
-        let condition = condition.filter(|_| self.condition_key.is_some());
+        let condition = condition.filter(|condition| {
+            self.condition_key.is_some() || matches!(condition, CachedCondition::AllByStatistics)
+        });
         let record = self
             .condition_key
-            .filter(|_| !matches!(condition, Some(CachedCondition::Whole(_))));
+            .filter(|_| !condition.is_some_and(CachedCondition::is_whole));
         let record_leading = self.leading_key.filter(|_| condition.is_none());
         let exact = condition.is_some_and(CachedCondition::is_exact);
         let cached_rows = condition

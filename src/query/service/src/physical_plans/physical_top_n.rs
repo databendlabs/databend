@@ -46,6 +46,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::runtime_scan_filter::cache_runtime_top_n_boundary;
 use crate::physical_plans::runtime_scan_filter::register_runtime_top_n_filter;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -158,6 +159,15 @@ impl IPhysicalPlan for PartialTopNPlan {
             &self.order_by,
             self.candidate_count,
         );
+        let boundary_cache_key = runtime_top_n_filter.as_ref().and_then(|boundary| {
+            cache_runtime_top_n_boundary(
+                &builder.ctx,
+                &self.input,
+                &self.order_by,
+                self.candidate_count,
+                boundary,
+            )
+        });
 
         self.input.build_pipeline(builder)?;
 
@@ -192,6 +202,7 @@ impl IPhysicalPlan for PartialTopNPlan {
             read_settings: ReadSettings::from_settings(&builder.settings)?,
             enable_fixed_rows: self.enable_fixed_rows,
             runtime_top_n_filter: filter,
+            boundary_cache_key,
         };
 
         builder
@@ -355,6 +366,7 @@ struct PartialTopNParams {
     read_settings: ReadSettings,
     enable_fixed_rows: bool,
     runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
+    boundary_cache_key: Option<String>,
 }
 
 impl PartialTopNParams {
@@ -394,6 +406,7 @@ impl PartialTopNParams {
                     params.writer_pool_bytes,
                     params.read_settings,
                     params.runtime_top_n_filter.clone(),
+                    params.boundary_cache_key.clone(),
                 );
                 Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                     self.input.clone(),

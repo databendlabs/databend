@@ -46,6 +46,7 @@ impl CacheRegistry {
             .register::<iceberg::Table>()
             .register::<table::PruneResult>()
             .register::<table::Condition>()
+            .register::<table::TopNBoundary>()
             .register::<bloom::Filter>()
             .register::<zone_map::Chunk>()
             .register::<vector::Index>()

@@ -15,6 +15,8 @@
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
@@ -46,6 +48,17 @@ use crate::types::EncodedColumn;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
+/// The rows per code below which [`AggregateHashTable::add_groups`] does not probe by codes.
+const ROWS_PER_CODE: usize = 4;
+
+/// The rows per code of a block below which [`AggregateHashTable::add_groups_partial`] does not
+/// probe by codes. The codes of a block are shared by its slices, and the partial table sees each
+/// group once per window instead of once per final table, so fewer rows per code still pay.
+const PARTIAL_ROWS_PER_CODE: usize = 2;
+
+/// The ids of the payloads of the tables, see [`BlockGroupKeys`].
+static NEXT_PAYLOAD_ID: AtomicU64 = AtomicU64::new(0);
+
 #[derive(Default)]
 struct GroupKeyState {
     dict_hashes: Option<DictValueHashes>,
@@ -71,7 +84,14 @@ fn group_key_by_codes(entry: &BlockEntry) -> Option<&EncodedColumn> {
 }
 
 impl GroupKeyState {
-    fn init_codes(&mut self, group_columns: ProjectedBlock, row_count: usize) {
+    /// Sets up probing by codes if every group key is an encoded column, with at least
+    /// `rows_per_code` rows per combination of codes.
+    fn init_codes(
+        &mut self,
+        group_columns: ProjectedBlock,
+        row_count: usize,
+        rows_per_code: usize,
+    ) {
         let mut code_space = 1usize;
         for (index, entry) in group_columns.iter().enumerate() {
             let Some(encoded) = group_key_by_codes(entry) else {
@@ -93,7 +113,7 @@ impl GroupKeyState {
                 return;
             };
             code_space = next_space;
-            if code_space.saturating_mul(4) > row_count {
+            if code_space.saturating_mul(rows_per_code) > row_count {
                 return;
             }
             self.code_columns.push((index, stride));
@@ -104,6 +124,40 @@ impl GroupKeyState {
         self.rank_of_code.resize(code_space, u32::MAX);
         self.code_addresses.resize(code_space, RowPtr::null());
         self.code_places.resize(code_space, StateAddr::null());
+    }
+
+    /// Forgets the groups of the codes.
+    fn clear_addresses(&mut self) {
+        self.code_addresses.fill(RowPtr::null());
+        self.code_places.fill(StateAddr::null());
+    }
+}
+
+/// The group keys of an input block that [`AggregateHashTable::add_groups_partial`] aggregates in
+/// slices: the slices share the dictionaries of the block, so the groups of its codes are found
+/// once for all of them, or else its dictionaries are hashed once.
+pub struct BlockGroupKeys {
+    state: GroupKeyState,
+    /// The payload the groups of the codes are in: they are found again once it is taken.
+    payload_id: Option<u64>,
+}
+
+impl BlockGroupKeys {
+    pub fn new(group_columns: ProjectedBlock, row_count: usize) -> Self {
+        let mut state = GroupKeyState::default();
+        state.init_codes(group_columns, row_count, PARTIAL_ROWS_PER_CODE);
+        if state.code_addresses.is_empty() {
+            state.dict_hashes = DictValueHashes::new(group_columns, row_count);
+        }
+        BlockGroupKeys {
+            state,
+            payload_id: None,
+        }
+    }
+
+    /// Whether the groups are found by the codes of the rows.
+    pub fn by_codes(&self) -> bool {
+        !self.state.code_addresses.is_empty()
     }
 }
 
@@ -121,6 +175,8 @@ pub struct AggregateHashTable {
     /// The partial index restarted in place since the payload was taken, so the payload holds
     /// more rows than the index bounds.
     partial_restarted: bool,
+    /// Unique among the payloads of all tables, see [`BlockGroupKeys`].
+    payload_id: u64,
 }
 
 impl AggregateHashTable {
@@ -188,6 +244,7 @@ impl AggregateHashTable {
             hash_index,
             hash_index_resize_count: 0,
             partial_restarted: false,
+            payload_id: NEXT_PAYLOAD_ID.fetch_add(1, Ordering::Relaxed),
         }
     }
 
@@ -213,7 +270,7 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> Result<usize> {
         let mut group_state = GroupKeyState::default();
-        group_state.init_codes(group_columns, row_count);
+        group_state.init_codes(group_columns, row_count, ROWS_PER_CODE);
         // Probing by codes hashes only one representative row per code combination, so
         // hashing the dictionaries up front is only worth it without codes.
         if group_state.code_addresses.is_empty() {
@@ -278,8 +335,9 @@ impl AggregateHashTable {
 
     /// Adaptive partial aggregation entry point. When the index is full it grows at once to
     /// `capacity`, or restarts in place once it is that large; the group hashes are fed to
-    /// `sampler` once it has started. `dict_hashes` hash the dictionaries of the group columns
-    /// once for all the batches, see [`DictValueHashes`].
+    /// `sampler` once it has started. `block_keys`, of the block the rows are a slice of, finds
+    /// the groups by the codes of the rows, or hashes the dictionaries of the group columns once
+    /// for all the slices, see [`BlockGroupKeys`].
     #[allow(clippy::too_many_arguments)]
     pub fn add_groups_partial(
         &mut self,
@@ -289,9 +347,16 @@ impl AggregateHashTable {
         row_count: usize,
         capacity: usize,
         mut sampler: Option<&mut DistinctSampler>,
-        dict_hashes: Option<&DictValueHashes>,
+        mut block_keys: Option<&mut BlockGroupKeys>,
     ) -> Result<PartialAddStats> {
         debug_assert!(self.config.partial_agg);
+        if let Some(keys) = block_keys.as_deref_mut()
+            && keys.payload_id != Some(self.payload_id)
+        {
+            // The groups of the codes are in a payload that was taken.
+            keys.state.clear_addresses();
+            keys.payload_id = Some(self.payload_id);
+        }
         let mut stats = PartialAddStats::default();
         Self::for_each_batch(
             group_columns,
@@ -299,20 +364,46 @@ impl AggregateHashTable {
             (&[]).into(),
             row_count,
             |group_columns, params, _, rows| {
-                Self::fill_group_hashes(
-                    group_columns,
-                    &mut state.group_hashes[..rows],
-                    dict_hashes,
-                );
-                self.add_groups_partial_inner(
-                    state,
-                    group_columns,
-                    params,
-                    rows,
-                    capacity,
-                    sampler.as_deref_mut(),
-                    &mut stats,
-                )
+                stats.rows += rows;
+                let by_codes = match block_keys.as_deref_mut() {
+                    Some(keys) => self.probe_and_create_by_codes(
+                        state,
+                        group_columns,
+                        rows,
+                        &mut keys.state,
+                        |table, state, keys, distinct| {
+                            group_hash_entries(keys, &mut state.group_hashes[..distinct]);
+                            table.probe_partial(
+                                state,
+                                GroupRows::Columns(keys),
+                                distinct,
+                                capacity,
+                                sampler.as_deref_mut(),
+                                &mut stats,
+                            )
+                        },
+                    ),
+                    None => None,
+                };
+                if by_codes.is_none() {
+                    let dict_hashes = block_keys
+                        .as_deref()
+                        .and_then(|keys| keys.state.dict_hashes.as_ref());
+                    Self::fill_group_hashes(
+                        group_columns,
+                        &mut state.group_hashes[..rows],
+                        dict_hashes,
+                    );
+                    self.probe_partial(
+                        state,
+                        GroupRows::Columns(group_columns),
+                        rows,
+                        capacity,
+                        sampler.as_deref_mut(),
+                        &mut stats,
+                    );
+                }
+                self.accumulate_states(state, params, (&[]).into(), rows)
             },
         )?;
         Ok(stats)
@@ -395,9 +486,16 @@ impl AggregateHashTable {
             }
         }
 
-        let new_group_count = if let Some(new_group_count) =
-            self.probe_and_create_by_codes(state, group_columns, row_count, group_state)
-        {
+        let new_group_count = if let Some(new_group_count) = self.probe_and_create_by_codes(
+            state,
+            group_columns,
+            row_count,
+            group_state,
+            |table, state, keys, distinct| {
+                group_hash_entries(keys, &mut state.group_hashes[..distinct]);
+                table.probe_and_create(state, GroupRows::Columns(keys), distinct, None)
+            },
+        ) {
             new_group_count
         } else {
             Self::fill_group_hashes(
@@ -412,20 +510,17 @@ impl AggregateHashTable {
         Ok(new_group_count)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn add_groups_partial_inner(
+    /// Finds or creates the groups of `groups`, whose hashes the caller filled in
+    /// `state.group_hashes`, in the partial table, and returns the number of new groups.
+    fn probe_partial(
         &mut self,
         state: &mut ProbeState,
-        group_columns: ProjectedBlock,
-        params: &[ProjectedBlock],
+        groups: GroupRows,
         row_count: usize,
         capacity: usize,
         mut sampler: Option<&mut DistinctSampler>,
         stats: &mut PartialAddStats,
-    ) -> Result<()> {
-        // The caller filled `state.group_hashes`.
-        stats.rows += row_count;
-
+    ) -> usize {
         if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
             if capacity > self.hash_index.capacity() {
                 // Grow at once. The index was not restarted since the payload was emitted, so
@@ -453,13 +548,14 @@ impl AggregateHashTable {
 
         let mut adapter = AdapterImpl {
             payload: &mut self.payload,
-            groups: GroupRows::Columns(group_columns),
+            groups,
             source_states: None,
         };
-        stats.new_groups += self
+        let new_groups = self
             .hash_index
             .probe_and_create(state, row_count, &mut adapter);
-        self.accumulate_states(state, params, (&[]).into(), row_count)
+        stats.new_groups += new_groups;
+        new_groups
     }
 
     fn accumulate_states(
@@ -527,6 +623,7 @@ impl AggregateHashTable {
             Arc::new(Bump::new()),
         );
         let payload = std::mem::replace(&mut self.payload, fresh);
+        self.payload_id = NEXT_PAYLOAD_ID.fetch_add(1, Ordering::Relaxed);
         self.hash_index = HashIndex::dummy();
         self.hash_index = Self::initial_index(&self.payload);
         self.partial_restarted = false;
@@ -557,6 +654,9 @@ impl AggregateHashTable {
     /// addresses:          a0    a1    a0    a0    a1    a0    4. by code
     /// ```
     ///
+    /// `probe` hashes the representatives and finds or creates their groups, see
+    /// [`Self::probe_and_create`].
+    ///
     /// `None` if the keys do not qualify (a key is not encoded, or there are not several rows
     /// per combination); nothing is changed then.
     fn probe_and_create_by_codes(
@@ -565,6 +665,7 @@ impl AggregateHashTable {
         group_columns: ProjectedBlock,
         row_count: usize,
         group_state: &mut GroupKeyState,
+        probe: impl FnOnce(&mut Self, &mut ProbeState, ProjectedBlock, usize) -> usize,
     ) -> Option<usize> {
         if group_state.code_addresses.is_empty() {
             return None;
@@ -607,12 +708,10 @@ impl AggregateHashTable {
                 .ok()?;
 
             let distinct = representatives.len();
-            group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);
             // Functions map dictionary values without changing codes, so distinct codes can
             // produce equal values. Probe representatives normally to find their actual groups
             // before reusing the addresses for rows with the same code.
-            let count =
-                self.probe_and_create(state, GroupRows::Columns((&keys).into()), distinct, None);
+            let count = probe(self, state, (&keys).into(), distinct);
             for (rank, row) in representatives.iter().enumerate() {
                 let code = row_codes[*row as usize] as usize;
                 group_state.code_addresses[code] = state.addresses[rank];

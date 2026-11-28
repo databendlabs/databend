@@ -174,6 +174,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         .function()
         .typed_1_arg::<StringType, NumberType<u64>>()
         .passthrough_nullable()
+        .calc_domain(|_, domain| string_length_domain(domain, str::len))
         // The byte length is in the string views; the value bytes are never read.
         .vectorized(|val, _| match val {
             Value::Scalar(s) => Value::Scalar(s.len() as u64),
@@ -183,7 +184,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<StringType, NumberType<u64>, _>(
         "length",
-        |_, _| FunctionDomain::Full,
+        |_, domain| string_length_domain(domain, |s| s.chars().count()),
         |val, _ctx| val.chars().count() as u64,
     );
 
@@ -1333,6 +1334,24 @@ fn substr_one_char(builder: &mut StringColumnBuilder, str: &str, pos: i64) {
 #[inline]
 fn is_utf8_continuation_byte(byte: u8) -> bool {
     (byte & 0b1100_0000) == 0b1000_0000
+}
+
+/// The lengths (by `len`) of the strings of `domain`. Its bounds do not bound the lengths of the
+/// strings between them, but a string greater than or equal to a non-empty one is not empty, and
+/// a domain of one string has its length: `length(s) > 0` holds for every row of a block whose
+/// min `s` is not empty.
+fn string_length_domain(
+    domain: &StringDomain,
+    len: impl Fn(&str) -> usize,
+) -> FunctionDomain<NumberType<u64>> {
+    if domain.max.as_ref() == Some(&domain.min) {
+        let len = len(&domain.min) as u64;
+        return FunctionDomain::Domain(SimpleDomain { min: len, max: len });
+    }
+    FunctionDomain::Domain(SimpleDomain {
+        min: u64::from(!domain.min.is_empty()),
+        max: u64::MAX,
+    })
 }
 
 #[cfg(test)]

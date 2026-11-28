@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use arrow_schema::Field;
@@ -70,6 +71,10 @@ pub struct BlockReader {
     pub(crate) parquet_read_schema: Arc<ParquetReadSchema>,
     /// Name path of each projected column in the record batches read, by projection order.
     pub(crate) parquet_name_paths: Arc<Vec<Vec<String>>>,
+    /// The projected `String` columns of which only the byte lengths of the values are read:
+    /// their columns hold strings of NUL bytes of those lengths. See
+    /// [`BlockReader::with_length_only_columns`].
+    pub(crate) length_only_columns: Arc<HashSet<ColumnId>>,
 
     pub original_schema: TableSchemaRef,
 }
@@ -230,8 +235,39 @@ impl BlockReader {
             build_encodings,
             parquet_read_schema,
             parquet_name_paths,
+            length_only_columns: Default::default(),
             original_schema,
         }))
+    }
+
+    /// The columns of which this reader reads only the byte lengths of the values.
+    pub fn length_only_columns(&self) -> &HashSet<ColumnId> {
+        &self.length_only_columns
+    }
+
+    /// This reader, reading only the byte lengths of the values of `columns`, projected
+    /// `String` or `Nullable(String)` columns, when their chunks are not cached as columns: their
+    /// columns hold strings of NUL bytes of the lengths of the values. Only for columns whose
+    /// values are read by nothing but functions of their lengths, such as `octet_length`.
+    pub fn with_length_only_columns(&self, columns: HashSet<ColumnId>) -> Arc<BlockReader> {
+        Arc::new(BlockReader {
+            ctx: self.ctx.clone(),
+            operator: self.operator.clone(),
+            projection: self.projection.clone(),
+            projected_schema: self.projected_schema.clone(),
+            project_indices: self.project_indices.clone(),
+            project_column_nodes: self.project_column_nodes.clone(),
+            default_vals: self.default_vals.clone(),
+            all_field_default_vals: self.all_field_default_vals.clone(),
+            policy: self.policy,
+            column_encodings: self.column_encodings.clone(),
+            dictionary_ndv_ratio: self.dictionary_ndv_ratio,
+            build_encodings: self.build_encodings,
+            parquet_read_schema: self.parquet_read_schema.clone(),
+            parquet_name_paths: self.parquet_name_paths.clone(),
+            length_only_columns: Arc::new(columns),
+            original_schema: self.original_schema.clone(),
+        })
     }
 
     pub fn create(
@@ -257,15 +293,20 @@ impl BlockReader {
         )
     }
 
+    /// A reader of `projection`, which reads only the lengths of the columns this reader does.
     pub fn change_projection(&self, projection: Projection) -> Result<Arc<BlockReader>> {
-        Self::build_reader(
+        let reader = Self::build_reader(
             self.ctx.clone(),
             self.operator.clone(),
             self.original_schema.clone(),
             self.all_field_default_vals.clone(),
             projection,
             self.policy,
-        )
+        )?;
+        Ok(match self.length_only_columns.is_empty() {
+            true => reader,
+            false => reader.with_length_only_columns(self.length_only_columns.as_ref().clone()),
+        })
     }
 
     // Build non duplicate leaf_indices to avoid repeated read column from parquet

@@ -93,6 +93,9 @@ impl LegacyKinds {
             .register::<table::Condition>(LegacyKind::bytes("", |_, _| {
                 table::CONDITION_CACHE_BYTES as u64
             }))
+            .register::<table::TopNBoundary>(LegacyKind::bytes("", |_, _| {
+                table::TOP_N_BOUNDARY_CACHE_BYTES as u64
+            }))
             .register::<bloom::Filter>(LegacyKind::bytes(
                 "table_bloom_index_filter_size",
                 |c, _| c.table_bloom_index_filter_size,

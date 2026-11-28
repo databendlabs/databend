@@ -23,6 +23,7 @@ use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::SizedColumnArray;
+use databend_storages_common_cache::TopNBoundaryValue;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
@@ -65,6 +66,8 @@ pub struct FuseCaches {
     pub prune_results: MemCache<(PartStatistics, Partitions)>,
     /// Prewhere results by filter and block (`enable_condition_cache`).
     pub conditions: MemCache<BlockCondition>,
+    /// Runtime TopN boundaries by scan (`enable_condition_cache`).
+    pub top_n_boundaries: MemCache<TopNBoundaryValue>,
     pub inverted: InvertedIndexCache,
     /// Decoded HNSW indexes. Readers holding one keep it charged.
     pub vector_indexes: MemCache<CachedVectorIndex>,
@@ -165,6 +168,7 @@ impl FuseCaches {
             vector_refine_pages: manager.cache::<vector::Refine>(),
             prune_results: manager.cache::<table::PruneResult>(),
             conditions: manager.cache::<table::Condition>(),
+            top_n_boundaries: manager.cache::<table::TopNBoundary>(),
             inverted: InvertedIndexCache {
                 meta: manager.cache::<inverted::Meta>(),
                 lookup: manager.cache::<inverted::Lookup>(),
@@ -200,6 +204,7 @@ impl FuseCaches {
             vector_refine_pages: self.vector_refine_pages.with_policy(policy),
             prune_results: self.prune_results.with_policy(policy),
             conditions: self.conditions.with_policy(policy),
+            top_n_boundaries: self.top_n_boundaries.with_policy(policy),
             inverted: self.inverted.with_policy(policy),
             vector_indexes: self.vector_indexes.with_policy(policy),
             column_arrays: self.column_arrays.with_policy(policy),

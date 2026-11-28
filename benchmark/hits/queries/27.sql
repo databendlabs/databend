@@ -1,5 +1,5 @@
 SELECT CounterID,
-    AVG(length(URL)) AS l,
+    AVG(octet_length(URL)) AS l,
     COUNT(*) AS c
 FROM hits
 WHERE URL <> ''
