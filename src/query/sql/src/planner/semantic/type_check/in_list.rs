@@ -153,7 +153,7 @@ where A: super::TypeCheckAdapter
             .iter()
             .cloned()
             .try_reduce(|a, b| {
-                common_super_type(a.clone(), b.clone(), &BUILTIN_FUNCTIONS.default_cast_rules)
+                common_super_type(a.clone(), b.clone(), BUILTIN_FUNCTIONS.default_cast_rules())
                     .ok_or_else(|| {
                         ErrorCode::SemanticError(
                             format!("{a} and {b} don't have common data type",),

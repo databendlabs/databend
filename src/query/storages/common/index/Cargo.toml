@@ -37,7 +37,6 @@ bytes = { workspace = true }
 cbordata = { workspace = true }
 crc32fast = { workspace = true }
 fastrace = { workspace = true }
-feistel-permutation-rs = { workspace = true }
 geo = { workspace = true }
 half = { workspace = true }
 itertools = { workspace = true }

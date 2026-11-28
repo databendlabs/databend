@@ -14,6 +14,8 @@
 
 use databend_common_column::types::timestamp_tz;
 use databend_common_expression::ColumnRef;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
@@ -33,7 +35,7 @@ fn checked_function_to_cast(
     name: &str,
     params: &[Scalar],
     argument_type: DataType,
-) -> Option<type_check::FunctionCallToCastResult> {
+) -> Option<DataType> {
     let argument = Expr::ColumnRef(ColumnRef {
         span: None,
         id: 0,
@@ -50,8 +52,7 @@ fn checked_function_to_cast(
     .unwrap();
     checked.as_function_call().and_then(|call| {
         type_check::function_call_to_cast(
-            name,
-            params,
+            &call.id,
             &argument_type,
             &call.return_type,
             &BUILTIN_FUNCTIONS,
@@ -62,15 +63,10 @@ fn checked_function_to_cast(
 #[test]
 fn test_function_call_to_cast_uses_resolved_cast_function() {
     let cast = checked_function_to_cast("to_int64", &[], DataType::String).unwrap();
-    assert!(!cast.is_try);
-    assert_eq!(cast.dest_type, DataType::Number(NumberDataType::Int64));
+    assert_eq!(cast, DataType::Number(NumberDataType::Int64));
 
-    let cast = checked_function_to_cast("try_to_int64", &[], DataType::String).unwrap();
-    assert!(cast.is_try);
-    assert_eq!(
-        cast.dest_type,
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
-    );
+    // `try_to_*` is an ordinary function, not a cast.
+    assert!(checked_function_to_cast("try_to_int64", &[], DataType::String).is_none());
 
     // Aliases are accepted because check_function resolves them to the same FunctionID.
     assert!(checked_function_to_cast("date", &[], DataType::String).is_some());
@@ -86,20 +82,29 @@ fn test_function_call_to_cast_uses_resolved_cast_function() {
         DataType::Number(NumberDataType::Int64),
     )
     .unwrap();
-    assert_eq!(
-        cast.dest_type,
-        DataType::Decimal(DecimalSize::new(10, 2).unwrap())
-    );
+    assert_eq!(cast, DataType::Decimal(DecimalSize::new(10, 2).unwrap()));
 
     // Factory params must match those reconstructed by Expr::Cast.
     let mismatched_decimal_params = [
         Scalar::Number(NumberScalar::UInt8(11)),
         Scalar::Number(NumberScalar::UInt8(2)),
     ];
+    let mismatched = type_check::check_function(
+        None,
+        "to_decimal",
+        &mismatched_decimal_params,
+        &[Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "arg".to_string(),
+        })],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
     assert!(
         type_check::function_call_to_cast(
-            "to_decimal",
-            &mismatched_decimal_params,
+            &mismatched.as_function_call().unwrap().id,
             &DataType::Number(NumberDataType::Int64),
             &DataType::Decimal(DecimalSize::new(10, 2).unwrap()),
             &BUILTIN_FUNCTIONS,
@@ -129,7 +134,8 @@ fn test_nullable_function_call_to_cast_uses_complete_cast_resolution() {
     ];
 
     // Keep this table explicit: every function selected by Expr::Cast must prove that its checked
-    // nullable overload is also accepted by function_call_to_cast.
+    // nullable overload is also accepted by function_call_to_cast, while its `try_to_*`
+    // counterpart stays an ordinary function.
     let cases = [
         (
             "to_boolean",
@@ -274,8 +280,8 @@ fn test_nullable_function_call_to_cast_uses_complete_cast_resolution() {
 
         if let Some(try_name) = try_name {
             assert!(
-                checked_function_to_cast(try_name, &params, argument_type.clone()).is_some(),
-                "{try_name}({argument_type}) must be rewritten from the function selected by TRY_CAST"
+                checked_function_to_cast(try_name, &params, argument_type.clone()).is_none(),
+                "{try_name}({argument_type}) is an ordinary function, not a cast"
             );
         }
     }
@@ -512,4 +518,44 @@ fn test_find_leveled_eq_filters() {
             expected_table
         ]);
     }
+}
+
+/// Known divergence: the comparison and the equality reasoning of the planner use different
+/// common types for `UInt64` and `Int64`. The comparison casts to `Int64` and fails on values
+/// above `i64::MAX`, while the reasoning takes `Decimal(20, 0)`, lossless on both sides.
+#[test]
+fn test_comparison_and_conversion_common_types_differ() {
+    use databend_common_expression::conversion::ConversionClass;
+    use databend_common_expression::conversion::common_super_type_with_conversion;
+    use databend_common_expression::type_check::common_super_type;
+
+    let uint64 = DataType::Number(NumberDataType::UInt64);
+    let int64 = DataType::Number(NumberDataType::Int64);
+    assert_eq!(
+        common_super_type(
+            uint64.clone(),
+            int64.clone(),
+            BUILTIN_FUNCTIONS.comparison_cast_rules()
+        ),
+        Some(int64.clone())
+    );
+    let conversion = common_super_type_with_conversion(&uint64, &int64).unwrap();
+    assert_eq!(
+        conversion.common_type,
+        DataType::Decimal(DecimalSize::new(20, 0).unwrap())
+    );
+    assert_eq!(conversion.left, ConversionClass::LosslessInjective);
+    assert_eq!(conversion.right, ConversionClass::LosslessInjective);
+
+    let raw_expr = parse_raw_expr("a = b", &[("a", uint64), ("b", int64)], &BUILTIN_FUNCTIONS);
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let block = DataBlock::new_from_columns(vec![
+        UInt64Type::from_data(vec![u64::MAX]),
+        Int64Type::from_data(vec![-1]),
+    ]);
+    let func_ctx = FunctionContext::default();
+    let err = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+        .run(&expr)
+        .unwrap_err();
+    assert!(err.message().contains("number overflowed"), "{err}");
 }

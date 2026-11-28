@@ -35,6 +35,19 @@ pub fn gen_result_cache_prefix(tenant: &str) -> String {
     format!("{RESULT_CACHE_PREFIX}/{tenant}/")
 }
 
+/// Returns true if `meta_key` is a result cache meta key of `tenant`: the
+/// output of [`gen_result_cache_meta_key`] for a [`gen_result_cache_key`]
+/// digest, which is 64 lowercase hex chars.
+pub fn is_result_cache_meta_key(tenant: &str, meta_key: &str) -> bool {
+    let Some(digest) = meta_key.strip_prefix(&gen_result_cache_prefix(tenant)) else {
+        return false;
+    };
+    digest.len() == 64
+        && digest
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 #[inline(always)]
 pub(crate) fn gen_result_cache_dir(key: &str) -> String {
     format!("{RESULT_CACHE_PREFIX}/{key}")
@@ -76,4 +89,43 @@ pub struct ResultCacheValue {
     pub cache_key_extras: Vec<String>,
     /// The SQL of the query (truncated to 128 chars).
     pub sql: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_result_cache_meta_key() {
+        let digest = gen_result_cache_key("SELECT 1");
+        let meta_key = gen_result_cache_meta_key("t1", &digest);
+
+        assert!(is_result_cache_meta_key("t1", &meta_key));
+
+        // Another tenant's key.
+        assert!(!is_result_cache_meta_key("t2", &meta_key));
+        assert!(!is_result_cache_meta_key("t", &meta_key));
+
+        // Not a result cache key.
+        assert!(!is_result_cache_meta_key("t1", "__fd_database/t1/default"));
+        assert!(!is_result_cache_meta_key("t1", &digest));
+        assert!(!is_result_cache_meta_key("t1", ""));
+
+        // The digest part is not a sha256 hex digest.
+        let prefix = gen_result_cache_prefix("t1");
+        assert!(!is_result_cache_meta_key("t1", &prefix));
+        assert!(!is_result_cache_meta_key(
+            "t1",
+            &format!("{prefix}{}", &digest[1..])
+        ));
+        assert!(!is_result_cache_meta_key("t1", &format!("{meta_key}0")));
+        assert!(!is_result_cache_meta_key(
+            "t1",
+            &format!("{prefix}{}", digest.to_uppercase())
+        ));
+        assert!(!is_result_cache_meta_key(
+            "t1",
+            &format!("{prefix}t2/{}", &digest[3..])
+        ));
+    }
 }

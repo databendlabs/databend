@@ -182,7 +182,7 @@ impl HashJoinProbeState {
                         unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
                     loop {
                         if old_mactehd_counts > 0 {
-                            return Err(ErrorCode::UnresolvableConflict(
+                            return Err(ErrorCode::MultipleSourceRowsMatched(
                                 "multi rows from source match one and the same row in the target_table multi times in probe phase",
                             ));
                         }
@@ -214,7 +214,7 @@ impl HashJoinProbeState {
                         unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
                     loop {
                         if old_mactehd_counts > 0 {
-                            return Err(ErrorCode::UnresolvableConflict(
+                            return Err(ErrorCode::MultipleSourceRowsMatched(
                                 "multi rows from source match one and the same row in the target_table multi times in probe phase",
                             ));
                         }

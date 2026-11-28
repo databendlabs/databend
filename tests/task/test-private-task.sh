@@ -23,6 +23,9 @@ for node in 1 2; do
     echo "Creating private task config for node-${node}"
     cp "$SOURCE_CONFIG_FILE" "$CONFIG_FILE"
     sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
+    # List every meta node: only the leader serves watches, and a client follows a refused watch
+    # only to a leader it lists. The test of a meta leader restart at the end relies on it.
+    sed -i 's/^endpoints = .*/endpoints = ["0.0.0.0:9191", "0.0.0.0:28202", "0.0.0.0:28302"]/' "$CONFIG_FILE"
     printf '\n' >> "$CONFIG_FILE"
     cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
     printf '\n' >> "$CONFIG_FILE"
@@ -634,6 +637,137 @@ response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 
 check_response_error "$response"
 response=$(query_sql_with_auth "root:" "DROP TASK manual_cancel_task")
 check_response_error "$response"
+
+# A run recorded as executing while no query node holds the execution lease of its task, as a node
+# that stops during the run leaves it, is recorded as failed, and does not block the next runs.
+
+response=$(query_sql_with_auth "root:" "CREATE TASK abandoned_run_task SCHEDULE = 1 SECOND AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'abandoned_run_task'")
+check_response_error "$response"
+abandoned_run_task_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${abandoned_run_task_id}, 'abandoned_run_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 920000, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK abandoned_run_task RESUME")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'abandoned_run_task' AND state = 'SUCCEEDED'")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 1 ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(query_sql_with_auth "root:" "ALTER TASK abandoned_run_task SUSPEND")
+check_response_error "$response"
+
+if [ "$actual" -ge 1 ]; then
+    echo "✅ An abandoned executing run does not block the next runs"
+else
+    echo "❌ Expected the task to run after an abandoned executing run"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'abandoned_run_task' AND run_id = 920000 AND state = 'FAILED' AND completed_at IS NOT NULL AND error_message LIKE 'ABANDONED_EXECUTION:%'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "1" ]; then
+    echo "✅ An abandoned executing run is recorded as failed"
+else
+    echo "❌ Expected the abandoned run to be recorded as failed"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "DROP TASK abandoned_run_task")
+check_response_error "$response"
+
+# The latest run of a task decides whether its AFTER successors run. Of the runs that ended in the
+# same second, the one created last, with the greatest run_id, is the latest. same_second_other has
+# two failed runs and a succeeded one created after them, which all ended in the same second; the
+# succeeded run is inserted between the failed ones, so that it is neither the first nor the last
+# row in insertion order. same_second_parent has an abandoned run, recorded as failed when the
+# parent runs again, usually in the same second as that run ends.
+
+response=$(query_sql_with_auth "root:" "CREATE OR REPLACE TABLE same_second_sink (c int)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK same_second_parent AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK same_second_other AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK same_second_child AFTER 'same_second_parent', 'same_second_other' AS INSERT INTO same_second_sink VALUES (1)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK same_second_child RESUME")
+check_response_error "$response"
+
+actual_after_count=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_after WHERE next_task = 'same_second_child'")
+    check_response_error "$response"
+    actual_after_count=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual_after_count" = "2" ]; then
+        break
+    fi
+    sleep 1
+done
+if [ "$actual_after_count" != "2" ]; then
+    echo "❌ Expected the AFTER bindings of same_second_child to be ready"
+    echo "Actual  : $actual_after_count"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'same_second_other'")
+check_response_error "$response"
+same_second_other_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${same_second_other_id}, 'same_second_other', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930000, 0, 'FAILED', 1006, 'failed', 0, to_timestamp(1700000000), to_timestamp(1700000000), NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL), (${same_second_other_id}, 'same_second_other', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930002, 0, 'SUCCEEDED', 0, NULL, 0, to_timestamp(1700000000), to_timestamp(1700000000), NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL), (${same_second_other_id}, 'same_second_other', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930001, 0, 'FAILED', 1006, 'failed', 0, to_timestamp(1700000000), to_timestamp(1700000000), NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'same_second_parent'")
+check_response_error "$response"
+same_second_parent_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${same_second_parent_id}, 'same_second_parent', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930010, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "EXECUTE TASK same_second_parent")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM same_second_sink")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 1 ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual" -ge 1 ]; then
+    echo "✅ Of the runs that ended in the same second, the one created last decides the AFTER successors"
+else
+    echo "❌ Expected same_second_child to run after same_second_parent recovered from its abandoned run"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+for task in same_second_child same_second_parent same_second_other; do
+    response=$(query_sql_with_auth "root:" "DROP TASK ${task}")
+    check_response_error "$response"
+done
 
 # Check Task Fan-out
 
@@ -1331,5 +1465,106 @@ else
     echo "❌ Mismatch"
     echo "Expected: $expected"
     echo "Actual  : $actual"
+    exit 1
+fi
+
+# Test that a scheduled task keeps running when the meta leader restarts: every watch of the task
+# messages ends with the leader, and the task service must watch again to run the task. The leader
+# stops right after a run has finished, seconds before the next one starts. A run in flight while
+# no leader is elected can fail to record its end: it then stays EXECUTING, and blocks the next
+# runs until its query node's hold on the execution lease of the task ends, at most 30 s after the
+# run.
+
+META_ADMIN_PORTS=([1]=28101 [2]=28201 [3]=28301)
+META_GRPC_PORTS=([1]=9191 [2]=28202 [3]=28302)
+
+# Print the id of the meta node that reports itself as the leader, or nothing.
+meta_leader() {
+    for id in 1 2 3; do
+        if [ "$(curl -s "http://127.0.0.1:${META_ADMIN_PORTS[$id]}/v1/cluster/status" | jq -r '.is_leader' 2>/dev/null)" = "true" ]; then
+            echo "$id"
+            return
+        fi
+    done
+}
+
+# Print the numbers of the succeeded and of the executing runs of leader_change_task, or "0 0"
+# while the query fails.
+leader_change_task_runs() {
+    local runs
+    runs=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SUCCEEDED'), count_if(state = 'EXECUTING') FROM system_task.task_run WHERE task_name = 'leader_change_task'" |
+        jq -r 'select(.state == "Succeeded") | .data[0] | join(" ")' 2>/dev/null) || true
+    echo "${runs:-0 0}"
+}
+
+response=$(query_sql_with_auth "root:" "CREATE TASK leader_change_task SCHEDULE = 5 SECOND AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK leader_change_task RESUME")
+check_response_error "$response"
+
+# Wait until the second run has finished.
+second_run_done=false
+for _ in {1..300}; do
+    read -r succeeded_before executing <<<"$(leader_change_task_runs)"
+    if [ "$succeeded_before" -ge 2 ] && [ "$executing" -eq 0 ]; then
+        second_run_done=true
+        break
+    fi
+    sleep 0.1
+done
+if [ "$second_run_done" != true ]; then
+    echo "❌ Expected the scheduled task to run before the meta leader restarts"
+    echo "Succeeded runs: $succeeded_before, executing runs: $executing"
+    exit 1
+fi
+
+old_leader=$(meta_leader)
+if [ -z "$old_leader" ]; then
+    echo "❌ Expected a meta node to be the leader"
+    exit 1
+fi
+
+echo "Restarting the meta leader node-${old_leader}"
+pkill -9 -f "databend-meta-node-${old_leader}.toml" || {
+    echo "❌ No process of meta node-${old_leader}"
+    exit 1
+}
+
+new_leader=""
+for _ in {1..30}; do
+    new_leader=$(meta_leader)
+    if [ -n "$new_leader" ] && [ "$new_leader" != "$old_leader" ]; then
+        break
+    fi
+    sleep 1
+done
+if [ -z "$new_leader" ] || [ "$new_leader" = "$old_leader" ]; then
+    echo "❌ Expected another meta node to become the leader"
+    exit 1
+fi
+echo "Meta node-${new_leader} is the new leader"
+
+nohup "./target/${BUILD_PROFILE}/databend-meta" -c "scripts/ci/deploy/config/databend-meta-node-${old_leader}.toml" >>"./.databend/meta-${old_leader}.out" 2>&1 &
+python3 scripts/ci/wait_tcp.py --timeout 30 --port "${META_GRPC_PORTS[$old_leader]}"
+
+succeeded=0
+for _ in {1..120}; do
+    read -r succeeded _ <<<"$(leader_change_task_runs)"
+    if [ "$succeeded" -ge $((succeeded_before + 3)) ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(query_sql_with_auth "root:" "ALTER TASK leader_change_task SUSPEND")
+check_response_error "$response"
+
+if [ "$succeeded" -ge $((succeeded_before + 3)) ]; then
+    echo "✅ Scheduled task keeps running after the meta leader restarts"
+else
+    echo "❌ Expected the scheduled task to keep running after the meta leader restarts"
+    echo "Succeeded runs before the restart: $succeeded_before"
+    echo "Succeeded runs after the restart : $succeeded"
     exit 1
 fi

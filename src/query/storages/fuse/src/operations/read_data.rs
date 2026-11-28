@@ -91,6 +91,7 @@ impl FuseTable {
                         virtual_column.clone(),
                         self.table_compression,
                         block_reader.policy,
+                        block_reader.dictionary_ndv_ratio,
                     )
                 })
                 .transpose()?,

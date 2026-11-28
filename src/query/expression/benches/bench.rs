@@ -1079,3 +1079,58 @@ mod filter_string_compare {
         bench_dict_filter(bencher, shape, false, "s < t");
     }
 }
+
+#[divan::bench_group(max_time = 1)]
+mod topk_string {
+    use databend_common_column::bitmap::MutableBitmap;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::TopKSorter;
+    use databend_common_expression::types::StringType;
+    use divan::counter::ItemsCount;
+
+    const ROWS: usize = 65_536;
+    const LIMIT: usize = 100;
+
+    /// `short`: inlined strings (<= 12 bytes) sharing a 4-byte prefix.
+    /// `url`: long strings of varying length sharing a long prefix, like a URL column.
+    /// `distinct`: long strings whose first 4 bytes mostly differ.
+    /// `tied`: long strings all equal to the heap boundary.
+    fn value(shape: &str, row: usize) -> String {
+        // Scatter the rows so the column is not already in order.
+        let key = (row as u32).wrapping_mul(2_654_435_761) as usize % ROWS;
+        match shape {
+            "short" => format!("id_{key}"),
+            "url" => format!("https://www.example.com/{}{key}", "p/".repeat(key % 16)),
+            "distinct" => format!("{:08x}_with_a_long_suffix", key * 65_521),
+            "tied" => "https://www.example.com/duplicate".to_string(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn column(shape: &str, offset: usize) -> Column {
+        StringType::from_data(
+            (0..ROWS)
+                .map(|row| value(shape, row + offset))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Pushes a column into a sorter whose heap is already full, as for every block after the
+    /// first of an `ORDER BY s LIMIT 100` scan.
+    #[divan::bench(args = ["short", "url", "distinct", "tied"])]
+    fn push_column(bencher: divan::Bencher, shape: &str) {
+        let mut sorter = TopKSorter::new(LIMIT, true);
+        let mut bitmap = MutableBitmap::from_len_set(ROWS);
+        sorter.push_column(&column(shape, 0), &mut bitmap);
+        let column = column(shape, ROWS);
+
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .with_inputs(|| (sorter.clone(), MutableBitmap::from_len_set(ROWS)))
+            .bench_local_values(|(mut sorter, mut bitmap)| {
+                sorter.push_column(&column, &mut bitmap);
+                bitmap
+            });
+    }
+}
