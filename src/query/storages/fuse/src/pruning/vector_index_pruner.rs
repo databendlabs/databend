@@ -56,7 +56,6 @@ use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
 
 use crate::io::VectorIndexSearchOptions;
 use crate::io::read::VectorIndexIdentity;
@@ -521,20 +520,9 @@ impl VectorIndexPruner {
             })
         });
 
-        let mut semaphore = self.pruning_ctx.pruning_semaphore.clone();
-        // The index search is CPU bound. The runtime of a query has `max_threads`
-        // threads; the global one may have more, and must not run more of them.
-        // The tasks read the index too: never allow more than the I/O limit.
-        let max_threads = self.pruning_ctx.ctx.get_settings().get_max_threads()? as usize;
-        let workers = self
-            .pruning_ctx
-            .pruning_runtime()?
-            .inner()
-            .metrics()
-            .num_workers();
-        if max_threads < workers.min(semaphore.available_permits()) {
-            semaphore = Arc::new(Semaphore::new(max_threads.max(1)));
-        }
+        // The pruning runtime keeps the CPU bound index search within `max_threads`,
+        // see `PruningRuntime::create`; the semaphore keeps its reads within the I/O limit.
+        let semaphore = self.pruning_ctx.pruning_semaphore.clone();
         self.pruning_ctx.run_tasks(semaphore, tasks).await
     }
 

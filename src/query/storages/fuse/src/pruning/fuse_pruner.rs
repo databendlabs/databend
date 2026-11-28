@@ -96,7 +96,8 @@ enum PruningRuntime {
     /// The process-wide pruning runtime, set up with the global services.
     Global(Arc<Runtime>),
     /// A runtime of `max_threads` threads for this query, where the global
-    /// services are not set up. It is created on first use: the pipeline based
+    /// services are not set up or the query may use fewer threads than the
+    /// global runtime has. It is created on first use: the pipeline based
     /// pruning without index pruners never touches it.
     Query {
         threads: usize,
@@ -106,13 +107,18 @@ enum PruningRuntime {
 
 impl PruningRuntime {
     fn create(ctx: &Arc<dyn TableContext>) -> Result<Self> {
-        let settings = ctx.get_settings();
-        // Per-query pruning concurrency is still bounded by `pruning_semaphore`.
-        if let Some(runtime) = GlobalPruningRuntime::try_instance() {
+        let threads = ctx.get_settings().get_max_threads()? as usize;
+        // On the global runtime only the I/O limit (`pruning_semaphore`) bounds the
+        // pruning tasks of a query, and they also search indexes on the CPU. A query
+        // limited to fewer threads, e.g. by a workload group, keeps its own runtime
+        // so that this work stays within `max_threads`.
+        if let Some(runtime) = GlobalPruningRuntime::try_instance()
+            && threads >= runtime.inner().metrics().num_workers()
+        {
             return Ok(PruningRuntime::Global(runtime));
         }
         Ok(PruningRuntime::Query {
-            threads: settings.get_max_threads()? as usize,
+            threads,
             runtime: Mutex::new(None),
         })
     }
