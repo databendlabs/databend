@@ -85,5 +85,71 @@ select count(), sum(c), sum(s), min(mn), max(mx), sum(dc) from (select number % 
 statement ok
 unset force_aggregate_data_spill
 
+# Final aggregates whose groups outgrow the caches keep their input by bucket of the group hash,
+# and aggregate it a bucket at a time: with keys that come again many times, two keys of which one
+# is nullable, and string keys.
+query IIII
+select count(), sum(c), min(c), max(c) from (select number % 400000 as k, count() c from numbers(4000000) group by k)
+----
+400000	4000000	10	10
+
+query III
+select count(), sum(c), sum(s) from (select number % 300000 as k1, if(number % 7 = 0, null, number % 3) as k2, count() c, sum(number) s from numbers(3000000) group by k1, k2)
+----
+600000	3000000	4499998500000
+
+query IIII
+select count(), sum(c), min(c), max(c) from (select to_string(number % 400000) as k, count() c from numbers(4000000) group by k)
+----
+400000	4000000	10	10
+
+query IIII
+select count(), sum(c), sum(s), max(l) from (select concat('a longer group key ', to_string(number % 300000)) as k, count() c, sum(number) s, max(length(k)) l from numbers(1500000) group by k)
+----
+300000	1500000	1124999250000	25
+
+query IIII
+select count(), sum(c), sum(d), sum(a::Int64) from (select number % 400000 as k, count() c, count(distinct number % 7) d, avg(number) a from numbers(4000000) group by k)
+----
+400000	4000000	2800000	799999800000
+
+query IIII
+select count(), sum(c), sum(s)::Int64, sum(n) from (select number % 400000 as k, count() c, sum((number % 1000)::decimal(15, 2)) s, count(if(number % 3 = 0, null, number)) n from numbers(4000000) group by k)
+----
+400000	4000000	1998000000	2666666
+
+# Staged groups spill by bucket, and are aggregated again from the spill.
+statement ok
+set max_block_size = 1000000
+
+statement ok
+set force_aggregate_data_spill = 1
+
+query II
+select count(), sum(s) from (select number k, sum(number) s from numbers(2000000) group by k)
+----
+2000000	1999999000000
+
+query IIII
+select count(), sum(c), sum(d), sum(a::Int64) from (select number % 400000 as k, count() c, count(distinct number % 7) d, avg(number) a from numbers(4000000) group by k)
+----
+400000	4000000	2800000	799999800000
+
+query IIII
+select count(), sum(c), sum(s)::Int64, sum(n) from (select number % 400000 as k, count() c, sum((number % 1000)::decimal(15, 2)) s, count(if(number % 3 = 0, null, number)) n from numbers(4000000) group by k)
+----
+400000	4000000	1998000000	2666666
+
+query IIII
+select count(), sum(c), sum(s), max(l) from (select concat('a longer group key ', to_string(number % 300000)) as k, count() c, sum(number) s, max(length(k)) l from numbers(1500000) group by k)
+----
+300000	1500000	1124999250000	25
+
+statement ok
+unset force_aggregate_data_spill
+
+statement ok
+unset max_block_size
+
 statement ok
 unset max_threads

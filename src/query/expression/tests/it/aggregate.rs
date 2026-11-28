@@ -22,6 +22,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
@@ -47,6 +48,7 @@ use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StagedGroups;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::aggregate_function::EagerAggregation;
@@ -55,6 +57,7 @@ use databend_common_expression::group_hash_entries;
 use databend_common_expression::partial_table_bytes;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -1381,4 +1384,331 @@ fn candidate_lists(types: &[DataType], len: usize) -> Vec<Vec<DataType>> {
         }
     }
     out
+}
+
+/// The inputs of a final aggregate in `test_staged_groups_match_the_hash_table`: payloads of
+/// partial tables, raw rows, and serialized states, over the same groups.
+struct StagedInputs {
+    group_types: Vec<DataType>,
+    /// The group column of each input block.
+    blocks: Vec<BlockEntry>,
+}
+
+impl StagedInputs {
+    /// `blocks` blocks of `rows` keys of `groups` groups each, in another order each time: a
+    /// group repeats in a block when `rows` is above `groups`.
+    fn int_keys(groups: usize, rows: usize, blocks: usize) -> Vec<Vec<usize>> {
+        (0..blocks)
+            .map(|r| {
+                (0..rows)
+                    .map(|i| (i * 7919 + r * 104_729) % groups)
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn ints(groups: usize, rows: usize, blocks: usize) -> Self {
+        let blocks = Self::int_keys(groups, rows, blocks)
+            .into_iter()
+            .map(|keys| {
+                let keys = keys.into_iter().map(|k| k as i64 * 3 - 1_000_000);
+                Int64Type::from_data(keys.collect::<Vec<_>>()).into()
+            })
+            .collect();
+        StagedInputs {
+            group_types: vec![Int64Type::data_type()],
+            blocks,
+        }
+    }
+
+    fn nullable_ints(groups: usize, rows: usize, blocks: usize) -> Self {
+        let blocks = Self::int_keys(groups, rows, blocks)
+            .into_iter()
+            .map(|keys| {
+                let keys = keys.into_iter().map(|k| k as i32).collect::<Vec<_>>();
+                // The values under the NULLs differ, as a column may hold any value there: a
+                // NULL is one group whatever it holds.
+                let validity = keys.iter().map(|k| k % 11 != 0).collect::<Bitmap>();
+                Int32Type::from_data(keys)
+                    .wrap_nullable(Some(validity))
+                    .into()
+            })
+            .collect();
+        StagedInputs {
+            group_types: vec![Int32Type::data_type().wrap_nullable()],
+            blocks,
+        }
+    }
+
+    fn strings(groups: usize, rows: usize, blocks: usize) -> Self {
+        let blocks = Self::int_keys(groups, rows, blocks)
+            .into_iter()
+            .map(|keys| {
+                let keys = keys
+                    .into_iter()
+                    .map(|k| format!("a group key long enough for the arena {k}"))
+                    .collect::<Vec<_>>();
+                StringType::from_data(keys).into()
+            })
+            .collect();
+        StagedInputs {
+            group_types: vec![DataType::String],
+            blocks,
+        }
+    }
+
+    fn table(&self, fixture: &TrackedHeapFixture, config: HashTableConfig) -> AggregateHashTable {
+        AggregateHashTable::new(
+            self.group_types.clone(),
+            fixture.aggrs(),
+            config,
+            Arc::new(Bump::new()),
+        )
+    }
+
+    /// Input `i` as `kind` 0 (payloads of a partial table), 1 (raw rows) or 2 (serialized
+    /// states), added to `direct` and to `staged`.
+    fn add(
+        &self,
+        fixture: &TrackedHeapFixture,
+        i: usize,
+        kind: usize,
+        direct: &mut AggregateHashTable,
+        staged: &mut StagedGroups,
+        flush_state: &mut PayloadFlushState,
+    ) {
+        let groups = vec![self.blocks[i].clone()];
+        let rows = groups[0].len();
+        let markers = [vec![UInt64Type::from_data(vec![0u64; rows]).into()]];
+        let params: Vec<ProjectedBlock> = markers.iter().map(|v| v.into()).collect();
+        match kind {
+            0 => {
+                let mut partial =
+                    self.table(fixture, HashTableConfig::default().with_route_partitions(3));
+                partial
+                    .add_groups(
+                        &mut ProbeState::default(),
+                        (&groups).into(),
+                        &params,
+                        (&[]).into(),
+                        rows,
+                    )
+                    .unwrap();
+                for payload in partial.into_payloads() {
+                    direct.combine_payload(&payload, flush_state).unwrap();
+                    // The partial table, its arena with it, is gone before the staged rows are
+                    // aggregated: they keep their values.
+                    staged.add_payload(payload, flush_state).unwrap();
+                }
+            }
+            1 => {
+                direct
+                    .add_raw_groups(flush_state, (&groups).into(), &params, rows)
+                    .unwrap();
+                staged
+                    .add_rows(flush_state, (&groups).into(), &params, (&[]).into(), rows)
+                    .unwrap();
+            }
+            _ => {
+                let mut partial = self.table(
+                    fixture,
+                    HashTableConfig::default().with_initial_radix_bits(0),
+                );
+                partial
+                    .add_groups(
+                        &mut ProbeState::default(),
+                        (&groups).into(),
+                        &params,
+                        (&[]).into(),
+                        rows,
+                    )
+                    .unwrap();
+                let serialized = partial.payload.aggregate_flush_all().unwrap();
+                let states = ProjectedBlock::project(&[0], &serialized);
+                let keys = ProjectedBlock::project(&[1], &serialized);
+                let groups = serialized.num_rows();
+                direct
+                    .add_serialized_groups(flush_state, keys, states, groups)
+                    .unwrap();
+                staged
+                    .add_rows(flush_state, keys, &[], states, groups)
+                    .unwrap();
+            }
+        }
+    }
+
+    /// The inputs added to a hash table and to staged groups of `bits` bits from `start_bit`,
+    /// input `i` as kind `kind(i)`, see `add`.
+    fn aggregate(
+        &self,
+        fixture: &TrackedHeapFixture,
+        start_bit: u64,
+        bits: u64,
+        kind: impl Fn(usize) -> usize,
+    ) -> (AggregateHashTable, StagedGroups) {
+        let mut direct = self.table(fixture, HashTableConfig::default());
+        let mut staged =
+            StagedGroups::new(self.group_types.clone(), fixture.aggrs(), start_bit, bits);
+        let mut flush_state = PayloadFlushState::default();
+        for i in 0..self.blocks.len() {
+            self.add(
+                fixture,
+                i,
+                kind(i),
+                &mut direct,
+                &mut staged,
+                &mut flush_state,
+            );
+        }
+        (direct, staged)
+    }
+}
+
+fn staged_blocks(staged: StagedGroups, serialize: bool) -> Vec<(usize, DataBlock)> {
+    let mut output = staged.into_output(serialize);
+    let mut flush_state = PayloadFlushState::default();
+    let mut blocks = vec![];
+    while let Some(block) = output.next_block(&mut flush_state).unwrap() {
+        blocks.push(block);
+    }
+    // The buckets come out in order.
+    assert!(blocks.windows(2).all(|w| w[0].0 <= w[1].0));
+    blocks
+}
+
+/// The staged groups of a final aggregate give the groups of the hash table for the same inputs,
+/// and drop every state once: with fixed, nullable and string keys, inputs of every kind or
+/// partial aggregate payloads only, aggregated in place, groups repeated within a block, buckets
+/// merged into their tables as the input comes and others only at the output, and buckets split
+/// for being too big.
+#[test]
+fn test_staged_groups_match_the_hash_table() {
+    for (name, inputs, bits) in [
+        ("ints", StagedInputs::ints(60_000, 180_000, 6), 2),
+        (
+            "ints repeated in a block",
+            StagedInputs::ints(3_000, 40_000, 3),
+            1,
+        ),
+        // Too few rows for a bucket to be merged before the output.
+        ("ints, few rows", StagedInputs::ints(3_000, 4_000, 3), 0),
+        (
+            "ints, one bucket",
+            StagedInputs::ints(1_000_000, 400_000, 3),
+            0,
+        ),
+        ("strings", StagedInputs::strings(30_000, 30_000, 3), 3),
+        (
+            "strings repeated",
+            StagedInputs::strings(20_000, 60_000, 4),
+            1,
+        ),
+        (
+            "nullable ints",
+            StagedInputs::nullable_ints(40_000, 120_000, 4),
+            2,
+        ),
+    ] {
+        // Inputs of every kind, and partial aggregate payloads only, aggregated in place.
+        for (kinds, kind) in [
+            ("all kinds", (|i| i % 3) as fn(usize) -> usize),
+            ("payloads", |_| 0),
+        ] {
+            let fixture = TrackedHeapFixture::new();
+            {
+                let (direct, staged) = inputs.aggregate(&fixture, 0, bits, kind);
+                let groups = direct.payload.len();
+                let expected = fixture.merge_result_block(direct);
+                let blocks = staged_blocks(staged, false);
+                let staged =
+                    DataBlock::concat(&blocks.into_iter().map(|(_, b)| b).collect::<Vec<_>>())
+                        .unwrap();
+                assert_eq!(staged.num_rows(), groups, "{name}, {kinds}");
+                assert_block_value_sort_eq(&expected, &staged);
+            }
+            fixture.assert_all_states_dropped();
+        }
+    }
+}
+
+/// Partial aggregate payloads that send the same groups again and again, a payload per block, are
+/// aggregated in place in their bucket as it grows, several times: the buckets hold about two rows
+/// per group at most, the result is the hash table's, and every state, merged or kept, is dropped
+/// once.
+#[test]
+fn test_staged_groups_compact_repeated_payloads() {
+    for (name, inputs, bits) in [
+        ("ints", StagedInputs::ints(40_000, 40_000, 30), 0),
+        (
+            "ints, 4 buckets",
+            StagedInputs::ints(200_000, 200_000, 12),
+            2,
+        ),
+        ("strings", StagedInputs::strings(40_000, 40_000, 20), 0),
+        (
+            "nullable ints",
+            StagedInputs::nullable_ints(50_000, 50_000, 16),
+            0,
+        ),
+    ] {
+        let fixture = TrackedHeapFixture::new();
+        {
+            let (direct, staged) = inputs.aggregate(&fixture, 0, bits, |_| 0);
+            let groups = direct.payload.len();
+            // Every block sends every group: without the compactions the buckets would hold
+            // all of them.
+            assert!(
+                staged.staged_rows() <= 3 * groups,
+                "{name}: {} rows staged for {groups} groups, {} sent",
+                staged.staged_rows(),
+                staged.len(),
+            );
+            let expected = fixture.merge_result_block(direct);
+            let blocks = staged_blocks(staged, false);
+            let staged =
+                DataBlock::concat(&blocks.into_iter().map(|(_, b)| b).collect::<Vec<_>>()).unwrap();
+            assert_eq!(staged.num_rows(), groups, "{name}");
+            assert_block_value_sort_eq(&expected, &staged);
+        }
+        fixture.assert_all_states_dropped();
+    }
+}
+
+/// The serialized groups of the staged buckets, as a spill writes them, merge back into the same
+/// result, a spill bucket at a time.
+#[test]
+fn test_staged_groups_serialize_for_spill() {
+    for inputs in [
+        StagedInputs::strings(20_000, 20_000, 3),
+        StagedInputs::ints(200_000, 600_000, 3),
+    ] {
+        for kind in [(|i| i % 3) as fn(usize) -> usize, |_| 0] {
+            let fixture = TrackedHeapFixture::new();
+            {
+                let (direct, staged) = inputs.aggregate(&fixture, 2, 4, kind);
+                let mut flush_state = PayloadFlushState::default();
+                let mut restored = inputs.table(&fixture, HashTableConfig::default());
+                let mut spill_buckets = std::collections::BTreeSet::new();
+                for (bucket, block) in staged_blocks(staged, true) {
+                    spill_buckets.insert(bucket >> 2);
+                    let rows = block.num_rows();
+                    restored
+                        .add_serialized_groups(
+                            &mut flush_state,
+                            ProjectedBlock::project(&[1], &block),
+                            ProjectedBlock::project(&[0], &block),
+                            rows,
+                        )
+                        .unwrap();
+                }
+                assert_eq!(spill_buckets.len(), 4);
+                assert_eq!(restored.payload.len(), direct.payload.len());
+                assert_block_value_sort_eq(
+                    &fixture.merge_result_block(direct),
+                    &fixture.merge_result_block(restored),
+                );
+            }
+            fixture.assert_all_states_dropped();
+        }
+    }
 }
