@@ -16,22 +16,29 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::utils::FromData;
 use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::ListProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -80,8 +87,18 @@ impl AsyncSystemTable for ProceduresTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        // Bodies can be large. Fill them only when the scan reads `body`, and keep
+        // the column (as NULLs) otherwise, since the block must match the schema.
+        // An empty projection, as for `count(*)`, reads no column. Without projection
+        // information, read the bodies.
+        let body_index = self.table_info.schema().index_of("body")?;
+        let read_body = match push_downs.as_ref().and_then(|p| p.projection.as_ref()) {
+            Some(Projection::Columns(columns)) => columns.contains(&body_index),
+            _ => true,
+        };
+
         let tenant = ctx.get_tenant();
         let user_api = UserApiProvider::instance();
         let mgr = user_api.procedure_api(&tenant);
@@ -105,6 +122,18 @@ impl AsyncSystemTable for ProceduresTable {
             all_procedures
         };
 
+        // Legacy listings show every procedure, but a body still requires the access
+        // DESC PROCEDURE checks: global SUPER, or access to or ownership of that
+        // procedure. Without a checker, every listed body is readable.
+        let body_checker = if !read_body
+            || enable_experimental_rbac_check
+            || has_global_super(ctx.as_ref()).await?
+        {
+            None
+        } else {
+            Some(ctx.get_visibility_checker(false, Object::Procedure).await?)
+        };
+
         let mut names = Vec::with_capacity(procedures.len());
         let mut procedure_ids = Vec::with_capacity(procedures.len());
         let mut languages = Vec::with_capacity(procedures.len());
@@ -118,10 +147,13 @@ impl AsyncSystemTable for ProceduresTable {
         let mut arguments = Vec::with_capacity(procedures.len());
         let mut comments = Vec::with_capacity(procedures.len());
         let mut created_on_s = Vec::with_capacity(procedures.len());
+        let mut bodies = StringColumnBuilder::with_capacity(procedures.len());
+        let mut body_validity = MutableBitmap::with_capacity(procedures.len());
 
         for procedure in &procedures {
+            let procedure_id = *procedure.ident.procedure_id();
             names.push(procedure.name_ident.procedure_name().name.to_string());
-            procedure_ids.push(*procedure.ident.procedure_id());
+            procedure_ids.push(procedure_id);
             arguments.push(format!(
                 "{} RETURN ({})",
                 procedure.name_ident.procedure_name(),
@@ -132,6 +164,16 @@ impl AsyncSystemTable for ProceduresTable {
             comments.push(procedure.meta.comment.as_str());
 
             created_on_s.push(procedure.meta.created_on.timestamp_micros());
+            let readable = read_body
+                && body_checker
+                    .as_ref()
+                    .is_none_or(|checker| checker.check_procedure_visibility(&procedure_id));
+            if readable {
+                bodies.put_and_commit(procedure.meta.script.as_str());
+            } else {
+                bodies.put_and_commit("");
+            }
+            body_validity.push(readable);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -141,7 +183,19 @@ impl AsyncSystemTable for ProceduresTable {
             StringType::from_data(comments),
             StringType::from_data(descriptions),
             TimestampType::from_data(created_on_s),
+            Column::String(bodies.build()).wrap_nullable(Some(body_validity.into())),
         ]))
+    }
+}
+
+async fn has_global_super(ctx: &dyn TableContext) -> Result<bool> {
+    match ctx
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+        .await
+    {
+        Ok(()) => Ok(true),
+        Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => Ok(false),
+        Err(err) => Err(err),
     }
 }
 
@@ -157,6 +211,10 @@ impl ProceduresTable {
             TableField::new("comment", TableDataType::String),
             TableField::new("description", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new(
+                "body",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
         ]);
 
         let table_info = TableInfo {

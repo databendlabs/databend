@@ -18,6 +18,7 @@ DROP STAGE IF EXISTS super_forbidden_stage;
 DROP STAGE IF EXISTS super_private_stage;
 DROP TABLE IF EXISTS super_seq_defaults;
 DROP FUNCTION IF EXISTS super_private_udf;
+DROP PROCEDURE IF EXISTS super_private_proc();
 DROP CONNECTION IF EXISTS super_legacy_conn;
 DROP CONNECTION IF EXISTS super_private_conn;
 DROP CONNECTION IF EXISTS super_created_conn;
@@ -85,6 +86,7 @@ bendsql_connect_root_null --query="
 CREATE CONNECTION super_private_conn STORAGE_TYPE = 's3' ENDPOINT_URL = 'http://127.0.0.1:9900';
 CREATE SEQUENCE super_private_seq;
 CREATE FUNCTION super_private_udf AS (x) -> (x + 1);
+CREATE OR REPLACE PROCEDURE super_private_proc() RETURNS INT LANGUAGE SQL AS \$\$ BEGIN RETURN 42; END; \$\$;
 CREATE STAGE super_private_stage;
 GRANT OWNERSHIP ON CONNECTION super_private_conn TO ROLE account_admin;
 GRANT OWNERSHIP ON SEQUENCE super_private_seq TO ROLE account_admin;
@@ -176,6 +178,20 @@ expect_allowed super_public_creator 'SELECT nextval(super_private_seq) FROM numb
 expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' Super
 expect_visible super_public_creator 'SHOW SEQUENCES' super_private_seq 1
 
+echo '=== Procedure rows and bodies follow the RBAC switch ==='
+procedure_body_sql="SELECT body FROM system.procedures WHERE name = 'super_private_proc'"
+request super_public_creator "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == []
+' >/dev/null
+echo 'procedure row hidden when RBAC is enabled'
+
+bendsql_connect_root_null --query='GRANT ACCESS PROCEDURE ON PROCEDURE super_private_proc() TO ROLE super_creator_role;'
+request super_public_creator "$procedure_body_sql" '{"role":"super_creator_role"}' | jq -e '
+	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
+' >/dev/null
+echo 'procedure body visible with ACCESS PROCEDURE when RBAC is enabled'
+bendsql_connect_root_null --query='REVOKE ACCESS PROCEDURE ON PROCEDURE super_private_proc() FROM ROLE super_creator_role;'
+
 echo '=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ==='
 expect_denied super_public_creator 'SELECT super_private_udf(1)' Usage
 expect_denied super_public_creator 'LIST @super_private_stage' Read
@@ -183,6 +199,30 @@ expect_denied super_public_creator "SET GLOBAL $rbac_check = 0" Super
 expect_allowed super_direct_user "SET GLOBAL $rbac_check = 0"
 expect_allowed super_public_creator 'SELECT super_private_udf(1)'
 expect_allowed super_public_creator 'LIST @super_private_stage'
+
+echo '=== Legacy procedure listings show every row, but a body needs DESC PROCEDURE access ==='
+expect_visible super_public_creator 'SELECT name FROM system.procedures' super_private_proc 1
+expect_denied super_public_creator 'DESC PROCEDURE super_private_proc()' AccessProcedure
+request super_public_creator "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == [[null]]
+' >/dev/null
+echo 'procedure body is NULL without access'
+request super_direct_user "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
+' >/dev/null
+echo 'procedure body visible to SUPER'
+bendsql_connect_root_null --query='GRANT ACCESS PROCEDURE ON PROCEDURE super_private_proc() TO ROLE super_creator_role;'
+request super_public_creator "$procedure_body_sql" '{"role":"super_creator_role"}' | jq -e '
+	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
+' >/dev/null
+echo 'procedure body visible with ACCESS PROCEDURE'
+bendsql_connect_root_null --query='REVOKE ACCESS PROCEDURE ON PROCEDURE super_private_proc() FROM ROLE super_creator_role;'
+request super_public_creator "SHOW PROCEDURES WHERE name = 'super_private_proc'" | jq -e '
+	.state == "Succeeded" and .error == null and
+	(.schema | map(.name)) == ["name", "procedure_id", "arguments", "comment", "description", "created_on"] and
+	.data[0][0] == "super_private_proc"
+' >/dev/null
+echo 'SHOW PROCEDURES omits the body column'
 
 echo '=== Only direct SUPER or SUPER on the current role can change the global switches ==='
 bendsql_connect_root_null --query="
