@@ -30,6 +30,7 @@ mod virtual_column_pruner;
 
 pub use block_pruner::BlockPruner;
 pub(crate) use block_pruner::GranulePrunedBlock;
+pub use bloom_pruner::BloomIndexFile;
 pub use bloom_pruner::BloomPruner;
 pub use bloom_pruner::BloomPrunerCreator;
 pub use expr_bloom_filter::ExprBloomFilter;

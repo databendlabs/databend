@@ -669,15 +669,10 @@ impl TaskService {
                         .await?;
                     }
                 }
-                // The schedule message of the dropped task, whichever version it is.
+                // The schedule message of the dropped task, unless a task created with the same
+                // name after the drop has replaced it.
                 task_mgr
-                    .accept(
-                        &TaskMessageIdent::new(
-                            tenant,
-                            TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
-                        ),
-                        MatchSeq::GE(1),
-                    )
+                    .remove_dropped_schedule(&task_name, task_id)
                     .await
                     .map_err(meta_service_error)?;
             }

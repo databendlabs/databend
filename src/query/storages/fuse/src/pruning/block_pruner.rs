@@ -32,6 +32,7 @@ use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
@@ -39,6 +40,7 @@ use super::SegmentLocation;
 use crate::io::GranulePruningReadContext;
 use crate::io::granule_index::GRANULE_BLOOM_INDEX_NAME;
 use crate::io::num_granules_of;
+use crate::pruning::BloomIndexFile;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
@@ -978,20 +980,17 @@ impl BlockPruner {
                 metrics_inc_bytes_block_bloom_pruning_before(block_meta.block_size);
                 pruning_stats.set_blocks_bloom_pruning_before(1);
 
-                let column_ids = block_meta
-                    .column_metas()
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<_>>();
+                let index_files = BloomIndexFile::of_block(block_meta);
+                // The rebuild reads the block as a single data file.
+                let rebuild_from =
+                    (!block_meta.is_split()).then(|| BlockReadInfo::from(block_meta));
                 let keep_by_bloom = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksBloom,
                         bloom_pruner.should_keep(
-                            &block_meta.bloom_filter_index_location,
-                            block_meta.bloom_filter_index_size,
+                            &index_files,
                             &block_meta.col_stats,
-                            column_ids,
-                            &block_meta.into(),
+                            rebuild_from.as_ref(),
                         ),
                     )
                     .await;

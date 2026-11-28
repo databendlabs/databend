@@ -371,7 +371,6 @@ impl BloomIndex {
     /// This happens when the data doesn't show up in the filter.
     ///
     /// Otherwise return `Uncertain`.
-    #[fastrace::trace]
     pub fn apply(
         &self,
         expr: Expr<String>,
@@ -381,7 +380,40 @@ impl BloomIndex {
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
     ) -> Result<FilterEvalResult> {
-        let (expr, domains) = self.rewrite_expr(
+        Self::apply_all(
+            std::slice::from_ref(self),
+            expr,
+            eq_scalar_map,
+            like_scalar_map,
+            ngram_args,
+            column_stats,
+            data_schema,
+        )
+    }
+
+    /// Applies the predicate expression to the filters of several indexes of one block, as if
+    /// they were one index.
+    ///
+    /// A block split into column groups has one index file per group, and the files may have
+    /// different versions. Consulting the filters of all files in one pass proves
+    /// `a = 1 OR b = 2` false even when the filters of `a` and `b` are in different files.
+    /// The caller loads from each file only the filters of the columns its group serves, so a
+    /// filter that describes values a later group rewrote is never consulted.
+    #[fastrace::trace]
+    pub fn apply_all(
+        indexes: &[BloomIndex],
+        expr: Expr<String>,
+        eq_scalar_map: &HashMap<Scalar, u64>,
+        like_scalar_map: &NgramLikeScalarMap,
+        ngram_args: &[NgramArgs],
+        column_stats: &StatisticsOfColumns,
+        data_schema: TableSchemaRef,
+    ) -> Result<FilterEvalResult> {
+        let Some(first) = indexes.first() else {
+            return Ok(FilterEvalResult::Uncertain);
+        };
+        let (expr, domains) = Self::rewrite_expr_all(
+            indexes,
             expr,
             eq_scalar_map,
             like_scalar_map,
@@ -392,7 +424,7 @@ impl BloomIndex {
         match ConstantFolder::fold_with_domain(
             Cow::Owned(expr),
             &domains,
-            &self.func_ctx,
+            &first.func_ctx,
             &BUILTIN_FUNCTIONS,
         )
         .0
@@ -408,6 +440,26 @@ impl BloomIndex {
 
     pub fn rewrite_expr(
         &self,
+        expr: Expr<String>,
+        eq_scalar_map: &HashMap<Scalar, u64>,
+        like_scalar_map: &NgramLikeScalarMap,
+        ngram_args: &[NgramArgs],
+        column_stats: &StatisticsOfColumns,
+        data_schema: TableSchemaRef,
+    ) -> Result<(Expr<String>, HashMap<String, Domain>)> {
+        Self::rewrite_expr_all(
+            std::slice::from_ref(self),
+            expr,
+            eq_scalar_map,
+            like_scalar_map,
+            ngram_args,
+            column_stats,
+            data_schema,
+        )
+    }
+
+    fn rewrite_expr_all(
+        indexes: &[BloomIndex],
         expr: Expr<String>,
         eq_scalar_map: &HashMap<Scalar, u64>,
         like_scalar_map: &NgramLikeScalarMap,
@@ -446,7 +498,7 @@ impl BloomIndex {
 
         let visitor = RewriteVisitor {
             new_col_id: 1,
-            index: self,
+            indexes,
             data_schema,
             eq_scalar_map,
             like_scalar_map,
@@ -1627,7 +1679,7 @@ trait EqVisitor {
 
 struct RewriteVisitor<'a> {
     new_col_id: usize,
-    index: &'a BloomIndex,
+    indexes: &'a [BloomIndex],
     data_schema: TableSchemaRef,
     eq_scalar_map: &'a HashMap<Scalar, u64>,
     like_scalar_map: &'a NgramLikeScalarMap,
@@ -1650,16 +1702,22 @@ impl EqVisitor for RewriteVisitor<'_> {
 
         // If the column doesn't contain the constant,
         // we rewrite the expression to a new column with `false` domain.
-        if self.index.find(
-            table_field,
-            scalar,
-            ty,
-            self.eq_scalar_map,
-            self.like_scalar_map,
-            self.ngram_args,
-            is_like,
-        )? != FilterEvalResult::MustFalse
-        {
+        let mut result = FilterEvalResult::Uncertain;
+        for index in self.indexes {
+            result = index.find(
+                table_field,
+                scalar,
+                ty,
+                self.eq_scalar_map,
+                self.like_scalar_map,
+                self.ngram_args,
+                is_like,
+            )?;
+            if result == FilterEvalResult::MustFalse {
+                break;
+            }
+        }
+        if result != FilterEvalResult::MustFalse {
             return Ok(ControlFlow::Continue(None));
         }
         let new_col_name = format!("__bloom_column_{}_{}", col_name, self.new_col_id);

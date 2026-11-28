@@ -46,6 +46,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnGroupBloomMeta;
 use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -86,6 +87,10 @@ pub struct PartColumnGroup {
     pub location: String,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub compression: Compression,
+    /// The Bloom index file of the group, whose filters are current only for the columns the
+    /// group serves.
+    #[serde(default)]
+    pub bloom: Option<ColumnGroupBloomMeta>,
 }
 
 impl PartColumnGroup {
@@ -113,14 +118,14 @@ impl PartColumnGroup {
             .collect()
     }
 
-    /// The group as block metadata a reader can read the group from. The file size and the
-    /// Bloom index are not known from a part.
+    /// The group as block metadata a reader can read the group from. The file size is not
+    /// known from a part.
     pub fn to_file_meta(&self) -> ColumnGroupFileMeta {
         ColumnGroupFileMeta {
             location: (self.location.clone(), DataBlock::VERSION),
             file_size: 0,
             leaf_column_metas: self.columns_meta.clone(),
-            bloom: None,
+            bloom: self.bloom.clone(),
             compression: self.compression,
         }
     }
@@ -140,6 +145,7 @@ impl PartColumnGroup {
                     location: group.location.0.clone(),
                     columns_meta,
                     compression: group.compression,
+                    bloom: group.bloom.clone(),
                 })
             })
             .collect()
@@ -180,7 +186,9 @@ impl PartInfo for FuseBlockPartInfo {
             + option(&self.sort_min_max, |(min, max)| scalar(min) + scalar(max))
             + option(&self.block_meta_index, block_meta_index)
             + vec(&self.column_groups, |g| {
-                g.location.capacity() + hash_map(&g.columns_meta, |_, _| 0)
+                g.location.capacity()
+                    + hash_map(&g.columns_meta, |_, _| 0)
+                    + option(&g.bloom, |b| location(&b.location))
             })
     }
 }

@@ -32,6 +32,7 @@ use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::page_header::all_pages_dictionary_encoded;
+use super::page_header::dictionary_len;
 
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
@@ -80,13 +81,15 @@ impl<'a> RowGroupImplBuilder<'a> {
         self.column_chunks.insert(dfs_id, column_chunk);
     }
 
-    /// Whether the added column chunk is dictionary encoded: it starts with a dictionary page,
-    /// and the writer did not fall back to plain pages after it. Reads only the page headers;
-    /// `false` if they cannot be read.
-    pub fn all_pages_dictionary_encoded(&self, dfs_id: usize) -> bool {
+    /// Check the encoding and optional dictionary size limit in one pass over the page headers.
+    pub fn can_read_dictionary(&self, dfs_id: usize, max_len: Option<u64>) -> bool {
         self.column_chunks
             .get(&dfs_id)
-            .is_some_and(all_pages_dictionary_encoded)
+            .is_some_and(|chunk| match max_len {
+                Some(0) => false,
+                Some(max) => dictionary_len(chunk).is_some_and(|len| len > 0 && len as u64 <= max),
+                None => all_pages_dictionary_encoded(chunk),
+            })
     }
 
     pub fn build(self) -> RowGroupImpl {

@@ -344,6 +344,7 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_base::base::tokio;
+    use databend_common_expression::ColumnId;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Expr;
@@ -362,13 +363,17 @@ mod tests {
     use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
     use databend_storages_common_io::ReadSettings;
+    use databend_storages_common_table_meta::meta::ColumnGroupBloomMeta;
+    use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::SingleColumnMeta;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
     use opendal::Buffer;
 
     use super::*;
+    use crate::fuse_part::PartColumnGroup;
     use crate::test_utils::init_test_globals;
 
     fn test_read_settings() -> ReadSettings {
@@ -410,6 +415,56 @@ mod tests {
         let snapshot = stats.snapshot();
         assert_eq!(snapshot.min_max_rows_filtered, 4);
         assert_eq!(snapshot.min_max_partitions_pruned, 1);
+        Ok(())
+    }
+
+    /// A split part reads the filter of `y` from the index file of the group that serves `y`.
+    /// The legacy group's index file still holds a filter of `y` for the values before the
+    /// split, which would prune the block for a value it holds now.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_runtime_inlist_prunes_split_part_by_group_bloom_index() -> Result<()> {
+        init_test_globals()?;
+        let schema = test_schema();
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let before = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3, 4])]);
+        let after = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![10, 20, 30, 40])]);
+        let y = schema.column_id_of("y")?;
+        let part = make_split_part(
+            &schema,
+            vec![
+                part_group(
+                    "legacy",
+                    &[y + 1],
+                    write_bloom_index(&operator, &schema, &before).await?,
+                ),
+                part_group(
+                    "group",
+                    &[y],
+                    write_bloom_index(&operator, &schema, &after).await?,
+                ),
+            ],
+            10,
+            40,
+        );
+
+        for (values, pruned) in [(&[11, 21, 31], true), (&[10, 11, 12], false)] {
+            let pruner = ExprRuntimePruner::new(
+                FunctionContext::default(),
+                schema.clone(),
+                operator.clone(),
+                test_read_settings(),
+                CachePolicy::DEFAULT,
+                3,
+                vec![RuntimeFilterExpr {
+                    filter_id: 0,
+                    kind: RuntimeFilterExprKind::Inlist,
+                    inlist_value_count: 3,
+                    expr: inlist_expr("y", values)?,
+                    stats: Arc::new(RuntimeFilterStats::default()),
+                }],
+            );
+            assert_eq!(pruner.prune(&part).await?, pruned, "{values:?}");
+        }
         Ok(())
     }
 
@@ -600,7 +655,7 @@ mod tests {
             bloom_filter_index_size,
             None,
             4,
-            HashMap::new(),
+            column_metas(&[column_id]),
             Some(column_stats),
             Compression::Lz4Raw,
             None,
@@ -608,6 +663,67 @@ mod tests {
             None,
             vec![],
         )
+    }
+
+    /// A part of a split block whose `y` has the values `min..=max`, read from `groups`.
+    fn make_split_part(
+        schema: &TableSchemaRef,
+        groups: Vec<PartColumnGroup>,
+        min: i32,
+        max: i32,
+    ) -> databend_common_catalog::plan::PartInfoPtr {
+        let part = make_part(schema, None, 0, min, max);
+        let part = FuseBlockPartInfo::from_part(&part).unwrap();
+        FuseBlockPartInfo::create(
+            part.location.clone(),
+            None,
+            groups
+                .iter()
+                .filter_map(|group| group.bloom.as_ref())
+                .map(|bloom| bloom.file_size)
+                .sum(),
+            None,
+            part.nums_rows as u64,
+            part.columns_meta.clone(),
+            part.columns_stat.clone(),
+            part.compression,
+            None,
+            None,
+            None,
+            groups,
+        )
+    }
+
+    fn part_group(
+        name: &str,
+        column_ids: &[ColumnId],
+        bloom: (Option<(String, u64)>, u64),
+    ) -> PartColumnGroup {
+        PartColumnGroup {
+            location: name.to_string(),
+            columns_meta: column_metas(column_ids),
+            compression: Compression::Lz4Raw,
+            bloom: bloom.0.map(|location| ColumnGroupBloomMeta {
+                location,
+                file_size: bloom.1,
+            }),
+        }
+    }
+
+    fn column_metas(column_ids: &[ColumnId]) -> HashMap<ColumnId, ColumnMeta> {
+        column_ids
+            .iter()
+            .map(|id| {
+                (
+                    *id,
+                    ColumnMeta::Parquet(SingleColumnMeta {
+                        offset: 0,
+                        len: 1,
+                        num_values: 4,
+                    }),
+                )
+            })
+            .collect()
     }
 
     fn inlist_expr(column_name: &str, values: &[i32]) -> Result<Expr<String>> {
@@ -842,7 +958,7 @@ mod tests {
             bloom_filter_index_size,
             None,
             1000,
-            HashMap::new(),
+            column_metas(&[column_id]),
             Some(column_stats),
             Compression::Lz4Raw,
             None,

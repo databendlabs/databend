@@ -174,6 +174,7 @@ impl FuseVirtualColumnParquetMeta {
             vec![
                 BlockEntry::new_const_column_arg::<StringType>(snapshot_id, num_rows),
                 BlockEntry::new_const_column_arg::<TimestampType>(timestamp, num_rows),
+                StringType::from_data(block_locations).into(),
                 StringType::from_data(virtual_locations).into(),
                 UInt64Type::from_data(virtual_column_sizes).into(),
                 UInt64Type::from_data(row_counts).into(),

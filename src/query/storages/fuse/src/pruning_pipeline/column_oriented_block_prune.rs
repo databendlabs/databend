@@ -44,6 +44,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::FuseBlockPartInfo;
 use crate::pruning::BlockPruner;
+use crate::pruning::BloomIndexFile;
 use crate::pruning_pipeline::RuntimeFilterPruneContext;
 
 pub struct ColumnOrientedBlockPruneSink {
@@ -245,14 +246,17 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                             block_size,
                         };
 
+                        let index_files = bloom_filter_index_location
+                            .as_ref()
+                            .map(|location| BloomIndexFile {
+                                location,
+                                size: bloom_filter_index_size,
+                                column_ids: column_ids.clone(),
+                            })
+                            .into_iter()
+                            .collect::<Vec<_>>();
                         if !bloom_pruner
-                            .should_keep(
-                                &bloom_filter_index_location,
-                                bloom_filter_index_size,
-                                &columns_stat,
-                                column_ids.clone(),
-                                &block_read_info,
-                            )
+                            .should_keep(&index_files, &columns_stat, Some(&block_read_info))
                             .await
                         {
                             return Ok(());

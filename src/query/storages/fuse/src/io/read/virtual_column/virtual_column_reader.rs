@@ -65,6 +65,7 @@ pub struct VirtualColumnReader {
     pub(super) compression: TableCompression,
     /// How the sidecar files are read: the policy of the scan.
     pub(super) policy: CachePolicy,
+    pub(super) dictionary_ndv_ratio: Option<u64>,
     pub virtual_column_info: VirtualColumnInfo,
 }
 
@@ -75,12 +76,14 @@ impl VirtualColumnReader {
         virtual_column_info: VirtualColumnInfo,
         compression: TableCompression,
         policy: CachePolicy,
+        dictionary_ndv_ratio: u64,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
             dal,
             compression,
             policy,
+            dictionary_ndv_ratio: (dictionary_ndv_ratio > 0).then_some(dictionary_ndv_ratio),
             virtual_column_info,
         })
     }
