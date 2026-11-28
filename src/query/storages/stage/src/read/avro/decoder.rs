@@ -526,7 +526,8 @@ impl AvroDecoder {
     ) -> ReadFieldResult {
         if let MatchedSchema::Primary(schema) = matched_schema {
             let v = to_jsonb(&value, schema).map_err(Error::new_reason)?;
-            v.write_to_vec(&mut column.data);
+            v.write_to_vec(&mut column.data)
+                .map_err(|e| Error::new_reason(format!("invalid variant value: {e:?}")))?;
             column.commit_row();
             Ok(())
         } else {

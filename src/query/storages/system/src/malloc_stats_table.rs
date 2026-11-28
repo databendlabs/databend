@@ -84,7 +84,7 @@ impl MallocStatsTable {
         let json_value: serde_json::Value = serde_json::from_slice(&buf)?;
         let jsonb_value: jsonb::Value = (&json_value).into();
         Ok(vec![BlockEntry::new_const_column_arg::<VariantType>(
-            jsonb_value.to_vec(),
+            jsonb_value.to_vec()?,
             1,
         )])
     }

@@ -184,7 +184,11 @@ impl SimpleArgFunc for ClusteringInformation {
                 BlockEntry::new_const_column_arg::<StringType>(info.cluster_type, 1),
                 BlockEntry::new_const_column_arg::<TimestampType>(info.timestamp, 1),
                 BlockEntry::new_const_column_arg::<VariantType>(
-                    JsonbValue::from(info.info).to_vec(),
+                    JsonbValue::from(info.info).to_vec().map_err(|e| {
+                        ErrorCode::Internal(format!(
+                            "failed to encode clustering information as jsonb: {e:?}"
+                        ))
+                    })?,
                     1,
                 ),
             ],

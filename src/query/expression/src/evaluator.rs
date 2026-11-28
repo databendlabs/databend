@@ -1417,7 +1417,11 @@ impl<'a> Evaluator<'a> {
                 match jsonb::from_slice(x) {
                     Ok(value) => {
                         for v in value.as_array().into_iter().flatten() {
-                            v.write_to_vec(&mut builder.data);
+                            v.write_to_vec(&mut builder.data).map_err(|e| {
+                                ErrorCode::BadArguments(format!(
+                                    "failed to encode json value: {e:?}"
+                                ))
+                            })?;
                             builder.commit_row();
                         }
                     }
@@ -1458,7 +1462,11 @@ impl<'a> Evaluator<'a> {
                     Ok(value) => {
                         for (k, v) in value.as_object().into_iter().flatten() {
                             key_builder.put_and_commit(k.as_str());
-                            v.write_to_vec(&mut value_builder.data);
+                            v.write_to_vec(&mut value_builder.data).map_err(|e| {
+                                ErrorCode::BadArguments(format!(
+                                    "failed to encode json value: {e:?}"
+                                ))
+                            })?;
                             value_builder.commit_row();
                         }
                     }

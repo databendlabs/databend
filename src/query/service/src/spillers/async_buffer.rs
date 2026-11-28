@@ -1125,7 +1125,12 @@ mod tests {
         let variants = || {
             ["[1,\"a\"]", "{\"k\":null}"]
                 .iter()
-                .map(|json| jsonb::parse_value(json.as_bytes()).unwrap().to_vec())
+                .map(|json| {
+                    jsonb::parse_value(json.as_bytes())
+                        .unwrap()
+                        .to_vec()
+                        .unwrap()
+                })
                 .collect::<Vec<_>>()
         };
         // The last column has the shape of an arg_max state: (has_value, key, value).
