@@ -493,9 +493,11 @@ impl GranuleDataReader {
             &part.location,
             part.nums_rows,
             &part.columns_meta,
+            // Columns the block does not store are filled with their default values.
             read_context
                 .project_indices()
                 .values()
+                .filter(|(id, ..)| part.columns_meta.contains_key(id))
                 .filter(|(id, ..)| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id)))
                 .map(|(id, _, data_type)| (*id, data_type.to_string())),
             groups,

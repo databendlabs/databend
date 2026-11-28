@@ -179,6 +179,9 @@ impl ReadBlockContext {
                 .map(|meta| &meta.ignored_source_column_ids)
                 .filter(|ids| !ids.is_empty())
         });
+        // A column the block does not store, added later or a stream column of a block written
+        // before change tracking, has no granule marks: it is filled with its default value, as
+        // a whole-block read does.
         let offsets = OffsetsIndex::load(
             self.block_read_ctx.operator(),
             &granule_index.offsets,
@@ -189,6 +192,7 @@ impl ReadBlockContext {
                 .project_indices()
                 .values()
                 .map(|(column_id, ..)| *column_id)
+                .filter(|id| fuse_part.columns_meta.contains_key(id))
                 .filter(|id| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id))),
             self.block_read_ctx.policy(),
         )?;

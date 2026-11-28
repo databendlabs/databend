@@ -397,5 +397,29 @@ EXPLAIN SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3100'
 statement ok
 DROP TABLE spi_implicit_string
 
+# A column added after a block was written has no granule offsets in that block: a granule
+# read fills it with its default value, as a whole-block read does.
+statement ok
+CREATE TABLE spi_added_column(k int, payload bigint) CLUSTER BY(k) index_granularity=100 row_per_block=512
+
+statement ok
+INSERT INTO spi_added_column SELECT 300 - number, number FROM numbers(300)
+
+statement ok
+ALTER TABLE spi_added_column ADD COLUMN extra int NOT NULL DEFAULT 7
+
+query III
+SELECT count(), sum(payload), sum(extra) FROM spi_added_column WHERE k < 120
+----
+119 28560 833
+
+query III
+SELECT count(), sum(payload), sum(extra) FROM spi_added_column
+----
+300 44850 2100
+
+statement ok
+DROP TABLE spi_added_column
+
 statement ok
 DROP DATABASE db_09_0009_05
